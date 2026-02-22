@@ -83,9 +83,52 @@ console.log = (...args) => addLog('log', ...args);
 console.error = (...args) => addLog('error', ...args);
 console.warn = (...args) => addLog('warn', ...args);
 
+// Log inicial para verificar que el sistema funciona
+console.log('✅ Sistema de logs inicializado correctamente');
+
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// API Routes - Definir ANTES de express.static para evitar conflictos
+// GET /api/logs - Obtener logs del sistema (definir temprano para que esté disponible)
+app.get('/api/logs', (req, res) => {
+  try {
+    const { limit = 500, level, since } = req.query;
+    
+    console.log(`📋 Solicitud de logs - Buffer actual: ${logsBuffer.length} logs`);
+    
+    let filteredLogs = [...logsBuffer];
+    
+    // Filtrar por nivel si se especifica
+    if (level && level !== 'all') {
+      filteredLogs = filteredLogs.filter(log => log.level === level);
+      console.log(`📋 Filtrado por nivel "${level}": ${filteredLogs.length} logs`);
+    }
+    
+    // Filtrar por fecha si se especifica
+    if (since) {
+      const sinceDate = new Date(since);
+      filteredLogs = filteredLogs.filter(log => new Date(log.timestamp) >= sinceDate);
+    }
+    
+    // Limitar cantidad
+    const limitNum = parseInt(limit, 10);
+    const logs = filteredLogs.slice(-limitNum);
+    
+    console.log(`📋 Enviando ${logs.length} logs al cliente`);
+    
+    res.json({
+      logs,
+      total: logsBuffer.length,
+      filtered: filteredLogs.length,
+      returned: logs.length
+    });
+  } catch (error) {
+    console.error('Error en /api/logs:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // Serve static files from public directory
 app.use(express.static('public'));
@@ -2852,40 +2895,6 @@ app.put('/api/bot-status', (req, res) => {
     }
   } catch (error) {
     console.error('Error en PUT /api/bot-status:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// GET /api/logs - Obtener logs del sistema
-app.get('/api/logs', (req, res) => {
-  try {
-    const { limit = 500, level, since } = req.query;
-    
-    let filteredLogs = [...logsBuffer];
-    
-    // Filtrar por nivel si se especifica
-    if (level && level !== 'all') {
-      filteredLogs = filteredLogs.filter(log => log.level === level);
-    }
-    
-    // Filtrar por fecha si se especifica
-    if (since) {
-      const sinceDate = new Date(since);
-      filteredLogs = filteredLogs.filter(log => new Date(log.timestamp) >= sinceDate);
-    }
-    
-    // Limitar cantidad
-    const limitNum = parseInt(limit, 10);
-    const logs = filteredLogs.slice(-limitNum);
-    
-    res.json({
-      logs,
-      total: logsBuffer.length,
-      filtered: filteredLogs.length,
-      returned: logs.length
-    });
-  } catch (error) {
-    console.error('Error en /api/logs:', error);
     res.status(500).json({ error: error.message });
   }
 });

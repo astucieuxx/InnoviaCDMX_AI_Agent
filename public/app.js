@@ -1258,13 +1258,21 @@ async function loadLogs() {
     try {
         const levelFilter = document.getElementById('log-level-filter')?.value || 'all';
         const response = await fetch(`/api/logs?limit=500&level=${levelFilter}`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const data = await response.json();
         
         const container = document.getElementById('logs-container');
-        if (!container) return;
+        if (!container) {
+            console.error('Container de logs no encontrado');
+            return;
+        }
         
         if (!data.logs || data.logs.length === 0) {
-            container.innerHTML = '<div class="loading-text">No hay logs disponibles</div>';
+            container.innerHTML = `<div class="loading-text">No hay logs disponibles (Total en buffer: ${data.total || 0})</div>`;
             return;
         }
         
