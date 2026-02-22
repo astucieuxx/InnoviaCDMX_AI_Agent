@@ -745,9 +745,11 @@ async function sendTypingIndicator(phoneNumber, action = 'typing_on') {
 }
 
 async function sendWhatsAppMessage(phoneNumber, message, options = {}) {
+  // Limpiar número de teléfono (remover espacios, guiones, etc.)
+  // Definir fuera del try para que esté disponible en el catch
+  const cleanPhone = phoneNumber ? phoneNumber.replace(/\D/g, '') : 'unknown';
+  
   try {
-    // Limpiar número de teléfono (remover espacios, guiones, etc.)
-    const cleanPhone = phoneNumber.replace(/\D/g, ''); // Solo números
     
     // Verificar que tenemos los datos necesarios
     if (!CHAKRA_PLUGIN_ID) {
