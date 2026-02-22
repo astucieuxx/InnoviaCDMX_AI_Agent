@@ -798,11 +798,7 @@ async function sendWhatsAppMessage(phoneNumber, message, options = {}) {
       };
     }
     
-    console.log(`📤 Enviando mensaje a: ${endpoint}`);
-    console.log(`   Para: ${cleanPhone}`);
-    if (options.buttons) {
-      console.log(`   Con ${options.buttons.length} botones interactivos`);
-    }
+    // Log solo si hay error o para debugging importante
     
     const response = await axios.post(
       endpoint,
@@ -815,12 +811,6 @@ async function sendWhatsAppMessage(phoneNumber, message, options = {}) {
       }
     );
     
-    console.log(`✅ Mensaje enviado a ${cleanPhone} via Chakra`);
-    console.log(`   Response Status: ${response.status}`);
-    if (response.data) {
-      console.log(`   Response Data:`, JSON.stringify(response.data, null, 2));
-    }
-    
     // Detener typing indicator después de enviar el mensaje
     // (el mensaje real debería detenerlo automáticamente, pero por si acaso)
     await sendTypingIndicator(cleanPhone, 'typing_off');
@@ -828,21 +818,34 @@ async function sendWhatsAppMessage(phoneNumber, message, options = {}) {
     return response.data;
     
   } catch (error) {
-    console.error(`\n❌ ============================================`);
-    console.error(`❌ ERROR AL ENVIAR MENSAJE`);
-    console.error(`   Para: ${phoneNumber} (cleaned: ${cleanPhone})`);
-    console.error(`   Error:`, error.message);
+    console.error(`❌ Error enviando mensaje a ${cleanPhone}`);
+    
+    // Mostrar información detallada del error
     if (error.response) {
-      console.error(`   Status: ${error.response.status}`);
-      console.error(`   Status Text: ${error.response.statusText}`);
+      // Error de respuesta HTTP
+      console.error(`   HTTP ${error.response.status}: ${error.response.statusText}`);
       if (error.response.data) {
-        console.error(`   Response Data:`, JSON.stringify(error.response.data, null, 2));
+        try {
+          const errorData = typeof error.response.data === 'string' 
+            ? error.response.data 
+            : JSON.stringify(error.response.data, null, 2);
+          console.error(`   Respuesta: ${errorData.substring(0, 500)}`);
+        } catch (e) {
+          console.error(`   Respuesta: ${String(error.response.data).substring(0, 200)}`);
+        }
+      }
+    } else if (error.request) {
+      // Error de red (no hubo respuesta)
+      console.error(`   Error de red: No se recibió respuesta del servidor`);
+      console.error(`   Request: ${error.request.method || 'POST'} ${endpoint}`);
+    } else {
+      // Otro tipo de error
+      console.error(`   Error: ${error.message || String(error)}`);
+      if (error.stack) {
+        console.error(`   Stack: ${error.stack.split('\n').slice(0, 3).join('\n')}`);
       }
     }
-    if (error.stack) {
-      console.error(`   Stack:`, error.stack);
-    }
-    console.error(`============================================\n`);
+    
     throw error;
   }
 }
@@ -873,7 +876,12 @@ app.post('/webhook', async (req, res) => {
   try {
     const body = req.body;
     
-    console.log('📥 Webhook recibido de Chakra:', JSON.stringify(body, null, 2));
+    console.log('📥 ============================================');
+    console.log('📥 WEBHOOK RECIBIDO DE CHAKRA');
+    console.log('📥 ============================================');
+    console.log('📥 Body completo:', JSON.stringify(body, null, 2));
+    console.log('📥 Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('📥 ============================================');
 
     // Formato estándar WhatsApp Cloud API (usado por Chakra)
     // Puede venir en formato: { object: 'whatsapp_business_account', entry: [...] }
@@ -939,28 +947,49 @@ app.post('/webhook', async (req, res) => {
     }
     // Formato alternativo (si Chakra envía directamente)
     else if (body.messages && Array.isArray(body.messages)) {
+      console.log('📥 Formato alternativo detectado: body.messages');
       messages = body.messages;
     }
     // Formato directo (un solo mensaje)
     else if (body.from && body.text) {
+      console.log('📥 Formato directo detectado: body.from y body.text');
       messages = [body];
     }
+    else {
+      console.log('⚠️  Formato de webhook no reconocido. Body keys:', Object.keys(body));
+      console.log('⚠️  Body completo:', JSON.stringify(body, null, 2));
+    }
 
+    console.log(`📥 Total de mensajes encontrados en webhook: ${messages.length}`);
+    
+    if (messages.length === 0) {
+      console.log('⚠️  No se encontraron mensajes en el webhook. Body recibido:', JSON.stringify(body, null, 2));
+    }
+    
     // Procesar cada mensaje
     for (const message of messages) {
       const senderPhone = message.from || message.wa_id;
+      
+      console.log(`📨 Procesando mensaje - Tipo: ${message.type}, De: ${senderPhone}, Contenido:`, JSON.stringify(message, null, 2));
       
       // Manejar mensajes de texto
       if (message.type === 'text' || message.text) {
         const incomingMessage = message.text?.body || message.text || message.body;
         
         if (senderPhone && incomingMessage) {
-          console.log(`📨 Mensaje de texto de ${senderPhone}: ${incomingMessage}`);
+          console.log(`📨 ============================================`);
+          console.log(`📨 MENSAJE DE TEXTO RECIBIDO`);
+          console.log(`📨 De: ${senderPhone}`);
+          console.log(`📨 Mensaje: ${incomingMessage}`);
+          console.log(`📨 ============================================`);
           
           // Procesar el mensaje (no esperar para responder rápido al webhook)
           processIncomingMessage(senderPhone, incomingMessage, {}).catch(error => {
-            console.error('Error procesando mensaje:', error);
+            console.error('❌ Error procesando mensaje:', error);
+            console.error('   Stack:', error.stack);
           });
+        } else {
+          console.log(`⚠️  Mensaje de texto sin senderPhone o incomingMessage. senderPhone: ${senderPhone}, incomingMessage: ${incomingMessage}`);
         }
       }
       // Manejar respuestas de botones interactivos
@@ -2000,8 +2029,6 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
       // Normal flow - classify intent
       intent = await classifyIntent(incomingMessage, session);
     }
-    console.log(`🎯 Intent clasificado: ${intent}`);
-    
     // Guardar el intent en la sesión para métricas
     // Usar historial de intents para mejor tracking
     const currentSession = sessions.getSession(cleanPhone);
@@ -2038,10 +2065,6 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
     const calendarIntents = ['AGENDAR_NUEVA', 'CAMBIAR_CITA', 'CANCELAR_CITA'];
     if (calendarIntents.includes(intent)) {
       const targetCalendarId = citasNuevasCalendarId || process.env.CALENDAR_ID || 'primary';
-      console.log(`📌 Preparando calendarDeps para ${intent}:`);
-      console.log(`   citasNuevasCalendarId: ${citasNuevasCalendarId || 'null'}`);
-      console.log(`   CALENDAR_ID env: ${process.env.CALENDAR_ID || 'no configurado'}`);
-      console.log(`   📌 Calendar ID final a usar: ${targetCalendarId}`);
       calendarDeps = {
         calendarClient: calendar,
         authClient: authClient,
@@ -2086,21 +2109,17 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
     
     // STEP 7: Send reply via Chakra (with buttons if handler returned them)
     const sendOptions = result.buttons ? { buttons: result.buttons } : {};
-    console.log(`📤 Enviando respuesta del handler ${intent}...`);
     await sendWhatsAppMessage(cleanPhone, result.reply, sendOptions);
-    console.log(`✅ Respuesta enviada exitosamente para ${intent}`);
     
     // Add assistant reply to history
     sessions.addToHistory(cleanPhone, 'assistant', result.reply);
-    console.log(`✅ Mensaje agregado al historial`);
   } catch (error) {
-    console.error('❌ Error procesando mensaje:', error);
-    // Intentar enviar mensaje de error al usuario
-    try {
-      await sendWhatsAppMessage(senderPhone, '❌ Ocurrió un error. Por favor intenta de nuevo.');
-    } catch (err) {
-      console.error('Error al enviar mensaje de error:', err);
+    console.error('❌ Error procesando mensaje:', error.message || error);
+    if (error.stack) {
+      console.error('   Stack:', error.stack.split('\n').slice(0, 3).join('\n'));
     }
+    // No intentar enviar mensaje de error si ya falló el envío
+    // (evitar loops infinitos de errores)
   }
 }
 

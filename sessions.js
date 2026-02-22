@@ -77,12 +77,13 @@ function updateSession(phone, data) {
   // Always update last activity timestamp
   session.ultima_actividad = new Date().toISOString();
   
-  console.log(`📝 Sesión actualizada para: ${cleanPhone}`, {
-    etapa: session.etapa,
-    nombre_novia: session.nombre_novia,
-    fecha_boda: session.fecha_boda,
-    fecha_cita: session.fecha_cita
-  });
+  // Log solo cambios importantes (no cada actualización)
+  const importantChanges = ['etapa', 'nombre_novia', 'fecha_boda', 'fecha_cita', 'calendar_event_id'];
+  const hasImportantChange = importantChanges.some(key => data.hasOwnProperty(key));
+  
+  if (hasImportantChange) {
+    console.log(`📝 Sesión actualizada: ${cleanPhone} - ${Object.keys(data).join(', ')}`);
+  }
   
   return session;
 }
