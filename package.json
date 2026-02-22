@@ -1,0 +1,25 @@
+{
+  "name": "whatsapp-calendar-bot",
+  "version": "1.0.0",
+  "description": "Bot de WhatsApp para agendar citas con Google Calendar",
+  "main": "whatsapp-calendar-bot.js",
+  "scripts": {
+    "start": "node whatsapp-calendar-bot.js",
+    "dev": "nodemon whatsapp-calendar-bot.js",
+    "test": "node test-bot.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.2",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "google-auth-library": "^9.4.1",
+    "googleapis": "^118.0.0",
+    "openai": "^4.20.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=18.x"
+  }
+}

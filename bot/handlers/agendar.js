@@ -1,0 +1,734 @@
+/**
+ * Agendar Handler
+ * 
+ * Handles appointment scheduling requests.
+ * This is the ONLY handler that calls Google Calendar.
+ * 
+ * Flow:
+ * 1. Extract fecha_cita_deseada from message (using focused OpenAI call)
+ * 2. If no date mentioned, ask user for preferred date/time
+ * 3. If date found, query Google Calendar for available slots
+ * 4. Return slots as interactive buttons
+ */
+
+const OpenAI = require('openai');
+const { getAvailableSlots, isDayOpen, createCalendarEvent: createCalendarEventService } = require('../calendar-service');
+const {
+  getBusinessName,
+  getBusinessHours
+} = require('../../config');
+
+// Initialize OpenAI client for date extraction
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
+
+/**
+ * Extract appointment date from message using focused OpenAI call
+ * @param {string} message - User's message
+ * @param {string} fechaBoda - Wedding date (to avoid confusion)
+ * @returns {Promise<string|null>} Date in YYYY-MM-DD format or null
+ */
+async function extractFechaCitaDeseada(message, fechaBoda) {
+  try {
+    if (!process.env.OPENAI_API_KEY) {
+      console.warn('⚠️  OPENAI_API_KEY no configurado, no se puede extraer fecha de cita');
+      return null;
+    }
+
+    const systemPrompt = `Eres un extractor de fechas para citas de showroom.
+
+Tu tarea es extraer SOLO la fecha que el usuario quiere para VISITAR el showroom (la fecha de la cita, NO la fecha de la boda).
+
+IMPORTANTE:
+- La FECHA DE BODA es: ${fechaBoda || 'no mencionada'}
+- El año actual es 2026
+- NO extraigas la fecha de boda, solo la fecha para visitar el showroom
+- Si el usuario dice "tienen libre el martes 24 de febrero", extrae "2026-02-24" (ignora el día de la semana, usa solo el número de día)
+- Si el usuario dice "quiero ir el 4 de marzo", extrae "2026-03-04"
+- Si el usuario dice "martes 17 de marzo", extrae "2026-03-17" (ignora "martes", usa solo el día 17)
+- Si el usuario dice "el 4 de marzo 2026", extrae "2026-03-04"
+- Si el usuario dice "el 4 de marzo" (sin año), asume año 2026 y extrae "2026-03-04"
+- Si el usuario solo menciona la fecha de boda sin mencionar una fecha de visita, devuelve null
+- Si no hay fecha de visita mencionada, devuelve null
+- SIEMPRE usa el año 2026 cuando el usuario no especifica el año
+- IGNORA los días de la semana (lunes, martes, miércoles, etc.) y usa SOLO el número de día y mes
+
+Responde SOLO con una fecha en formato YYYY-MM-DD o la palabra "null" si no hay fecha de visita mencionada.
+No agregues explicaciones, solo la fecha o "null".`;
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: message }
+      ],
+      max_tokens: 20,
+      temperature: 0.1 // Low temperature for consistent extraction
+    });
+
+    const extractedText = response.choices[0].message.content.trim();
+    console.log(`🔍 Texto extraído por LLM: "${extractedText}"`);
+    
+    if (extractedText.toLowerCase() === 'null' || extractedText.toLowerCase() === 'none' || !extractedText) {
+      return null;
+    }
+
+    // Try to parse and normalize the date
+    try {
+      let year, month, day;
+      
+      // First, check if it's already in YYYY-MM-DD format
+      const dateMatch = extractedText.match(/(\d{4})-(\d{2})-(\d{2})/);
+      if (dateMatch) {
+        // Already in YYYY-MM-DD format, extract components directly
+        // IMPORTANT: Parse directly to avoid timezone issues
+        year = parseInt(dateMatch[1]);
+        month = parseInt(dateMatch[2]);
+        day = parseInt(dateMatch[3]);
+        console.log(`📅 Fecha en formato YYYY-MM-DD detectada: año=${year}, mes=${month}, día=${day}`);
+      } else {
+        // Try to parse as a date string (might be in Spanish format)
+        const spanishMonths = {
+          'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4, 'mayo': 5, 'junio': 6,
+          'julio': 7, 'agosto': 8, 'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12
+        };
+        
+        // Check if it's in Spanish format like "4 de marzo 2026" or "4 marzo 2026" or "4 de marzo" (sin año)
+        // Also handle "Martes 17 de marzo" - ignore day of week
+        // Pattern: (optional day of week) (day number) (optional "de") (month name) (optional year)
+        const spanishDateMatch = extractedText.match(/(?:(?:lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo)\s+)?(\d{1,2})\s*(?:de\s*)?(\w+)(?:\s*(\d{4}))?/i);
+        if (spanishDateMatch) {
+          day = parseInt(spanishDateMatch[1]);
+          const monthName = spanishDateMatch[2].toLowerCase();
+          year = spanishDateMatch[3] ? parseInt(spanishDateMatch[3]) : 2026; // Default to 2026 if no year
+          
+          if (spanishMonths[monthName]) {
+            month = spanishMonths[monthName];
+            console.log(`📅 Fecha en español detectada: día=${day}, mes=${monthName} (${month}), año=${year}`);
+          } else {
+            throw new Error(`Mes en español no reconocido: ${monthName}`);
+          }
+        } else {
+          // Try standard Date parsing, but extract components carefully
+          // IMPORTANT: When parsing dates, use local timezone to avoid day shifts
+          const parsedDate = new Date(extractedText);
+          if (!isNaN(parsedDate.getTime())) {
+            // Extract components using LOCAL methods to avoid timezone shifts
+            // Using UTC methods can cause the date to shift by one day depending on timezone
+            // For example, "2026-03-17" parsed as UTC might become "2026-03-16" in local time
+            year = parsedDate.getFullYear();
+            month = parsedDate.getMonth() + 1;
+            day = parsedDate.getDate();
+            console.log(`📅 Fecha parseada (local): año=${year}, mes=${month}, día=${day}`);
+          } else {
+            throw new Error(`No se pudo parsear la fecha: ${extractedText}`);
+          }
+        }
+      }
+      
+      // Validate and format the date
+      if (year && month && day) {
+        // Smart year detection: if year is missing or in the past, determine the correct year
+        const currentDate = new Date();
+        const currentYear = currentDate.getFullYear();
+        const currentMonth = currentDate.getMonth() + 1; // 1-12
+        
+        // If year is missing or in the past, determine the correct year
+        if (!year || year < currentYear) {
+          // If the month is in the future relative to current month, use current year
+          // If the month is in the past relative to current month, use next year
+          if (month > currentMonth) {
+            year = currentYear;
+            console.log(`📅 Mes ${month} está en el futuro, usando año ${year}`);
+          } else if (month < currentMonth) {
+            year = currentYear + 1;
+            console.log(`📅 Mes ${month} está en el pasado este año, usando año ${year}`);
+          } else {
+            // Same month: check if day is in the future
+            const currentDay = currentDate.getDate();
+            if (day >= currentDay) {
+              year = currentYear;
+              console.log(`📅 Día ${day} está en el futuro este mes, usando año ${year}`);
+            } else {
+              year = currentYear + 1;
+              console.log(`📅 Día ${day} está en el pasado este mes, usando año ${year}`);
+            }
+          }
+        } else if (year < currentYear) {
+          console.log(`⚠️  Año ${year} está en el pasado, corrigiendo a ${currentYear}`);
+          year = currentYear;
+        }
+        
+        // Use local date constructor to avoid timezone issues
+        const localDate = new Date(year, month - 1, day);
+        
+        // Verify the date is valid
+        if (localDate.getFullYear() === year && 
+            localDate.getMonth() === month - 1 && 
+            localDate.getDate() === day) {
+          const normalizedYear = String(year).padStart(4, '0');
+          const normalizedMonth = String(month).padStart(2, '0');
+          const normalizedDay = String(day).padStart(2, '0');
+          const normalizedDate = `${normalizedYear}-${normalizedMonth}-${normalizedDay}`;
+          console.log(`📅 Fecha de cita extraída: ${normalizedDate}`);
+          return normalizedDate;
+        } else {
+          console.warn(`⚠️  Fecha inválida después de normalización: año=${year}, mes=${month}, día=${day}`);
+        }
+      }
+    } catch (e) {
+      console.warn(`⚠️  Error parseando fecha extraída: ${extractedText}`, e.message);
+    }
+
+    console.warn(`⚠️  No se pudo parsear la fecha extraída: ${extractedText}`);
+    return null;
+  } catch (error) {
+    console.error('❌ Error extrayendo fecha de cita:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Format date for display (DD/MM/YYYY)
+ * @param {string} date - Date in YYYY-MM-DD format
+ * @returns {string} Formatted date
+ */
+function formatDate(date) {
+  if (!date) return date;
+  
+  try {
+    if (date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      const [year, month, day] = date.split('-');
+      return `${day}/${month}/${year}`;
+    }
+    
+    const dateObj = new Date(date);
+    if (!isNaN(dateObj.getTime())) {
+      const day = String(dateObj.getDate()).padStart(2, '0');
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const year = dateObj.getFullYear();
+      return `${day}/${month}/${year}`;
+    }
+  } catch (e) {
+    // Return original if parsing fails
+  }
+  
+  return date;
+}
+
+/**
+ * Execute agendar intent handler
+ * @param {Object} session - Session object
+ * @param {string} message - User's message
+ * @param {Object} calendarDeps - Calendar dependencies { calendarClient, authClient, calendarId }
+ * @returns {Promise<Object>} { reply: string, sessionUpdates: object, buttons: array }
+ */
+async function execute(session, message, calendarDeps = null) {
+  const nombre = getBusinessName();
+  const horarios = getBusinessHours();
+  const { analyzeContextualResponse } = require('../utils/context-analyzer');
+
+  // Helper to get client name (supports both nombre_cliente and nombre_novia)
+  const getClientName = (sess) => sess.nombre_cliente || sess.nombre_novia || null;
+  
+  // CRITICAL: If pending_agendar_fecha is active OR fecha_cita_solicitada is already set (from moving appointment flow),
+  // we MUST process the appointment date immediately
+  // Skip ALL info collection and submenu logic - user is providing appointment date
+  if (session.pending_agendar_fecha || session.fecha_cita_solicitada) {
+    console.log(`📅 Usuario está proporcionando fecha de cita (pending_agendar_fecha activo o fecha_cita_solicitada ya establecida), procesando directamente...`);
+    // Extract fecha_cita_deseada from message, or use the one already in session
+    let fechaCitaDeseada = session.fecha_cita_solicitada; // Use date from session if already set (from moving appointment)
+    if (!fechaCitaDeseada) {
+      fechaCitaDeseada = await extractFechaCitaDeseada(message, session.fecha_boda);
+    }
+    
+    // Clear pending_agendar_fecha flag if we got a date
+    const sessionUpdates = {};
+    if (fechaCitaDeseada && session.pending_agendar_fecha) {
+      sessionUpdates.pending_agendar_fecha = false;
+    }
+
+    // If no date mentioned, ask for it
+    if (!fechaCitaDeseada) {
+      return {
+        reply: `¡Con gusto! Nos encantará recibirte 💕\n\n¿Qué día te gustaría visitarnos? Puedes decirme, por ejemplo: "el martes 24 de febrero" o "el 4 de marzo".\n\nEstamos abiertos:\n• Martes a sábado: ${horarios.martes_sabado || 'N/A'}\n• Domingos: ${horarios.domingos || 'N/A'}\n• Lunes: ${horarios.lunes || 'Cerrado'}`,
+        sessionUpdates: {
+          pending_agendar_fecha: true // Flag to indicate we're waiting for appointment date
+        }
+      };
+    }
+
+    // Verify the date is not the wedding date (only if fecha_boda exists)
+    if (session.fecha_boda && fechaCitaDeseada === session.fecha_boda) {
+      return {
+        reply: `Entiendo que mencionaste ${formatDate(fechaCitaDeseada)}, pero esa es la fecha de tu boda. ¿Qué día te gustaría visitarnos en el showroom? 💐`,
+        sessionUpdates: {
+          pending_agendar_fecha: true // Keep flag since we're still waiting for a valid date
+        }
+      };
+    }
+    
+    // Clear pending_agendar_fecha flag since we got a valid date
+    if (session.pending_agendar_fecha) {
+      sessionUpdates.pending_agendar_fecha = false;
+    }
+
+    // Process the date and show available slots (continue with normal flow below)
+    // This will skip all info collection and submenu logic
+    // Store fechaCitaDeseada in session so we can use it later, then continue to slot processing
+    sessionUpdates.fecha_cita_solicitada = fechaCitaDeseada;
+    sessionUpdates.skipInfoCollection = true; // Flag to skip info collection blocks
+    Object.assign(session, sessionUpdates);
+    
+    // IMPORTANT: Skip all info collection and submenu logic, go directly to slot processing
+    // We'll continue to the slot processing code below (after all the info collection blocks)
+  }
+  
+  // Check if this is a button click for "Agendar Nueva Cita" from submenu
+  // If so, skip info collection and go directly to asking for appointment date
+  // "menu_agendar_click" means user clicked main menu button (needs info collection)
+  // "quiero agendar" or "cita_nueva" means user clicked submenu button (info already collected)
+  const isCitaNuevaButton = message === 'quiero agendar' || message === 'cita_nueva';
+  const isMenuAgendarClick = message === 'menu_agendar_click';
+  
+  if (isCitaNuevaButton) {
+    // User clicked "Agendar Nueva Cita" from submenu - assume info is already collected
+    // Skip all info collection checks and go directly to appointment date flow
+    // Extract fecha_cita_deseada from message (will be empty string for button click)
+    const fechaCitaDeseada = await extractFechaCitaDeseada(message, session.fecha_boda);
+    
+    if (!fechaCitaDeseada) {
+      // No date in message, ask for appointment date
+      return {
+        reply: `¡Con gusto! Nos encantará recibirte 💕\n\n¿Qué día te gustaría visitarnos? Puedes decirme, por ejemplo: "el martes 24 de febrero" o "el 4 de marzo".\n\nEstamos abiertos:\n• Martes a sábado: ${horarios.martes_sabado || 'N/A'}\n• Domingos: ${horarios.domingos || 'N/A'}\n• Lunes: ${horarios.lunes || 'Cerrado'}`,
+        sessionUpdates: {
+          pending_agendar_fecha: true
+        }
+      };
+    }
+    // If date was found in message, continue with normal appointment scheduling flow below
+    // (skip all info collection checks)
+  }
+  
+  // If NOT a button click for "Agendar Nueva Cita", proceed with info collection if needed
+  // This includes: menu_agendar_click (from main menu) and regular text messages
+  // BUT: Skip if we already processed the appointment date above (skipInfoCollection flag)
+  if (!isCitaNuevaButton && !session.skipInfoCollection) {
+    
+    // If we're waiting for name (pending_nombre), check if user provided it
+    if (session.pending_nombre === true) {
+      // Use LLM to analyze if user provided their name
+      const nameAnalysis = await analyzeContextualResponse(
+      message,
+      'name_collection',
+      session,
+      {}
+    );
+    
+    if (nameAnalysis.action === 'provide_name' || nameAnalysis.action === 'provide_first_name') {
+      // User provided name - extract and save it
+      let extractedName = nameAnalysis.extractedValue;
+      
+      // If only first name provided, we'll still use it but note it's incomplete
+      if (!extractedName) {
+        // Try to extract from message directly
+        const nameMatch = message.match(/(?:me\s+llamo|soy|mi\s+nombre\s+es)\s+([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)*)/i);
+        if (nameMatch) {
+          extractedName = nameMatch[1];
+        } else {
+          // Try simple extraction: first capitalized words
+          const words = message.split(/\s+/).filter(w => /^[A-ZÁÉÍÓÚÑ]/.test(w));
+          if (words.length >= 1) {
+            extractedName = words.slice(0, 2).join(' '); // Take first 2 capitalized words
+          }
+        }
+      }
+      
+      if (extractedName) {
+        const sessionUpdates = {
+          nombre_cliente: extractedName,
+          nombre_novia: extractedName, // Backward compatibility
+          pending_nombre: false
+        };
+        
+        // Now check if we need fecha_boda
+        if (!session.fecha_boda && !session.fecha_boda_declinada) {
+          const nombrePrimero = extractedName.split(' ')[0];
+          return {
+            reply: `¡Perfecto ${nombrePrimero}! ✨ Para ayudarte mejor, ¿me compartes la fecha completa de tu boda? Por favor incluye el día, mes y año (por ejemplo: "10 de julio 2026"). Si aún no la tienes definida, no hay problema, solo dímelo 💫`,
+            sessionUpdates: {
+              ...sessionUpdates,
+              pending_fecha_boda: true
+            }
+          };
+        }
+        
+        // We have name and fecha_boda (or declined), show cita submenu
+        // Update session and show submenu so user can choose what to do
+        const { getClientFirstName } = require('../utils/name-utils');
+        const nombrePrimero = getClientFirstName(session) || extractedName.split(' ')[0];
+        
+        // Show cita submenu instead of continuing directly
+        const citaMenuHandler = require('./cita-menu');
+        const citaMenuResult = await citaMenuHandler.execute(session, message);
+        
+        return {
+          reply: citaMenuResult.reply,
+          sessionUpdates: {
+            ...sessionUpdates,
+            ...citaMenuResult.sessionUpdates
+          },
+          buttons: citaMenuResult.buttons
+        };
+      } else {
+        // Couldn't extract name, ask again
+        return {
+          reply: `¡Me encantaría ayudarte a agendar! 👰‍♀️ Pero primero necesito tu nombre completo (nombre y apellido) para personalizar tu experiencia.\n\n¿Me lo compartes?`,
+          sessionUpdates: {
+            pending_nombre: true
+          }
+        };
+      }
+    } else {
+      // User didn't provide name clearly, ask again
+      return {
+        reply: `¡Me encantaría ayudarte a agendar! 👰‍♀️ Pero primero necesito tu nombre completo (nombre y apellido) para personalizar tu experiencia.\n\n¿Me lo compartes?`,
+        sessionUpdates: {
+          pending_nombre: true
+        }
+      };
+    }
+    } // End of if (session.pending_nombre === true)
+    
+    // Check if we have nombre_cliente/nombre_novia - ask for it if missing
+    if (!getClientName(session)) {
+      return {
+        reply: `¡Me encantaría ayudarte a agendar! 👰‍♀️ Pero primero necesito tu nombre completo (nombre y apellido) para personalizar tu experiencia.\n\n¿Me lo compartes?`,
+        sessionUpdates: {
+          pending_nombre: true // Flag to indicate we're waiting for name
+        }
+      };
+    }
+    
+    // If we have both name and fecha_boda (or declined), and we're not in a pending state,
+    // show cita submenu directly (user clicked "Agendar/Editar Cita" and already has info)
+    // BUT: Skip this if pending_agendar_fecha is active (user is providing appointment date)
+    if (getClientName(session) && (session.fecha_boda || session.fecha_boda_declinada) && 
+        !session.pending_nombre && !session.pending_fecha_boda && !session.pending_agendar_fecha && !isCitaNuevaButton) {
+      // User has all info, show submenu directly
+      const citaMenuHandler = require('./cita-menu');
+      const citaMenuResult = await citaMenuHandler.execute(session, message);
+      
+      return {
+        reply: citaMenuResult.reply,
+        sessionUpdates: citaMenuResult.sessionUpdates || {},
+        buttons: citaMenuResult.buttons
+      };
+    }
+    
+    // If we're waiting for fecha_boda (pending_fecha_boda), check if user provided it
+    if (session.pending_fecha_boda === true) {
+      // Use LLM to analyze if user provided wedding date or declined
+      const dateAnalysis = await analyzeContextualResponse(
+      message,
+      'wedding_date_collection',
+      session,
+      {}
+    );
+    
+    if (dateAnalysis.action === 'decline_date') {
+      // User declined to provide date - mark it and show cita submenu
+      const sessionUpdates = {
+        fecha_boda_declinada: true,
+        pending_fecha_boda: false
+      };
+      
+      Object.assign(session, sessionUpdates);
+      
+      // Show cita submenu since user has completed info collection
+      const citaMenuHandler = require('./cita-menu');
+      const citaMenuResult = await citaMenuHandler.execute(session, message);
+      
+      return {
+        reply: citaMenuResult.reply,
+        sessionUpdates: {
+          ...sessionUpdates,
+          ...citaMenuResult.sessionUpdates
+        },
+        buttons: citaMenuResult.buttons
+      };
+    } else if (dateAnalysis.action === 'provide_date') {
+      // User provided date - extract and save it immediately
+      let extractedFechaBoda = null;
+      
+      // Try to extract date from message using profile extractor
+      try {
+        const { extractBrideProfile } = require('../profile-extractor');
+        // Use recent history to provide context for extraction
+        const recentHistory = (session.historial || []).slice(-5).concat([{ role: 'user', content: message }]);
+        const profileData = await extractBrideProfile(recentHistory);
+        if (profileData.fecha_boda) {
+          extractedFechaBoda = profileData.fecha_boda;
+          console.log(`📝 Fecha de boda extraída del mensaje: ${extractedFechaBoda}`);
+        }
+      } catch (e) {
+        console.warn('⚠️  No se pudo extraer fecha de boda del mensaje:', e.message);
+      }
+      
+      const sessionUpdates = {
+        pending_fecha_boda: false
+      };
+      
+      // If we extracted the date, save it immediately
+      if (extractedFechaBoda) {
+        sessionUpdates.fecha_boda = extractedFechaBoda;
+        console.log(`✅ Fecha de boda guardada inmediatamente en sesión: ${extractedFechaBoda}`);
+      } else {
+        // If extraction failed, mark that we need to wait for profile extractor
+        // But still clear pending_fecha_boda so user can proceed
+        console.log(`⚠️  Fecha de boda no extraída inmediatamente, el profile extractor la procesará en el siguiente mensaje`);
+      }
+      
+      Object.assign(session, sessionUpdates);
+      
+      // Show cita submenu since user has completed info collection
+      const citaMenuHandler = require('./cita-menu');
+      const citaMenuResult = await citaMenuHandler.execute(session, message);
+      
+      return {
+        reply: citaMenuResult.reply,
+        sessionUpdates: {
+          ...sessionUpdates,
+          ...citaMenuResult.sessionUpdates
+        },
+        buttons: citaMenuResult.buttons
+      };
+    } else {
+      // User didn't provide date clearly, ask again
+      const nombrePrimero = getClientName(session).split(' ')[0];
+      return {
+        reply: `¡Perfecto ${nombrePrimero}! ✨ Para ayudarte mejor, ¿me compartes la fecha completa de tu boda? Por favor incluye el día, mes y año (por ejemplo: "10 de julio 2026"). Si aún no la tienes definida, no hay problema, solo dímelo 💫`,
+        sessionUpdates: {
+          pending_fecha_boda: true
+        }
+      };
+    }
+    
+    // Check if we have fecha_boda - ask for it if missing (optional but preferred)
+    // Only ask if user hasn't declined to provide it
+    if (!session.fecha_boda && !session.fecha_boda_declinada) {
+      // First time asking for fecha_boda
+      const nombrePrimero = getClientName(session).split(' ')[0];
+      return {
+        reply: `¡Perfecto ${nombrePrimero}! ✨ Para ayudarte mejor, ¿me compartes la fecha completa de tu boda? Por favor incluye el día, mes y año (por ejemplo: "10 de julio 2026"). Si aún no la tienes definida, no hay problema, solo dímelo 💫`,
+        sessionUpdates: {
+          pending_fecha_boda: true // Flag to indicate we're waiting for wedding date
+        }
+      };
+    }
+    } // End of if (session.pending_fecha_boda === true)
+  } // End of if (!isCitaNuevaButton)
+
+  // IMPORTANT: If pending_agendar_fecha is active, we MUST process the appointment date
+  // Skip any submenu logic and go directly to date extraction and slot display
+  // This ensures that when user provides appointment date, we show slots, not submenu
+  
+  // Extract fecha_cita_deseada from message (only if not already processed above)
+  let fechaCitaDeseada = session.fecha_cita_solicitada; // Use date from session if already processed
+  if (!fechaCitaDeseada) {
+    fechaCitaDeseada = await extractFechaCitaDeseada(message, session.fecha_boda);
+  }
+  
+  // Clear pending_agendar_fecha flag if we got a date
+  const sessionUpdates = {};
+  if (fechaCitaDeseada && session.pending_agendar_fecha) {
+    sessionUpdates.pending_agendar_fecha = false;
+  }
+  
+  // Clear skipInfoCollection flag if it was set (we already processed the date)
+  if (session.skipInfoCollection) {
+    sessionUpdates.skipInfoCollection = false;
+  }
+
+  // If no date mentioned, ask for it
+  if (!fechaCitaDeseada) {
+    return {
+      reply: `¡Con gusto! Nos encantará recibirte 💕\n\n¿Qué día te gustaría visitarnos? Puedes decirme, por ejemplo: "el martes 24 de febrero" o "el 4 de marzo".\n\nEstamos abiertos:\n• Martes a sábado: ${horarios.martes_sabado || 'N/A'}\n• Domingos: ${horarios.domingos || 'N/A'}\n• Lunes: ${horarios.lunes || 'Cerrado'}`,
+      sessionUpdates: {
+        pending_agendar_fecha: true // Flag to indicate we're waiting for appointment date
+      }
+    };
+  }
+
+  // Verify the date is not the wedding date (only if fecha_boda exists)
+  if (session.fecha_boda && fechaCitaDeseada === session.fecha_boda) {
+    return {
+      reply: `Entiendo que mencionaste ${formatDate(fechaCitaDeseada)}, pero esa es la fecha de tu boda. ¿Qué día te gustaría visitarnos en el showroom? 💐`,
+      sessionUpdates: {
+        pending_agendar_fecha: true // Keep flag since we're still waiting for a valid date
+      }
+    };
+  }
+  
+  // Clear pending_agendar_fecha flag since we got a valid date
+  if (session.pending_agendar_fecha) {
+    sessionUpdates.pending_agendar_fecha = false;
+  }
+
+  // If we have calendar dependencies, query Google Calendar
+  if (calendarDeps && calendarDeps.calendarClient && calendarDeps.authClient) {
+    try {
+      console.log(`📅 Consultando disponibilidad para: ${fechaCitaDeseada}`);
+      
+      // If we're moving an appointment, exclude the old event from availability count
+      const excludeEventId = session.calendar_event_id || null;
+      
+      const slots = await getAvailableSlots(
+        fechaCitaDeseada,
+        calendarDeps.calendarClient,
+        calendarDeps.authClient,
+        calendarDeps.calendarId || 'primary',
+        excludeEventId // Exclude the event being moved from count
+      );
+
+      if (slots.length === 0) {
+        // Check if day is closed
+        if (!isDayOpen(fechaCitaDeseada)) {
+          const [year, month, day] = fechaCitaDeseada.split('-').map(Number);
+          const dateObj = new Date(year, month - 1, day);
+          const dayOfWeek = dateObj.getDay();
+          const dayNames = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+          const dayName = dayNames[dayOfWeek];
+          
+          return {
+            reply: `❌ Los ${dayName === 'lunes' ? 'lunes' : dayName} estamos cerrados. Por favor, elige otro día.\n\nEstamos abiertos:\n• Martes a sábado: ${horarios.martes_sabado || 'N/A'}\n• Domingos: ${horarios.domingos || 'N/A'}`,
+            sessionUpdates: {
+              ...sessionUpdates,
+              pending_agendar_fecha: true // Keep flag since date was invalid
+            }
+          };
+        }
+        
+        return {
+          reply: `❌ No hay bloques disponibles para ${formatDate(fechaCitaDeseada)}. Por favor, elige otra fecha.`,
+          sessionUpdates: {
+            ...sessionUpdates,
+            pending_agendar_fecha: true // Keep flag since no slots available
+          }
+        };
+      }
+
+      // Filter to only show slots with at least 1 available spot
+      const availableSlots = slots.filter(slot => slot.availableSpots && slot.availableSpots > 0);
+
+      if (availableSlots.length === 0) {
+        return {
+          reply: `❌ No hay horarios disponibles para ${formatDate(fechaCitaDeseada)}. Por favor, elige otra fecha.`,
+          sessionUpdates: {
+            ...sessionUpdates,
+            pending_agendar_fecha: true // Keep flag since no slots available
+          }
+        };
+      }
+
+      // Show all available slots as numbered list
+      let replyText = `Horarios disponibles para ${formatDate(fechaCitaDeseada)}:\n\n`;
+      
+      // Create numbered list with all available slots
+      availableSlots.forEach((slot, index) => {
+        replyText += `${index + 1}. ${slot.time}\n`;
+      });
+      
+      replyText += `\nEscribe el número del horario que prefieras para agendar tu cita.`;
+
+      // Save all available slots for selection
+      sessionUpdates.slots_disponibles = availableSlots;
+      sessionUpdates.fecha_cita_solicitada = fechaCitaDeseada;
+      sessionUpdates.pending_agendar_fecha = false; // Clear flag since we processed the date
+      sessionUpdates.periodo_seleccionado = null; // Clear any period selection
+      sessionUpdates.slots_medio_dia = null; // Clear period flags
+      sessionUpdates.slots_tarde = null;
+
+      return {
+        reply: replyText,
+        sessionUpdates
+      };
+    } catch (error) {
+      console.error('❌ Error consultando Google Calendar:', error);
+      // Fallback: ask user to try again
+      return {
+        reply: `Disculpa, hubo un error consultando la disponibilidad. ¿Puedes intentar de nuevo o decirme otra fecha? 💫`,
+        sessionUpdates: {}
+      };
+    }
+  } else {
+    // No calendar dependencies available - use default slots
+    console.warn('⚠️  Calendar dependencies not provided, using default slots');
+    
+    // Determinar si es domingo para excluir el 6:30pm
+    const [year, month, day] = fechaCitaDeseada.split('-').map(Number);
+    const dateObj = new Date(year, month - 1, day);
+    const dayOfWeek = dateObj.getDay();
+    const isSunday = dayOfWeek === 0;
+    
+    console.log(`   📅 [agendar handler] Verificando día de la semana para ${fechaCitaDeseada}: día ${dayOfWeek} (0=domingo)`);
+    console.log(`   📅 [agendar handler] Es domingo? ${isSunday}`);
+    
+    const allDefaultSlots = [
+      { time: '11:00 AM', start: `${fechaCitaDeseada}T11:00:00`, end: `${fechaCitaDeseada}T12:30:00`, availableSpots: 2, totalSpots: 2 },
+      { time: '12:30 PM', start: `${fechaCitaDeseada}T12:30:00`, end: `${fechaCitaDeseada}T14:00:00`, availableSpots: 2, totalSpots: 2 },
+      { time: '2:00 PM', start: `${fechaCitaDeseada}T14:00:00`, end: `${fechaCitaDeseada}T15:30:00`, availableSpots: 2, totalSpots: 2 },
+      { time: '3:30 PM', start: `${fechaCitaDeseada}T15:30:00`, end: `${fechaCitaDeseada}T17:00:00`, availableSpots: 2, totalSpots: 2 },
+      { time: '5:00 PM', start: `${fechaCitaDeseada}T17:00:00`, end: `${fechaCitaDeseada}T18:30:00`, availableSpots: 2, totalSpots: 2 },
+      { time: '6:30 PM', start: `${fechaCitaDeseada}T18:30:00`, end: `${fechaCitaDeseada}T20:00:00`, availableSpots: 2, totalSpots: 2 }
+    ];
+    
+    // Si es domingo, excluir el último slot (6:30pm)
+    const defaultSlots = isSunday ? allDefaultSlots.slice(0, -1) : allDefaultSlots;
+    
+    if (isSunday) {
+      console.log(`   📅 ✅ [agendar handler] Es domingo - excluyendo 6:30pm. Slots disponibles: ${defaultSlots.length}`);
+    }
+
+    let slotsMessage = `Bloques disponibles para ${formatDate(fechaCitaDeseada)} (90 min cada uno):`;
+
+    const buttons = defaultSlots
+      .map((slot, originalIndex) => {
+        // Only create button if slot has at least 1 available spot
+        if (!slot.availableSpots || slot.availableSpots <= 0) {
+          return null;
+        }
+        
+        // Format time without emojis and special chars (no spaces available shown)
+        let timeText = slot.time.replace(/[^\d:apm\s]/gi, '');
+        // Limit to 20 characters (WhatsApp limit)
+        if (timeText.length > 20) {
+          timeText = timeText.substring(0, 17) + '...';
+        }
+        return {
+          id: `slot_${originalIndex}`, // Use original index to match slots_disponibles array
+          title: timeText
+        };
+      })
+      .filter(button => button !== null); // Remove null entries
+
+    // Limit to 3 buttons (WhatsApp max)
+    const buttonsToShow = buttons.slice(0, 3);
+    
+    if (defaultSlots.length > 3) {
+      slotsMessage += `\n\n(Se muestran los primeros 3 bloques. Hay ${defaultSlots.length} bloques disponibles en total)`;
+    }
+
+      return {
+        reply: slotsMessage,
+        sessionUpdates: {
+          slots_disponibles: defaultSlots,
+          fecha_cita_solicitada: fechaCitaDeseada
+        },
+        buttons: buttonsToShow
+      };
+  }
+}
+
+module.exports = { execute, extractFechaCitaDeseada };

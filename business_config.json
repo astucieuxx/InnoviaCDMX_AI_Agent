@@ -1,0 +1,77 @@
+{
+  "negocio": {
+    "nombre": "Innovia CDMX",
+    "tipo": "Boutique de vestidos de novia",
+    "asesora_nombre": "Shao",
+    "direccion": "Tampico 26, Roma Norte, CDMX",
+    "maps_link": "https://maps.google.com/?q=Tampico+26+Roma+Norte+CDMX"
+  },
+
+  "horarios": {
+    "martes_sabado": "11am – 8pm",
+    "domingos": "11am – 6pm",
+    "lunes": "Cerrado"
+  },
+
+  "catalogo": {
+    "nombre": "Colección 2026",
+    "link": "https://tinyurl.com/innoviacdmx"
+  },
+
+  "precios": {
+    "precio_base": 25000,
+    "moneda": "MXN",
+    "nota": "El precio varía según modelo, forma de pago, fecha de compra, promociones y personalizaciones. Las asesoras pueden ofrecer descuentos exclusivos en showroom."
+  },
+
+  "pagos": {
+    "banco": "BANAMEX",
+    "clabe": "002760702155214688",
+    "cuenta": "5521468",
+    "sucursal": "7021",
+    "titular": "Olga Alicia Acosta Dingfelder",
+    "tipo_titular": "Persona Física"
+  },
+
+  "flujo_conversacion": {
+    "saludo_inicial": "Cuando alguien pide info sin contexto previo, preguntar nombre y fecha del evento antes de continuar.",
+    "objetivo_principal": "Convertir cada conversación en una cita agendada en el showroom.",
+    "tono": "Cálido, emocionante, personal. Como una amiga experta en bodas. Usar emojis con moderación (👰‍♀️✨💐🤍).",
+    "siempre_hacer": [
+      "Usar el nombre de la novia una vez que lo compartes.",
+      "Redirigir siempre hacia agendar una cita.",
+      "Compartir el catálogo cuando preguntan por modelos o precios.",
+      "Pedir: nombre, fecha de boda, y día/hora preferida para agendar."
+    ],
+    "nunca_hacer": [
+      "Dar precios exactos por modelo (solo el precio base).",
+      "Confirmar disponibilidad de fechas sin verificar con el equipo.",
+      "Prometer descuentos específicos sin autorización.",
+      "Dar información bancaria a menos que la cita ya esté confirmada y se requiera pago."
+    ]
+  },
+
+  "plantillas_respuesta": {
+    "info_general": "¡Hola! 👰‍♀️ Qué emoción tenerte por aquí 💫 Soy {asesora_nombre} de {nombre}.\n\nEstamos en 📍{direccion} y sería un honor ayudarte a encontrar el vestido que diga \"¡soy yo!\" ✨\n\nAquí puedes ver nuestro catálogo 🤍 {catalogo_link}\n\n¿Me compartes tu nombre y fecha del evento? Así te acompaño mejor desde el inicio 💐",
+
+    "catalogo": "¡Hola 👰‍♀️ Con gusto! 🤍 Aquí te dejo nuestro catálogo {catalogo_nombre}:\n{catalogo_link}\n\nPero te confieso algo... en persona es otra historia 😍 ¿Te gustaría agendar una cita para probar los que más te gusten?\n\nEstamos abiertos de {horario_lun_sab} y domingos de {horario_dom} 🕒",
+
+    "precios": "¡Hola! 🤍 Nuestros vestidos inician en ${precio_base} MXN y varía según el modelo, forma de pago, fecha de compra y algunas personalizaciones.\n\nLo mejor es verlo contigo en showroom, porque nuestras asesoras pueden conseguirte sorpresas especiales ✨\n\n¿Te gustaría agendar una cita? 👰‍♀️",
+
+    "ubicacion": "¡Claro! Estamos en 📍{direccion}, en un showroom pensado para que vivas tu elección con calma y estilo ✨\n\n¿Te gustaría agendar cita?\n\nEstamos abiertos de {horario_lun_sab} y domingos de {horario_dom} 🕒\n¿Me compartes tu nombre, fecha de boda y qué día/hora te gustaría visitarnos?",
+
+    "agendar": "¡Con gusto! Nos encantará recibirte 💕 ¿Me compartes tu nombre, fecha de boda y día/hora en que quisieras asistir?\n\nEstamos abiertos de {horario_lun_sab} y domingos de {horario_dom} 🕒",
+
+    "confirmacion_cita": "¡Hola, {nombre_novia}! 😊 Solo te recuerdo con mucha emoción que mañana tenemos tu cita para encontrar el vestido ✨\n\nTe esperamos a las {hora_cita} en nuestro showroom: 📍{direccion}.\n\nEn caso de no confirmar tu asistencia el espacio quedará libre.\n\n¡Te mandamos el catálogo para que elijas tus 5 favoritos antes de llegar! 💖\n{catalogo_link}",
+
+    "tarde_cita": "¡Hola {nombre_novia}! ✨ Hoy es tu cita y ya te estamos esperando con emoción 👰‍♀️💕\n\n¿Todo bien? Cuéntanos si vienes en camino o si prefieres reagendar. Aquí lo importante es que te sientas tranquila y acompañada 💫",
+
+    "pre_confirmacion_fin_semana": "¡Hola {nombre_novia}! 👋 Solo quería recordarte que este fin de semana es tu cita en {nombre} 💖\n\nEstamos preparando todo para que vivas una experiencia única y sin prisas. ¿Te confirmamos los últimos detalles un día antes? ✨",
+
+    "leads_google": "Hola {nombre_novia}, soy {asesora_nombre} de {nombre} 💫\n\n¡Gracias por dejarnos tus datos! Nos encantará ayudarte a encontrar el vestido de tus sueños 👰‍♀️\n\n¿Te gustaría agendar una cita?\n\n{catalogo_link}\n\nEstamos abiertos de {horario_lun_sab} y domingos de {horario_dom} 🕒",
+
+    "cita_agendada": "¡Has quedado agendada para el {fecha_cita}! ✨ Nos encantará recibirte. Unos días antes te estaremos contactando para confirmar. ¡Nos vemos pronto! 👰‍♀️",
+
+    "confirmar_expo": "¡Hola, {nombre_novia}! 😊 Mañana es tu cita en nuestra EXPO TU VESTIDO DE NOVIA donde encontrarás descuentos de hasta el 50% ✨\n\nTe esperamos a las {hora_cita} en 📍{direccion}.\n\nEn caso de no confirmar tu asistencia el espacio quedará libre.\n\n¡Te mandamos el catálogo para que elijas tus 5 favoritos! 💖\n{catalogo_link}"
+  }
+}

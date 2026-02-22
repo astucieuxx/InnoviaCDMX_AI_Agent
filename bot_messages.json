@@ -1,0 +1,265 @@
+{
+  "saludo": {
+    "nombre": "Saludo Inicial",
+    "descripcion": "Mensajes de bienvenida y saludo inicial",
+    "mensajes": {
+      "primer_contacto": {
+        "id": "primer_contacto",
+        "nombre": "Primer Contacto",
+        "texto": "¡Hola! 👰‍♀️ Qué emoción tenerte por aquí 💫 Bienvenida a {business_name}.\n\nEstamos en 📍{business_address} y sería un honor ayudarte a encontrar el vestido que diga \"¡soy yo!\" ✨\n\nPuedes ver nuestro catálogo aquí: {catalog_link}\n\n¿En qué puedo ayudarte hoy?",
+        "variables": [
+          "business_name",
+          "business_address",
+          "catalog_link"
+        ]
+      },
+      "con_nombre_sin_fecha": {
+        "id": "con_nombre_sin_fecha",
+        "nombre": "Con Nombre, Sin Fecha de Boda",
+        "texto": "¡Hola {nombre_cliente}! ✨ Bienvenida a {business_name} 💫\n\n¿En qué puedo ayudarte hoy?",
+        "variables": [
+          "nombre_cliente",
+          "business_name"
+        ]
+      },
+      "pidiendo_fecha_boda": {
+        "id": "pidiendo_fecha_boda",
+        "nombre": "Pidiendo Fecha de Boda",
+        "texto": "¡Perfecto {nombre_cliente}! ✨ Para ayudarte mejor, ¿me compartes la fecha completa de tu boda? Por favor incluye el día, mes y año (por ejemplo: \"10 de julio 2026\"). Si aún no la tienes definida, no hay problema, solo dímelo 💫",
+        "variables": [
+          "nombre_cliente"
+        ]
+      },
+      "con_nombre_y_fecha": {
+        "id": "con_nombre_y_fecha",
+        "nombre": "Con Nombre y Fecha de Boda",
+        "texto": "¡Muy bien {nombre_cliente}! ✨ Qué emoción, tu boda el {fecha_boda} está a la vuelta de la esquina 💫\n\n¿En qué puedo ayudarte hoy?",
+        "variables": [
+          "nombre_cliente",
+          "fecha_boda"
+        ]
+      }
+    }
+  },
+  "agendar": {
+    "nombre": "Agendar Cita",
+    "descripcion": "Flujo completo de agendamiento de citas",
+    "mensajes": {
+      "pidiendo_nombre": {
+        "id": "pidiendo_nombre",
+        "nombre": "Pidiendo Nombre Completo",
+        "texto": "¡Perfecto! Para agendar tu cita, necesito algunos datos:\n\n1️⃣ ¿Cuál es tu nombre completo?",
+        "variables": []
+      },
+      "pidiendo_fecha_cita": {
+        "id": "pidiendo_fecha_cita",
+        "nombre": "Pidiendo Fecha de Cita",
+        "texto": "¡Con gusto! Nos encantará recibirte 💕\n\n¿Qué día te gustaría visitarnos? Puedes decirme, por ejemplo: \"el martes 24 de febrero\" o \"el 4 de marzo\".\n\nEstamos abiertos:\n• Martes a sábado: {horarios_martes_sabado}\n• Domingos: {horarios_domingos}\n• Lunes: {horarios_lunes}",
+        "variables": [
+          "horarios_martes_sabado",
+          "horarios_domingos",
+          "horarios_lunes"
+        ]
+      },
+      "fecha_es_boda": {
+        "id": "fecha_es_boda",
+        "nombre": "Fecha Coincide con Boda",
+        "texto": "Entiendo que mencionaste {fecha_cita}, pero esa es la fecha de tu boda. ¿Qué día te gustaría visitarnos en el showroom? 💐",
+        "variables": [
+          "fecha_cita"
+        ]
+      },
+      "dia_cerrado": {
+        "id": "dia_cerrado",
+        "nombre": "Día Cerrado",
+        "texto": "❌ Los {dia_semana} estamos cerrados. Por favor, elige otro día.\n\nEstamos abiertos:\n• Martes a sábado: {horarios_martes_sabado}\n• Domingos: {horarios_domingos}",
+        "variables": [
+          "dia_semana",
+          "horarios_martes_sabado",
+          "horarios_domingos"
+        ]
+      },
+      "mostrando_horarios": {
+        "id": "mostrando_horarios",
+        "nombre": "Mostrando Horarios Disponibles",
+        "texto": "Bloques disponibles para {fecha_cita} (90 min cada uno):",
+        "variables": [
+          "fecha_cita"
+        ]
+      },
+      "cita_confirmada": {
+        "id": "cita_confirmada",
+        "nombre": "Cita Confirmada",
+        "texto": "¡Perfecto! ✅ Tu cita ha sido agendada:\n\n📅 Fecha: {fecha_cita}\n🕐 Hora: {hora_cita}\n\nTe esperamos en nuestro showroom. Si necesitas hacer algún cambio, solo avísame 💐",
+        "variables": [
+          "fecha_cita",
+          "hora_cita"
+        ]
+      }
+    }
+  },
+  "cita_menu": {
+    "nombre": "Menú de Citas",
+    "descripcion": "Opciones del menú de citas",
+    "mensajes": {
+      "con_cita": {
+        "id": "con_cita",
+        "nombre": "Usuario con Cita Agendada",
+        "texto": "Muy bien {nombre_cliente}! ✨ Veo que ya tienes una cita agendada. ¿Qué te gustaría hacer?",
+        "variables": [
+          "nombre_cliente"
+        ]
+      },
+      "sin_cita": {
+        "id": "sin_cita",
+        "nombre": "Usuario sin Cita",
+        "texto": "¡Muy bien! ✨ ¿Qué te gustaría hacer?",
+        "variables": []
+      }
+    }
+  },
+  "cambiar_cita": {
+    "nombre": "Cambiar/Reagendar Cita",
+    "descripcion": "Flujo para cambiar o reagendar una cita existente",
+    "mensajes": {
+      "cita_encontrada": {
+        "id": "cita_encontrada",
+        "nombre": "Cita Encontrada",
+        "texto": "¡Por supuesto {nombre_cliente}! 💐\n\nTu cita actual está agendada para:\n\n📅 Fecha: {fecha_cita}\n🕐 Hora: {hora_cita}\n\n¿Qué te gustaría hacer con tu cita?",
+        "variables": [
+          "nombre_cliente",
+          "fecha_cita",
+          "hora_cita"
+        ]
+      },
+      "cita_no_encontrada": {
+        "id": "cita_no_encontrada",
+        "nombre": "Cita No Encontrada",
+        "texto": "¡Hola {nombre_cliente}! ✨\n\nNo encontré una cita agendada para cambiar. ¿Te gustaría agendar una nueva cita?",
+        "variables": [
+          "nombre_cliente"
+        ]
+      },
+      "pidiendo_nueva_fecha": {
+        "id": "pidiendo_nueva_fecha",
+        "nombre": "Pidiendo Nueva Fecha",
+        "texto": "¡Por supuesto! 💐\n\n¿Qué día te gustaría reagendar tu cita? Puedes decirme, por ejemplo: \"el martes 24 de febrero\" o \"el 4 de marzo\".\n\nUna vez que me digas la fecha, te mostraré los horarios disponibles ✨",
+        "variables": []
+      }
+    }
+  },
+  "cancelar_cita": {
+    "nombre": "Cancelar Cita",
+    "descripcion": "Flujo para cancelar una cita",
+    "mensajes": {
+      "cita_encontrada": {
+        "id": "cita_encontrada",
+        "nombre": "Cita Encontrada para Cancelar",
+        "texto": "✅ Encontré tu cita agendada:\n\n📅 Fecha: {fecha_cita}\n🕐 Hora: {hora_cita}\n\n¿Confirmas que deseas cancelar esta cita?",
+        "variables": [
+          "fecha_cita",
+          "hora_cita"
+        ]
+      },
+      "cita_cancelada": {
+        "id": "cita_cancelada",
+        "nombre": "Cita Cancelada",
+        "texto": "✅ Tu cita ha sido cancelada:\n\n📅 Fecha: {fecha_cita}\n🕐 Hora: {hora_cita}\n\nSi cambias de opinión, estaré aquí para ayudarte a agendar una nueva cita cuando lo desees 💐",
+        "variables": [
+          "fecha_cita",
+          "hora_cita"
+        ]
+      },
+      "cita_no_encontrada": {
+        "id": "cita_no_encontrada",
+        "nombre": "Cita No Encontrada para Cancelar",
+        "texto": "¡Hola {nombre_cliente}! ✨\n\nNo encontré una cita agendada para cancelar. ¿Te gustaría agendar una nueva cita?",
+        "variables": [
+          "nombre_cliente"
+        ]
+      }
+    }
+  },
+  "informacion": {
+    "nombre": "Información General",
+    "descripcion": "Mensajes de información sobre el negocio",
+    "mensajes": {
+      "menu_info": {
+        "id": "menu_info",
+        "nombre": "Menú de Información",
+        "texto": "¿Qué información te gustaría conocer?",
+        "variables": []
+      },
+      "info_general": {
+        "id": "info_general",
+        "nombre": "Información General",
+        "texto": "{saludo} Qué emoción tenerte por aquí 💫\n\nSoy {asesora} de {business_name}, {tipo} ubicada en 📍{business_address}.\n\nEstamos abiertos:\n• Martes a sábado: {horarios_martes_sabado}\n• Domingos: {horarios_domingos}\n• Lunes: {horarios_lunes}\n\nAquí puedes ver nuestro catálogo {catalog_name}:\n{catalog_link}",
+        "variables": [
+          "saludo",
+          "asesora",
+          "business_name",
+          "tipo",
+          "business_address",
+          "horarios_martes_sabado",
+          "horarios_domingos",
+          "horarios_lunes",
+          "catalog_name",
+          "catalog_link"
+        ]
+      }
+    }
+  },
+  "catalogo": {
+    "nombre": "Catálogo",
+    "descripcion": "Mensajes relacionados con el catálogo",
+    "mensajes": {
+      "mostrando_catalogo": {
+        "id": "mostrando_catalogo",
+        "nombre": "Mostrando Catálogo",
+        "texto": "{saludo} Con gusto! 🤍\n\nAquí te dejo nuestro catálogo {catalog_name}:\n{catalog_link}\n\nPero te confieso algo... en persona es otra historia 😍\n\nVer los vestidos en fotos es una cosa, pero probártelos y sentir cómo te quedan es una experiencia completamente diferente ✨\n\n¿Te gustaría agendar una cita para probar los que más te gusten? 💐",
+        "variables": [
+          "saludo",
+          "catalog_name",
+          "catalog_link"
+        ]
+      }
+    }
+  },
+  "precios": {
+    "nombre": "Precios",
+    "descripcion": "Mensajes sobre precios",
+    "mensajes": {
+      "mostrando_precios": {
+        "id": "mostrando_precios",
+        "nombre": "Mostrando Precios",
+        "texto": "{saludo}\n\nNuestros vestidos inician en ${precio_base} {moneda}.\n\n{nota}\n\nLo mejor es verlo contigo en showroom, porque nuestras asesoras pueden conseguirte sorpresas especiales ✨\n\n¿Te gustaría agendar una cita? ✨",
+        "variables": [
+          "saludo",
+          "precio_base",
+          "moneda",
+          "nota"
+        ]
+      }
+    }
+  },
+  "escalacion": {
+    "nombre": "Escalamiento a Asesor",
+    "descripcion": "Mensajes cuando se escala a un asesor humano",
+    "mensajes": {
+      "conectando_asesor": {
+        "id": "conectando_asesor",
+        "nombre": "Conectando con Asesor",
+        "texto": "😊 Entiendo que quieres hablar con un asesor. Voy a conectarte con uno de nuestros expertos para que te pueda ayudar con lo que necesites 👰‍♀️✨\n\n📧 He enviado una notificación a nuestro equipo para que se comuniquen contigo pronto.",
+        "variables": []
+      },
+      "no_entendido": {
+        "id": "no_entendido",
+        "nombre": "No Entendido",
+        "texto": "{saludo}\n\nNo estoy seguro de entender exactamente qué necesitas. Puedo ayudarte con:\n\n• Reagendar o cancelar tu cita existente\n• Agendar o editar una cita\n• Ver información sobre catálogo, precios o ubicación\n• Hablar con un asesor\n\nSi prefieres, puedo conectarte con uno de nuestros asesores que te ayudará mejor. ¿Te gustaría hablar con un asesor?",
+        "variables": [
+          "saludo"
+        ]
+      }
+    }
+  }
+}

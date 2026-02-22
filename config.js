@@ -1,0 +1,341 @@
+const fs = require('fs');
+const path = require('path');
+
+/**
+ * Business Configuration Module
+ * 
+ * Reads and exports business configuration from business_config.json
+ * All modules should import business config from here, never hardcode business info directly.
+ */
+
+let businessConfig = null;
+let botMessages = null; // Cache for bot messages
+
+/**
+ * Load business configuration from JSON file
+ * @returns {Object} Business configuration object
+ */
+function loadBusinessConfig() {
+  if (businessConfig) {
+    return businessConfig;
+  }
+
+  try {
+    const configPath = path.join(__dirname, 'business_config.json');
+    const configData = fs.readFileSync(configPath, 'utf8');
+    businessConfig = JSON.parse(configData);
+    console.log('✅ Business config loaded successfully');
+    return businessConfig;
+  } catch (error) {
+    console.error('❌ Error loading business_config.json:', error.message);
+    throw new Error(`Failed to load business configuration: ${error.message}`);
+  }
+}
+
+// Load config immediately when module is imported
+const config = loadBusinessConfig();
+
+/**
+ * Get business information
+ */
+function getBusinessInfo() {
+  return config.negocio || {};
+}
+
+/**
+ * Get business name
+ */
+function getBusinessName() {
+  return getBusinessInfo().nombre || 'Nuestro negocio';
+}
+
+/**
+ * Get business type
+ */
+function getBusinessType() {
+  return getBusinessInfo().tipo || '';
+}
+
+/**
+ * Get advisor name
+ */
+function getAdvisorName() {
+  return getBusinessInfo().asesora_nombre || '';
+}
+
+/**
+ * Get business address
+ */
+function getBusinessAddress() {
+  return getBusinessInfo().direccion || '';
+}
+
+/**
+ * Get business maps link
+ */
+function getBusinessMapsLink() {
+  return getBusinessInfo().maps_link || '';
+}
+
+/**
+ * Get business hours
+ */
+function getBusinessHours() {
+  return config.horarios || {};
+}
+
+/**
+ * Get catalog information
+ */
+function getCatalogInfo() {
+  return config.catalogo || {};
+}
+
+/**
+ * Get catalog link
+ */
+function getCatalogLink() {
+  return getCatalogInfo().link || '';
+}
+
+/**
+ * Get catalog name
+ */
+function getCatalogName() {
+  return getCatalogInfo().nombre || 'Catálogo';
+}
+
+/**
+ * Get pricing information
+ */
+function getPricingInfo() {
+  return config.precios || {};
+}
+
+/**
+ * Get base price
+ */
+function getBasePrice() {
+  return getPricingInfo().precio_base || 0;
+}
+
+/**
+ * Get payment information
+ */
+function getPaymentInfo() {
+  return config.pagos || {};
+}
+
+/**
+ * Get conversation flow configuration
+ */
+function getConversationFlow() {
+  return config.flujo_conversacion || {};
+}
+
+/**
+ * Get response templates
+ */
+function getResponseTemplates() {
+  return config.plantillas_respuesta || {};
+}
+
+/**
+ * Get a specific response template with variable substitution
+ * @param {string} templateKey - Key of the template to get
+ * @param {Object} variables - Variables to substitute in the template
+ * @returns {string} Processed template string
+ */
+function getResponseTemplate(templateKey, variables = {}) {
+  const templates = getResponseTemplates();
+  let template = templates[templateKey] || '';
+  
+  if (!template) {
+    console.warn(`⚠️  Template "${templateKey}" not found`);
+    return '';
+  }
+  
+  // Replace variables in template
+  // Variables can be: {nombre}, {asesora_nombre}, {direccion}, etc.
+  Object.keys(variables).forEach(key => {
+    const regex = new RegExp(`\\{${key}\\}`, 'g');
+    template = template.replace(regex, variables[key]);
+  });
+  
+  // Replace business config variables
+  const businessInfo = getBusinessInfo();
+  template = template.replace(/\{nombre\}/g, businessInfo.nombre || '');
+  template = template.replace(/\{asesora_nombre\}/g, businessInfo.asesora_nombre || '');
+  template = template.replace(/\{direccion\}/g, businessInfo.direccion || '');
+  
+  const catalogInfo = getCatalogInfo();
+  template = template.replace(/\{catalogo_link\}/g, catalogInfo.link || '');
+  template = template.replace(/\{catalogo_nombre\}/g, catalogInfo.nombre || '');
+  
+  const hours = getBusinessHours();
+  template = template.replace(/\{horario_lun_sab\}/g, hours.martes_sabado || '');
+  template = template.replace(/\{horario_dom\}/g, hours.domingos || '');
+  
+  const pricing = getPricingInfo();
+  template = template.replace(/\{precio_base\}/g, pricing.precio_base || '');
+  
+  return template;
+}
+
+/**
+ * Get default greeting message
+ */
+function getDefaultGreeting() {
+  return getResponseTemplate('info_general') || 
+         `¡Hola! 👰 Bienvenida a ${getBusinessName()}.\n\nPara agendar una cita, necesito algunos datos.\n\n¿Cuál es tu nombre?`;
+}
+
+/**
+ * Get default response when bot doesn't understand
+ */
+function getDefaultResponse() {
+  return `Escribe "cita" para agendar una consulta en ${getBusinessName()}.`;
+}
+
+/**
+ * Get appointment confirmation message
+ * @param {Object} appointmentData - Appointment data (name, date, time, etc.)
+ * @returns {string} Confirmation message
+ */
+function getAppointmentConfirmationMessage(appointmentData) {
+  const { name, date, time, calendarLink } = appointmentData;
+  
+  let message = `✅ ¡Cita confirmada!\n\n👰 ${name}\n📅 Fecha: ${date}\n🕐 Hora: ${time}\n\n📍 Te esperamos en ${getBusinessName()}`;
+  
+  if (getBusinessAddress()) {
+    message += `\n📍 ${getBusinessAddress()}`;
+  }
+  
+  if (calendarLink) {
+    message += `\n📅 Ver en Google Calendar: ${calendarLink}`;
+  }
+  
+  message += `\n📞 Si necesitas cambiar, responde este mensaje\n\n¡Gracias!`;
+  
+  return message;
+}
+
+/**
+ * Load bot messages from bot_messages.json
+ * @returns {Object} Bot messages object
+ */
+function loadBotMessages() {
+  if (botMessages) {
+    return botMessages;
+  }
+
+  try {
+    const messagesPath = path.join(__dirname, 'bot_messages.json');
+    const messagesData = fs.readFileSync(messagesPath, 'utf8');
+    botMessages = JSON.parse(messagesData);
+    console.log('✅ Bot messages loaded successfully');
+    return botMessages;
+  } catch (error) {
+    console.error('❌ Error loading bot_messages.json:', error.message);
+    // Return empty object if file doesn't exist
+    return {};
+  }
+}
+
+/**
+ * Reload bot messages from file (useful after updates)
+ */
+function reloadBotMessages() {
+  botMessages = null;
+  return loadBotMessages();
+}
+
+/**
+ * Get a bot message from bot_messages.json
+ * @param {string} flow - Flow name (e.g., 'saludo', 'agendar')
+ * @param {string} messageId - Message ID within the flow
+ * @param {Object} variables - Variables to replace in the message
+ * @returns {string} Processed message or empty string if not found
+ */
+function getBotMessage(flow, messageId, variables = {}) {
+  const messages = loadBotMessages();
+  
+  if (!messages[flow] || !messages[flow].mensajes || !messages[flow].mensajes[messageId]) {
+    console.warn(`⚠️  Bot message not found: ${flow}.${messageId}`);
+    return '';
+  }
+  
+  let message = messages[flow].mensajes[messageId].texto || '';
+  
+  // Replace variables
+  Object.keys(variables).forEach(key => {
+    const regex = new RegExp(`\\{${key}\\}`, 'g');
+    message = message.replace(regex, variables[key] || '');
+  });
+  
+  // Replace business config variables
+  const businessInfo = getBusinessInfo();
+  message = message.replace(/\{business_name\}/g, businessInfo.nombre || '');
+  message = message.replace(/\{asesora\}/g, businessInfo.asesora_nombre || '');
+  message = message.replace(/\{business_address\}/g, businessInfo.direccion || '');
+  
+  const catalogInfo = getCatalogInfo();
+  message = message.replace(/\{catalog_link\}/g, catalogInfo.link || '');
+  message = message.replace(/\{catalog_name\}/g, catalogInfo.nombre || '');
+  
+  const hours = getBusinessHours();
+  message = message.replace(/\{horarios_martes_sabado\}/g, hours.martes_sabado || '');
+  message = message.replace(/\{horarios_domingos\}/g, hours.domingos || '');
+  message = message.replace(/\{horarios_lunes\}/g, hours.lunes || '');
+  
+  const pricing = getPricingInfo();
+  message = message.replace(/\{precio_base\}/g, pricing.precio_base || '');
+  message = message.replace(/\{moneda\}/g, pricing.moneda || 'MXN');
+  message = message.replace(/\{nota\}/g, pricing.nota || '');
+  
+  return message;
+}
+
+// Export everything
+module.exports = {
+  // Raw config
+  config,
+  
+  // Business info
+  getBusinessInfo,
+  getBusinessName,
+  getBusinessType,
+  getAdvisorName,
+  getBusinessAddress,
+  getBusinessMapsLink,
+  
+  // Hours
+  getBusinessHours,
+  
+  // Catalog
+  getCatalogInfo,
+  getCatalogLink,
+  getCatalogName,
+  
+  // Pricing
+  getPricingInfo,
+  getBasePrice,
+  
+  // Payment
+  getPaymentInfo,
+  
+  // Conversation flow
+  getConversationFlow,
+  
+  // Templates
+  getResponseTemplates,
+  getResponseTemplate,
+  getDefaultGreeting,
+  getDefaultResponse,
+  getAppointmentConfirmationMessage,
+  
+  // Bot messages
+  loadBotMessages,
+  reloadBotMessages,
+  getBotMessage
+};

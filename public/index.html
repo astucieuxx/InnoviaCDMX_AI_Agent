@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Agent - Dashboard de Analytics</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-content">
+                <div class="header-title">
+                    <div class="header-logo"></div>
+                    <div>
+                        <h1>AI Agent</h1>
+                        <p class="header-subtitle">Innovia CDMX · Dashboard de Analytics</p>
+                    </div>
+                </div>
+                <div class="header-actions">
+                    <div class="date-selector">
+                        <button class="date-btn" data-period="today">Hoy</button>
+                        <button class="date-btn" data-period="7d">7 días</button>
+                        <button class="date-btn active" data-period="30d">30 días</button>
+                        <button class="date-btn" data-period="90d">90 días</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="analytics">📊 Analytics</button>
+            <button class="tab-btn" data-tab="conversations">💬 Conversaciones</button>
+            <button class="tab-btn" data-tab="appointments">📅 Citas</button>
+            <button class="tab-btn" data-tab="messages">✏️ Mensajes</button>
+            <button class="tab-btn" data-tab="config">⚙️ Configuración</button>
+        </div>
+
+        <!-- Tab: Analytics -->
+        <div id="analytics" class="tab-content active">
+            <!-- KPI Row -->
+            <div class="kpi-grid" style="margin-bottom: 24px;">
+                <div class="kpi-card">
+                    <div class="kpi-icon">💬</div>
+                    <div class="kpi-value" id="total-conversations-kpi">0</div>
+                    <div class="kpi-label">Conversaciones</div>
+                    <div class="kpi-sub">
+                        <span class="kpi-trend up">↑ <span id="conversations-trend">0%</span></span>
+                    </div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-icon">👥</div>
+                    <div class="kpi-value" id="new-users-kpi">0</div>
+                    <div class="kpi-label">Usuarios Nuevos</div>
+                    <div class="kpi-sub">
+                        <span class="kpi-trend up">↑ <span id="new-users-trend">0%</span></span>
+                    </div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-icon">⚡</div>
+                    <div class="kpi-value" id="fcr-rate-kpi-main">0%</div>
+                    <div class="kpi-label">Resolución Auto.</div>
+                    <div class="kpi-sub">
+                        <span class="kpi-trend up">↑ <span id="fcr-trend">0%</span></span>
+                    </div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-icon">⏰</div>
+                    <div class="kpi-value" id="avg-response-time-kpi-main">0s</div>
+                    <div class="kpi-label">Tiempo Resp.</div>
+                    <div class="kpi-sub">
+                        <span class="kpi-trend down">↓ <span id="response-time-trend">0%</span></span>
+                    </div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-icon">📅</div>
+                    <div class="kpi-value" id="total-appointments-generated-kpi-main">0</div>
+                    <div class="kpi-label">Citas Generadas</div>
+                    <div class="kpi-sub">
+                        <span class="kpi-trend up">↑ <span id="appointments-trend">0%</span></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Usage + Intents -->
+            <div class="charts-grid" style="margin-bottom: 24px;">
+                <div class="chart-card">
+                    <h3>Conversaciones Nuevas</h3>
+                    <p class="chart-subtitle">Solo usuarios nuevos · últimos 7 días</p>
+                    <canvas id="conversations-day-chart"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>Intents más usados</h3>
+                    <p class="chart-subtitle">Top 5 este mes</p>
+                    <canvas id="intents-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Performance + Funnel -->
+            <div class="charts-grid" style="margin-bottom: 24px;">
+                <div class="chart-card">
+                    <h3>Rendimiento del AI Agent</h3>
+                    <p class="chart-subtitle">Tasa de éxito en tareas clave</p>
+                    <div class="performance-metrics-list">
+                        <div class="performance-metric">
+                            <div class="performance-metric-header">
+                                <span class="performance-label">FCR (FIRST CONTACT RESOLUTION)</span>
+                                <span class="performance-value" id="fcr-rate-display">81%</span>
+                            </div>
+                            <div class="performance-subtitle">vs 74% mes pasado</div>
+                        </div>
+                        <div class="performance-metric">
+                            <div class="performance-metric-header">
+                                <span class="performance-label">ESCALAMIENTO HUMANO</span>
+                                <span class="performance-value" id="escalation-rate-display">19%</span>
+                            </div>
+                            <div class="performance-subtitle" id="escalation-rate-change">-</div>
+                        </div>
+                        <div class="performance-metric">
+                            <div class="performance-metric-header">
+                                <span class="performance-label">TIEMPO RESP. PROMEDIO</span>
+                                <span class="performance-value" id="avg-response-time-display">1.2s</span>
+                            </div>
+                            <div class="performance-subtitle" id="response-time-change">-</div>
+                        </div>
+                        <div class="performance-metric">
+                            <div class="performance-metric-header">
+                                <span class="performance-label">DURACIÓN CONVERSACIÓN</span>
+                                <span class="performance-value" id="avg-conversation-duration-display">3m 42s</span>
+                            </div>
+                            <div class="performance-subtitle">end-to-end</div>
+                        </div>
+                    </div>
+                    <canvas id="task-success-chart"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>Funnel de Conversión</h3>
+                    <p class="chart-subtitle">Conversación → Cita → Confirmación</p>
+                    <canvas id="conversion-funnel-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- AI Insights -->
+            <div class="insights-section">
+                <h2>🤖 AI Insights</h2>
+                <div id="ai-insights" class="insights-container">
+                    <p class="loading-text">Analizando datos...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Conversaciones -->
+        <div id="conversations" class="tab-content">
+            <div class="conversations-layout">
+                <div class="conversations-list-container">
+                    <h3>Conversaciones</h3>
+                    <div id="conversations-list" class="conversations-list">
+                        <p class="loading-text">Cargando...</p>
+                    </div>
+                </div>
+                <div class="conversation-detail">
+                    <div id="conversation-header">
+                        <h3>Selecciona una conversación</h3>
+                    </div>
+                    <div id="conversation-messages" class="conversation-messages">
+                        <p class="loading-text">Selecciona una conversación para ver los mensajes</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Citas -->
+        <div id="appointments" class="tab-content">
+            <div class="section">
+                <h2>Citas Agendadas</h2>
+                <div id="appointments-list" class="appointments-list">
+                    <p class="loading-text">Cargando...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Mensajes -->
+        <div id="messages" class="tab-content">
+            <div class="messages-section">
+                <div class="messages-header">
+                    <h2>📝 Gestión de Mensajes del AI Agent</h2>
+                    <p class="section-description">Edita todos los mensajes que el AI Agent envía a los usuarios, organizados por flujo de conversación.</p>
+                    <button id="save-all-messages" class="btn-primary" style="margin-top: 20px;">💾 Guardar Todos los Cambios</button>
+                    <div id="messages-status" class="status-message"></div>
+                </div>
+
+                <div id="messages-container" class="messages-container">
+                    <p class="loading-text">Cargando mensajes...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Configuración -->
+        <div id="config" class="tab-content">
+            <div class="config-section" style="margin-bottom: 32px;">
+                <h2>Estado del AI Agent</h2>
+                <div class="bot-status-container" style="background: var(--bg-card); padding: 20px; border-radius: 12px; border: 1px solid var(--border-color);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <div>
+                            <h3 style="color: var(--text-primary); margin-bottom: 4px; font-size: 16px;">Estado Actual</h3>
+                            <p id="bot-status-text" style="color: var(--text-secondary); font-size: 14px; margin: 0;">Cargando...</p>
+                        </div>
+                        <div id="bot-status-indicator" style="width: 12px; height: 12px; border-radius: 50%; background: var(--text-secondary);"></div>
+                    </div>
+                    <button type="button" id="toggle-bot-status" class="btn-primary" style="width: 100%;">
+                        <span id="toggle-bot-text">Cargando...</span>
+                    </button>
+                    <div id="bot-status-message" class="status-message" style="margin-top: 12px; display: none;"></div>
+                </div>
+            </div>
+            <div class="config-section">
+                <h2>Información del Negocio</h2>
+                <form id="config-form">
+                    <div class="form-group">
+                        <label>Nombre del Negocio</label>
+                        <input type="text" id="business-name" placeholder="Innovia CDMX">
+                    </div>
+                    <div class="form-group">
+                        <label>Dirección</label>
+                        <input type="text" id="business-address" placeholder="Tampico 26, Roma Norte, CDMX">
+                    </div>
+                    <div class="form-group">
+                        <label>Teléfono del Admin (para notificaciones)</label>
+                        <input type="text" id="admin-phone" placeholder="+14083618787">
+                        <small>Número que recibirá notificaciones cuando un cliente solicite hablar con asesor</small>
+                    </div>
+                    <div class="form-group">
+                        <label>Horarios - Martes a Sábado</label>
+                        <input type="text" id="horarios-martes-sabado" placeholder="11am – 8pm">
+                    </div>
+                    <div class="form-group">
+                        <label>Horarios - Domingos</label>
+                        <input type="text" id="horarios-domingos" placeholder="11am – 6pm">
+                    </div>
+                    <div class="form-group">
+                        <label>Link del Catálogo</label>
+                        <input type="text" id="catalogo-link" placeholder="https://tinyurl.com/innoviacdmx">
+                    </div>
+                    <div class="form-group">
+                        <label>Precio Base (MXN)</label>
+                        <input type="number" id="precio-base" placeholder="25000">
+                    </div>
+                    <button type="submit" class="btn-primary">💾 Guardar Configuración</button>
+                    <div id="config-status" class="status-message"></div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
