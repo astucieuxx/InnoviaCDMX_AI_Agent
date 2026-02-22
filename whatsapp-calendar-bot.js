@@ -136,8 +136,9 @@ app.get('/api/logs', (req, res) => {
 app.use(express.static('public'));
 
 // Credenciales de Chakra (BSP de WhatsApp)
-const CHAKRA_API_KEY = process.env.CHAKRA_API_KEY;
-const CHAKRA_PLUGIN_ID = process.env.CHAKRA_PLUGIN_ID;
+// Limpiar API key (remover espacios, saltos de línea, etc.)
+const CHAKRA_API_KEY = process.env.CHAKRA_API_KEY ? process.env.CHAKRA_API_KEY.trim().replace(/\s+/g, '') : null;
+const CHAKRA_PLUGIN_ID = process.env.CHAKRA_PLUGIN_ID ? process.env.CHAKRA_PLUGIN_ID.trim() : null;
 const CHAKRA_WHATSAPP_API_VERSION = process.env.CHAKRA_WHATSAPP_API_VERSION || 'v18.0';
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN || 'mi_token_seguro_123';
 
@@ -721,12 +722,15 @@ async function sendTypingIndicator(phoneNumber, action = 'typing_on') {
     
     // Intentar enviar el typing indicator (no crítico si falla)
     try {
+      // Limpiar API key antes de usarlo
+      const cleanApiKey = CHAKRA_API_KEY ? CHAKRA_API_KEY.trim().replace(/\s+/g, '') : '';
+      
       await axios.post(
         endpoint,
         payload,
         {
           headers: {
-            'Authorization': `Bearer ${CHAKRA_API_KEY}`,
+            'Authorization': `Bearer ${cleanApiKey}`,
             'Content-Type': 'application/json'
           }
         }
@@ -804,12 +808,19 @@ async function sendWhatsAppMessage(phoneNumber, message, options = {}) {
     
     // Log solo si hay error o para debugging importante
     
+    // Validar y limpiar API key antes de usarlo
+    if (!CHAKRA_API_KEY || CHAKRA_API_KEY.trim().length === 0) {
+      throw new Error('CHAKRA_API_KEY no está configurado o está vacío');
+    }
+    
+    const cleanApiKey = CHAKRA_API_KEY.trim().replace(/\s+/g, '');
+    
     const response = await axios.post(
       endpoint,
       payload,
       {
         headers: {
-          'Authorization': `Bearer ${CHAKRA_API_KEY}`,
+          'Authorization': `Bearer ${cleanApiKey}`,
           'Content-Type': 'application/json'
         }
       }
