@@ -384,9 +384,28 @@ async function createCalendarEvent(name, phone, email, dateStart, fechaBoda, cal
       attendees: email ? [{ email: email }] : []
     };
 
-    console.log(`   📅 Creando evento en calendario ID: ${calendarId}`);
+    console.log(`   📅 ============================================`);
+    console.log(`   📅 CREANDO EVENTO EN GOOGLE CALENDAR`);
+    console.log(`   📅 ============================================`);
+    console.log(`   📅 Calendario ID: ${calendarId}`);
+    
+    // Obtener información del calendario para verificar
+    try {
+      const calendarInfo = await calendarClient.calendars.get({
+        auth: auth,
+        calendarId: calendarId
+      });
+      const calendarName = calendarInfo.data.summary || 'Sin nombre';
+      console.log(`   📅 Nombre del calendario: "${calendarName}"`);
+      console.log(`   📅 Email del calendario: ${calendarInfo.data.id || 'N/A'}`);
+    } catch (calError) {
+      console.warn(`   ⚠️  No se pudo obtener información del calendario: ${calError.message}`);
+    }
+    
     console.log(`   📝 Título del evento: ${eventSummary}`);
     console.log(`   🕐 Inicio: ${startDate.toLocaleString('es-MX')}`);
+    console.log(`   🕐 Fin: ${endDate.toLocaleString('es-MX')}`);
+    console.log(`   📅 ============================================`);
     
     const createdEvent = await calendarClient.events.insert({
       auth: auth,
@@ -395,12 +414,19 @@ async function createCalendarEvent(name, phone, email, dateStart, fechaBoda, cal
     });
 
     if (createdEvent && createdEvent.data) {
-      console.log(`✅ Evento creado exitosamente en Google Calendar`);
-      console.log(`   ID: ${createdEvent.data.id}`);
-      console.log(`   Link: ${createdEvent.data.htmlLink || 'N/A'}`);
+      console.log(`   ✅ ============================================`);
+      console.log(`   ✅ EVENTO CREADO EXITOSAMENTE`);
+      console.log(`   ✅ ============================================`);
+      console.log(`   ✅ ID del evento: ${createdEvent.data.id}`);
+      console.log(`   ✅ Link: ${createdEvent.data.htmlLink || 'N/A'}`);
+      console.log(`   ✅ Calendario: ${calendarId}`);
+      console.log(`   ✅ Título: ${createdEvent.data.summary}`);
+      console.log(`   ✅ Inicio: ${createdEvent.data.start?.dateTime || createdEvent.data.start?.date}`);
+      console.log(`   ✅ ============================================`);
       return createdEvent.data;
     }
 
+    console.error(`   ❌ ERROR: createdEvent.data es null o undefined`);
     return null;
   } catch (error) {
     console.error('❌ Error creando evento en Google Calendar:', error.message);

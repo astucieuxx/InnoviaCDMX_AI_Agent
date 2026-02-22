@@ -1345,6 +1345,16 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
           console.log(`📅 Creando nuevo evento en calendario: ${targetCalendarId}`);
           console.log(`   citasNuevasCalendarId: ${citasNuevasCalendarId || 'null'}`);
           console.log(`   CALENDAR_ID env: ${process.env.CALENDAR_ID || 'no configurado'}`);
+          console.log(`📅 ============================================`);
+          console.log(`📅 INTENTANDO CREAR EVENTO EN GOOGLE CALENDAR`);
+          console.log(`📅 ============================================`);
+          console.log(`📅 Calendario ID a usar: ${targetCalendarId}`);
+          console.log(`📅 Cliente: ${getClientName(sessionData) || 'Cliente'}`);
+          console.log(`📅 Teléfono: ${cleanPhone}`);
+          console.log(`📅 Fecha/Hora: ${selectedSlot.start}`);
+          console.log(`📅 Fecha de boda: ${sessionData.fecha_boda || 'No especificada'}`);
+          console.log(`📅 ============================================`);
+          
           calendarEvent = await createCalendarEventService(
             getClientName(sessionData) || 'Cliente',
             cleanPhone,
@@ -1355,12 +1365,25 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
             authClient,
             targetCalendarId
           );
+          
           if (calendarEvent) {
-            console.log(`✅ Evento creado exitosamente en Google Calendar`);
-            console.log(`   ID: ${calendarEvent.id}`);
-            console.log(`   Link: ${calendarEvent.htmlLink || 'N/A'}`);
+            console.log(`📅 ============================================`);
+            console.log(`📅 ✅ EVENTO CREADO CONFIRMADO`);
+            console.log(`📅 ============================================`);
+            console.log(`📅 ID del evento: ${calendarEvent.id}`);
+            console.log(`📅 Link directo: ${calendarEvent.htmlLink || 'N/A'}`);
+            console.log(`📅 Calendario: ${targetCalendarId}`);
+            console.log(`📅 Título: ${calendarEvent.summary}`);
+            console.log(`📅 ============================================`);
+            console.log(`📅 IMPORTANTE: Verifica que el calendario "${targetCalendarId}" esté compartido con tu cuenta de Google`);
+            console.log(`📅 Si usas cuenta de servicio, comparte el calendario con: ${calendarEvent.organizer?.email || 'la cuenta de servicio'}`);
+            console.log(`📅 ============================================`);
           } else {
-            console.error(`❌ No se pudo crear el evento en Google Calendar`);
+            console.error(`📅 ============================================`);
+            console.error(`📅 ❌ ERROR: NO SE PUDO CREAR EL EVENTO`);
+            console.error(`📅 ============================================`);
+            console.error(`📅 El evento retornó null. Revisa los logs anteriores para ver el error.`);
+            console.error(`📅 ============================================`);
           }
         }
         
