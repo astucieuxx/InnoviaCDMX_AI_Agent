@@ -719,21 +719,52 @@ async function findEventsByName(clientName, calendarClient, authClient, calendar
     console.log(`   Eventos encontrados: ${matchingEvents.length}`);
     
     return matchingEvents.map(event => {
-      // Parse start and end dates
-      const startDate = event.start.dateTime ? new Date(event.start.dateTime) : new Date(event.start.date);
-      const endDate = event.end.dateTime ? new Date(event.end.dateTime) : new Date(event.end.date);
+      // Parse start and end dates - IMPORTANTE: interpretar como hora de CDMX
+      let startDate, endDate;
       
-      // Format date for display (DD/MM/YYYY)
+      if (event.start.dateTime) {
+        // Si viene como dateTime (ISO string), parsearlo y convertirlo a hora local de CDMX
+        const dateTimeStr = event.start.dateTime;
+        // Extraer componentes de fecha/hora (puede venir con o sin timezone)
+        const dateMatch = dateTimeStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+        if (dateMatch) {
+          const [, year, month, day, hour, minute, second] = dateMatch.map(Number);
+          // Crear fecha interpretada como hora local de CDMX (no UTC)
+          startDate = new Date(year, month - 1, day, hour, minute, second || 0);
+        } else {
+          startDate = new Date(dateTimeStr);
+        }
+      } else {
+        startDate = new Date(event.start.date + 'T00:00:00');
+      }
+      
+      if (event.end.dateTime) {
+        const dateTimeStr = event.end.dateTime;
+        const dateMatch = dateTimeStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+        if (dateMatch) {
+          const [, year, month, day, hour, minute, second] = dateMatch.map(Number);
+          endDate = new Date(year, month - 1, day, hour, minute, second || 0);
+        } else {
+          endDate = new Date(dateTimeStr);
+        }
+      } else {
+        endDate = new Date(event.end.date + 'T23:59:59');
+      }
+      
+      // Format date for display (DD/MM/YYYY) - usando hora de CDMX
       const formatDate = (date) => {
-        const day = String(date.getDate()).padStart(2, '0');
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const year = date.getFullYear();
+        // Usar toLocaleDateString con timeZone de CDMX para obtener los componentes correctos
+        const dateInCDMX = new Date(date.toLocaleString('en-US', { timeZone: 'America/Mexico_City' }));
+        const day = String(dateInCDMX.getDate()).padStart(2, '0');
+        const month = String(dateInCDMX.getMonth() + 1).padStart(2, '0');
+        const year = dateInCDMX.getFullYear();
         return `${day}/${month}/${year}`;
       };
       
-      // Format time for display (HH:MM AM/PM)
+      // Format time for display (HH:MM AM/PM) - SIEMPRE en hora de CDMX
       const formatTime = (date) => {
         return date.toLocaleTimeString('es-MX', { 
+          timeZone: 'America/Mexico_City',
           hour: '2-digit', 
           minute: '2-digit', 
           hour12: true 

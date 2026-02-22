@@ -25,10 +25,21 @@ function formatDateSpanish(dateInput) {
     if (dateInput instanceof Date) {
       date = dateInput;
     } else if (typeof dateInput === 'string') {
-      // Try parsing as ISO string first
-      date = new Date(dateInput);
-      
-      // If that fails, try parsing as YYYY-MM-DD
+      // Si viene como ISO string, parsearlo y tratarlo como hora local de CDMX
+      if (dateInput.includes('T')) {
+        const dateMatch = dateInput.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+        if (dateMatch) {
+          const [, year, month, day, hour, minute, second] = dateMatch.map(Number);
+          // Crear fecha interpretada como hora local de CDMX (no UTC)
+          date = new Date(year, month - 1, day, hour, minute, second || 0);
+        } else {
+          date = new Date(dateInput);
+        }
+      } else {
+        // Try parsing as ISO string first
+        date = new Date(dateInput);
+        
+        // If that fails, try parsing as YYYY-MM-DD
       if (isNaN(date.getTime()) && dateInput.match(/^\d{4}-\d{2}-\d{2}/)) {
         const [year, month, day] = dateInput.split('-').map(Number);
         date = new Date(year, month - 1, day);
@@ -50,14 +61,19 @@ function formatDateSpanish(dateInput) {
       throw new Error('Invalid date');
     }
     
+    // Obtener componentes de fecha en zona horaria de CDMX
+    // Usar toLocaleString con timeZone para obtener los valores correctos
+    const dateInCDMX = new Date(date.toLocaleString('en-US', { timeZone: 'America/Mexico_City' }));
+    
     const dayOfWeekNames = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
     const monthNames = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 
                         'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
     
-    const dayOfWeek = dayOfWeekNames[date.getDay()];
-    const day = date.getDate();
-    const month = monthNames[date.getMonth()];
-    const year = date.getFullYear();
+    // Obtener día de la semana usando la fecha en CDMX
+    const dayOfWeek = dayOfWeekNames[dateInCDMX.getDay()];
+    const day = dateInCDMX.getDate();
+    const month = monthNames[dateInCDMX.getMonth()];
+    const year = dateInCDMX.getFullYear();
     
     // Capitalize first letter
     const capitalizedDayOfWeek = dayOfWeek.charAt(0).toUpperCase() + dayOfWeek.slice(1);
@@ -91,10 +107,21 @@ function formatTimeSpanish(dateInput) {
     if (dateInput instanceof Date) {
       date = dateInput;
     } else if (typeof dateInput === 'string') {
-      // Try parsing as ISO string first
-      date = new Date(dateInput);
-      
-      // If that fails, try extracting time from ISO string
+      // Si viene como ISO string, parsearlo y tratarlo como hora local de CDMX
+      if (dateInput.includes('T')) {
+        const dateMatch = dateInput.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+        if (dateMatch) {
+          const [, year, month, day, hour, minute, second] = dateMatch.map(Number);
+          // Crear fecha interpretada como hora local de CDMX (no UTC)
+          date = new Date(year, month - 1, day, hour, minute, second || 0);
+        } else {
+          date = new Date(dateInput);
+        }
+      } else {
+        // Try parsing as ISO string first
+        date = new Date(dateInput);
+        
+        // If that fails, try extracting time from ISO string
       if (isNaN(date.getTime())) {
         const timeMatch = dateInput.match(/T(\d{2}):(\d{2})/);
         if (timeMatch) {
