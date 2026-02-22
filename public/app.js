@@ -1279,6 +1279,11 @@ async function loadLogs() {
         // Ordenar logs por timestamp (más recientes primero)
         const sortedLogs = [...data.logs].reverse();
         
+        // Guardar posición del scroll antes de actualizar
+        const scrollPosition = container.scrollTop;
+        const wasAtTop = scrollPosition < 50; // Considerar "arriba" si está a menos de 50px del inicio
+        const wasAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 50;
+        
         container.innerHTML = sortedLogs.map(log => {
             const date = new Date(log.timestamp);
             const timeStr = date.toLocaleString('es-MX', {
@@ -1302,8 +1307,20 @@ async function loadLogs() {
             `;
         }).join('');
         
-        // Auto-scroll al inicio (logs más recientes están arriba)
-        container.scrollTop = 0;
+        // Restaurar posición del scroll
+        // Solo hacer scroll al inicio si el usuario estaba en la parte superior
+        // Si estaba scrolleando, mantener su posición relativa
+        if (wasAtTop) {
+            container.scrollTop = 0;
+        } else if (wasAtBottom) {
+            // Si estaba al final, mantener al final (para ver nuevos logs)
+            container.scrollTop = container.scrollHeight;
+        } else {
+            // Mantener posición relativa aproximada
+            const newScrollHeight = container.scrollHeight;
+            const ratio = scrollPosition / (container.scrollHeight - container.clientHeight);
+            container.scrollTop = Math.max(0, (newScrollHeight - container.clientHeight) * ratio);
+        }
         
     } catch (error) {
         console.error('Error cargando logs:', error);

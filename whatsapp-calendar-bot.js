@@ -754,9 +754,12 @@ async function sendWhatsAppMessage(phoneNumber, message, options = {}) {
   const cleanPhone = phoneNumber ? phoneNumber.replace(/\D/g, '') : 'unknown';
   
   try {
-    
     // Verificar que tenemos los datos necesarios
-    if (!CHAKRA_PLUGIN_ID) {
+    if (!CHAKRA_API_KEY || CHAKRA_API_KEY.trim().length === 0) {
+      throw new Error('CHAKRA_API_KEY no está configurado. Configúralo en Railway → Variables.');
+    }
+    
+    if (!CHAKRA_PLUGIN_ID || CHAKRA_PLUGIN_ID.trim().length === 0) {
       throw new Error('CHAKRA_PLUGIN_ID no está configurado. Obtén el Plugin ID del panel de Chakra.');
     }
     
@@ -838,7 +841,16 @@ async function sendWhatsAppMessage(phoneNumber, message, options = {}) {
     // Mostrar información detallada del error
     if (error.response) {
       // Error de respuesta HTTP
-      console.error(`   HTTP ${error.response.status}: ${error.response.statusText}`);
+      const status = error.response.status;
+      console.error(`   HTTP ${status}: ${error.response.statusText}`);
+      
+      if (status === 401) {
+        console.error(`   ⚠️  ERROR DE AUTENTICACIÓN`);
+        console.error(`   El API key de Chakra no es válido o no tiene permisos`);
+        console.error(`   Verifica en Railway → Variables que CHAKRA_API_KEY sea correcto`);
+        console.error(`   Verifica en Chakra que el API key tenga permisos de "Chakra Bot"`);
+      }
+      
       if (error.response.data) {
         try {
           const errorData = typeof error.response.data === 'string' 
