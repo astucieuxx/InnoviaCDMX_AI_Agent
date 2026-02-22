@@ -45,6 +45,9 @@ function initTabs() {
             btn.classList.add('active');
             document.getElementById(targetTab).classList.add('active');
             
+            // Detener auto-refresh de logs si se cambia de pestaña
+            stopLogsAutoRefresh();
+            
             // Cargar datos según el tab
             if (targetTab === 'analytics') {
                 loadAnalytics();
@@ -54,6 +57,9 @@ function initTabs() {
                 loadAppointments();
             } else if (targetTab === 'messages') {
                 loadMessages();
+            } else if (targetTab === 'logs') {
+                loadLogs();
+                startLogsAutoRefresh();
             } else if (targetTab === 'config') {
                 loadConfig();
             }
@@ -1232,7 +1238,93 @@ document.addEventListener('DOMContentLoaded', () => {
     if (toggleButton) {
         toggleButton.addEventListener('click', toggleBotStatus);
     }
+    
+    // Event listeners para logs
+    const logLevelFilter = document.getElementById('log-level-filter');
+    const refreshLogsBtn = document.getElementById('refresh-logs-btn');
+    
+    if (logLevelFilter) {
+        logLevelFilter.addEventListener('change', loadLogs);
+    }
+    if (refreshLogsBtn) {
+        refreshLogsBtn.addEventListener('click', loadLogs);
+    }
 });
+
+// Cargar logs
+let logsRefreshInterval = null;
+
+async function loadLogs() {
+    try {
+        const levelFilter = document.getElementById('log-level-filter')?.value || 'all';
+        const response = await fetch(`/api/logs?limit=500&level=${levelFilter}`);
+        const data = await response.json();
+        
+        const container = document.getElementById('logs-container');
+        if (!container) return;
+        
+        if (!data.logs || data.logs.length === 0) {
+            container.innerHTML = '<div class="loading-text">No hay logs disponibles</div>';
+            return;
+        }
+        
+        // Ordenar logs por timestamp (más recientes primero)
+        const sortedLogs = [...data.logs].reverse();
+        
+        container.innerHTML = sortedLogs.map(log => {
+            const date = new Date(log.timestamp);
+            const timeStr = date.toLocaleString('es-MX', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            
+            const levelClass = `log-${log.level}`;
+            const levelIcon = log.level === 'error' ? '❌' : log.level === 'warn' ? '⚠️' : 'ℹ️';
+            
+            return `
+                <div class="log-entry ${levelClass}">
+                    <div class="log-timestamp">${timeStr}</div>
+                    <div class="log-level">${levelIcon} ${log.level.toUpperCase()}</div>
+                    <div class="log-message">${escapeHtml(log.message)}</div>
+                </div>
+            `;
+        }).join('');
+        
+        // Auto-scroll al inicio (logs más recientes están arriba)
+        container.scrollTop = 0;
+        
+    } catch (error) {
+        console.error('Error cargando logs:', error);
+        const container = document.getElementById('logs-container');
+        if (container) {
+            container.innerHTML = `<div class="error-text">Error cargando logs: ${error.message}</div>`;
+        }
+    }
+}
+
+// Auto-refresh logs cada 3 segundos cuando la pestaña está activa
+function startLogsAutoRefresh() {
+    if (logsRefreshInterval) {
+        clearInterval(logsRefreshInterval);
+    }
+    
+    const activeTab = document.querySelector('.tab-btn.active')?.getAttribute('data-tab');
+    if (activeTab === 'logs') {
+        logsRefreshInterval = setInterval(loadLogs, 3000);
+    }
+}
+
+// Detener auto-refresh cuando se cambia de pestaña
+function stopLogsAutoRefresh() {
+    if (logsRefreshInterval) {
+        clearInterval(logsRefreshInterval);
+        logsRefreshInterval = null;
+    }
+}
 
 // Cargar mensajes del bot
 let messagesData = {};

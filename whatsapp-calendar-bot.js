@@ -33,6 +33,56 @@ const {
 
 const app = express();
 
+// Sistema de logs en memoria
+const logsBuffer = [];
+const MAX_LOGS = 1000; // Mantener últimos 1000 logs
+
+// Interceptar console.log, console.error, etc. para capturar logs
+const originalConsoleLog = console.log;
+const originalConsoleError = console.error;
+const originalConsoleWarn = console.warn;
+
+function addLog(level, ...args) {
+  const timestamp = new Date().toISOString();
+  const message = args.map(arg => {
+    if (typeof arg === 'object') {
+      try {
+        return JSON.stringify(arg, null, 2);
+      } catch (e) {
+        return String(arg);
+      }
+    }
+    return String(arg);
+  }).join(' ');
+  
+  const logEntry = {
+    timestamp,
+    level,
+    message
+  };
+  
+  logsBuffer.push(logEntry);
+  
+  // Mantener solo los últimos MAX_LOGS
+  if (logsBuffer.length > MAX_LOGS) {
+    logsBuffer.shift();
+  }
+  
+  // Llamar a la función original
+  if (level === 'error') {
+    originalConsoleError(...args);
+  } else if (level === 'warn') {
+    originalConsoleWarn(...args);
+  } else {
+    originalConsoleLog(...args);
+  }
+}
+
+// Sobrescribir console methods
+console.log = (...args) => addLog('log', ...args);
+console.error = (...args) => addLog('error', ...args);
+console.warn = (...args) => addLog('warn', ...args);
+
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
@@ -2802,6 +2852,40 @@ app.put('/api/bot-status', (req, res) => {
     }
   } catch (error) {
     console.error('Error en PUT /api/bot-status:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/logs - Obtener logs del sistema
+app.get('/api/logs', (req, res) => {
+  try {
+    const { limit = 500, level, since } = req.query;
+    
+    let filteredLogs = [...logsBuffer];
+    
+    // Filtrar por nivel si se especifica
+    if (level && level !== 'all') {
+      filteredLogs = filteredLogs.filter(log => log.level === level);
+    }
+    
+    // Filtrar por fecha si se especifica
+    if (since) {
+      const sinceDate = new Date(since);
+      filteredLogs = filteredLogs.filter(log => new Date(log.timestamp) >= sinceDate);
+    }
+    
+    // Limitar cantidad
+    const limitNum = parseInt(limit, 10);
+    const logs = filteredLogs.slice(-limitNum);
+    
+    res.json({
+      logs,
+      total: logsBuffer.length,
+      filtered: filteredLogs.length,
+      returned: logs.length
+    });
+  } catch (error) {
+    console.error('Error en /api/logs:', error);
     res.status(500).json({ error: error.message });
   }
 });

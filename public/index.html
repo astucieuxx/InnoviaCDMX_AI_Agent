@@ -34,6 +34,7 @@
             <button class="tab-btn" data-tab="conversations">💬 Conversaciones</button>
             <button class="tab-btn" data-tab="appointments">📅 Citas</button>
             <button class="tab-btn" data-tab="messages">✏️ Mensajes</button>
+            <button class="tab-btn" data-tab="logs">📋 Logs</button>
             <button class="tab-btn" data-tab="config">⚙️ Configuración</button>
         </div>
 
@@ -249,6 +250,27 @@
                     <button type="submit" class="btn-primary">💾 Guardar Configuración</button>
                     <div id="config-status" class="status-message"></div>
                 </form>
+            </div>
+        </div>
+
+        <!-- Tab: Logs -->
+        <div id="logs" class="tab-content">
+            <div class="logs-section">
+                <div class="logs-header">
+                    <h2>📋 Logs del Sistema</h2>
+                    <div class="logs-controls">
+                        <select id="log-level-filter" class="log-filter">
+                            <option value="all">Todos los niveles</option>
+                            <option value="log">Log</option>
+                            <option value="warn">Warning</option>
+                            <option value="error">Error</option>
+                        </select>
+                        <button id="refresh-logs-btn" class="btn-primary">🔄 Actualizar</button>
+                    </div>
+                </div>
+                <div class="logs-container" id="logs-container">
+                    <div class="loading-text">Cargando logs...</div>
+                </div>
             </div>
         </div>
     </div>
