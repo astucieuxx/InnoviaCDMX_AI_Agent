@@ -96,14 +96,16 @@ app.get('/api/logs', (req, res) => {
   try {
     const { limit = 500, level, since } = req.query;
     
-    console.log(`📋 Solicitud de logs - Buffer actual: ${logsBuffer.length} logs`);
+    // Usar originalConsoleLog para estos logs (no capturarlos en el buffer)
+    // Esto evita que los logs sobre logs aparezcan en los logs
+    // originalConsoleLog(`📋 Solicitud de logs - Buffer: ${logsBuffer.length} logs`);
     
     let filteredLogs = [...logsBuffer];
     
     // Filtrar por nivel si se especifica
     if (level && level !== 'all') {
       filteredLogs = filteredLogs.filter(log => log.level === level);
-      console.log(`📋 Filtrado por nivel "${level}": ${filteredLogs.length} logs`);
+      // originalConsoleLog(`📋 Filtrado por nivel "${level}": ${filteredLogs.length} logs`);
     }
     
     // Filtrar por fecha si se especifica
@@ -116,7 +118,7 @@ app.get('/api/logs', (req, res) => {
     const limitNum = parseInt(limit, 10);
     const logs = filteredLogs.slice(-limitNum);
     
-    console.log(`📋 Enviando ${logs.length} logs al cliente`);
+    // originalConsoleLog(`📋 Enviando ${logs.length} logs al cliente`);
     
     res.json({
       logs,
@@ -125,7 +127,7 @@ app.get('/api/logs', (req, res) => {
       returned: logs.length
     });
   } catch (error) {
-    console.error('Error en /api/logs:', error);
+    originalConsoleError('Error en /api/logs:', error);
     res.status(500).json({ error: error.message });
   }
 });
