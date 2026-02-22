@@ -315,7 +315,25 @@ async function createCalendarEvent(name, phone, email, dateStart, fechaBoda, cal
     }
     
     // Calcular fecha de fin: siempre 90 minutos después del inicio
-    const startDate = new Date(dateStart);
+    // IMPORTANTE: dateStart viene como ISO string (puede estar en UTC)
+    // Necesitamos interpretarlo como hora local de CDMX
+    let startDate;
+    if (typeof dateStart === 'string' && dateStart.includes('T')) {
+      // Si viene como ISO string, parsearlo y tratarlo como hora local de CDMX
+      // Ejemplo: "2026-03-18T12:30:00.000Z" -> interpretar como 12:30 PM hora de CDMX
+      const dateMatch = dateStart.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+      if (dateMatch) {
+        const [, year, month, day, hour, minute, second] = dateMatch.map(Number);
+        // Crear fecha en zona horaria local de CDMX (no UTC)
+        startDate = new Date(year, month - 1, day, hour, minute, second || 0);
+        console.log(`   📅 Fecha parseada como hora local CDMX: ${startDate.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })}`);
+      } else {
+        startDate = new Date(dateStart);
+      }
+    } else {
+      startDate = new Date(dateStart);
+    }
+    
     const endDate = new Date(startDate.getTime() + 90 * 60 * 1000); // 90 minutos
     
     // Formatear teléfono: XX XXX XXXX (formato mexicano de 10 dígitos)
@@ -370,15 +388,37 @@ async function createCalendarEvent(name, phone, email, dateStart, fechaBoda, cal
     }
     description += '\n*Cita creada por Calendar bot*';
     
+    // Formatear fecha/hora en formato RFC3339 para CDMX
+    // Necesitamos crear la fecha en formato ISO pero interpretada como hora local de CDMX
+    const formatDateTimeForCDMX = (date) => {
+      // Obtener componentes de la fecha en hora local
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const seconds = String(date.getSeconds()).padStart(2, '0');
+      
+      // Formato: YYYY-MM-DDTHH:MM:SS (sin Z, para que Google Calendar lo interprete con timeZone)
+      return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+    };
+    
+    const startDateTime = formatDateTimeForCDMX(startDate);
+    const endDateTime = formatDateTimeForCDMX(endDate);
+    
+    console.log(`   🕐 Hora de inicio (CDMX): ${startDate.toLocaleString('es-MX', { timeZone: 'America/Mexico_City', hour: '2-digit', minute: '2-digit', hour12: true })}`);
+    console.log(`   🕐 Hora de fin (CDMX): ${endDate.toLocaleString('es-MX', { timeZone: 'America/Mexico_City', hour: '2-digit', minute: '2-digit', hour12: true })}`);
+    console.log(`   🕐 DateTime string enviado: ${startDateTime} (timeZone: America/Mexico_City)`);
+    
     const event = {
       summary: eventSummary,
       description: description,
       start: {
-        dateTime: startDate.toISOString(),
+        dateTime: startDateTime,
         timeZone: 'America/Mexico_City'
       },
       end: {
-        dateTime: endDate.toISOString(),
+        dateTime: endDateTime,
         timeZone: 'America/Mexico_City'
       },
       attendees: email ? [{ email: email }] : []
@@ -464,7 +504,23 @@ async function updateCalendarEvent(eventId, name, phone, email, dateStart, fecha
     }
     
     // Calcular fecha de fin: siempre 90 minutos después del inicio
-    const startDate = new Date(dateStart);
+    // IMPORTANTE: dateStart viene como ISO string (puede estar en UTC)
+    // Necesitamos interpretarlo como hora local de CDMX
+    let startDate;
+    if (typeof dateStart === 'string' && dateStart.includes('T')) {
+      // Si viene como ISO string, parsearlo y tratarlo como hora local de CDMX
+      const dateMatch = dateStart.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+      if (dateMatch) {
+        const [, year, month, day, hour, minute, second] = dateMatch.map(Number);
+        // Crear fecha en zona horaria local de CDMX (no UTC)
+        startDate = new Date(year, month - 1, day, hour, minute, second || 0);
+      } else {
+        startDate = new Date(dateStart);
+      }
+    } else {
+      startDate = new Date(dateStart);
+    }
+    
     const endDate = new Date(startDate.getTime() + 90 * 60 * 1000); // 90 minutos
     
     // Formatear teléfono
@@ -514,15 +570,29 @@ async function updateCalendarEvent(eventId, name, phone, email, dateStart, fecha
     }
     description += '\n*Cita reagendada por Calendar bot*';
     
+    // Formatear fecha/hora en formato RFC3339 para CDMX
+    const formatDateTimeForCDMX = (date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const seconds = String(date.getSeconds()).padStart(2, '0');
+      return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+    };
+    
+    const startDateTime = formatDateTimeForCDMX(startDate);
+    const endDateTime = formatDateTimeForCDMX(endDate);
+    
     const event = {
       summary: eventSummary,
       description: description,
       start: {
-        dateTime: startDate.toISOString(),
+        dateTime: startDateTime,
         timeZone: 'America/Mexico_City'
       },
       end: {
-        dateTime: endDate.toISOString(),
+        dateTime: endDateTime,
         timeZone: 'America/Mexico_City'
       },
       attendees: email ? [{ email: email }] : []
