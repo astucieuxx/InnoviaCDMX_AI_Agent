@@ -76,38 +76,15 @@ async function execute(session, message, calendarDeps = null) {
 
   // Show existing appointment info if found
   if (existingEvent) {
-    // Parse event start date - interpretar como hora de CDMX
-    let eventStart;
-    const eventStartStr = existingEvent.start.dateTime || existingEvent.start.date;
+    // Use centralized date formatter
+    const { parseCalendarDate, formatDateSpanishCDMX, formatTimeCDMX } = require('../utils/date-formatter');
     
-    if (typeof eventStartStr === 'string' && eventStartStr.includes('T')) {
-      // Si viene como ISO string, parsearlo y tratarlo como hora local de CDMX
-      const dateMatch = eventStartStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
-      if (dateMatch) {
-        const [, year, month, day, hour, minute, second] = dateMatch.map(Number);
-        // Crear fecha interpretada como hora local de CDMX (no UTC)
-        eventStart = new Date(year, month - 1, day, hour, minute, second || 0);
-      } else {
-        eventStart = new Date(eventStartStr);
-      }
-    } else {
-      eventStart = new Date(eventStartStr);
-    }
+    const eventStartStr = existingEvent.start.dateTime || existingEvent.start.date || existingEvent.start;
+    const eventStart = parseCalendarDate(eventStartStr);
     
-    // Formatear fecha y hora SIEMPRE en zona horaria de CDMX
-    const formattedDate = eventStart.toLocaleDateString('es-MX', { 
-      timeZone: 'America/Mexico_City',
-      weekday: 'long',
-      day: 'numeric', 
-      month: 'long', 
-      year: 'numeric' 
-    });
-    const formattedTime = eventStart.toLocaleTimeString('es-MX', { 
-      timeZone: 'America/Mexico_City',
-      hour: '2-digit', 
-      minute: '2-digit', 
-      hour12: true 
-    });
+    // Format date and time in CDMX timezone
+    const formattedDate = formatDateSpanishCDMX(eventStart);
+    const formattedTime = formatTimeCDMX(eventStart);
     
     // Capitalize first letter of weekday
     const capitalizedDate = formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1);

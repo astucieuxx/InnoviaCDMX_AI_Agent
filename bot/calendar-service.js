@@ -737,52 +737,13 @@ async function findEventsByName(clientName, calendarClient, authClient, calendar
         endDate = new Date(event.end.date + 'T23:59:59');
       }
       
-      // Format date for display (DD/MM/YYYY) - usando hora de CDMX
-      const formatDate = (date) => {
-        // Usar toLocaleDateString directamente con timeZone para obtener componentes en CDMX
-        if (date instanceof Date) {
-          const parts = date.toLocaleDateString('en-US', { 
-            timeZone: 'America/Mexico_City',
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit'
-          });
-          // Formato: "MM/DD/YYYY" -> convertir a "DD/MM/YYYY"
-          const match = parts.match(/(\d{2})\/(\d{2})\/(\d{4})/);
-          if (match) {
-            const [, month, day, year] = match;
-            return `${day}/${month}/${year}`;
-          }
-        }
-        // Fallback
-        const day = String(date.getDate()).padStart(2, '0');
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const year = date.getFullYear();
-        return `${day}/${month}/${year}`;
-      };
+      // Use centralized date formatter
+      const { formatDateCDMX } = require('./utils/date-formatter');
+      const formatDate = formatDateCDMX;
       
-      // Format time for display (HH:MM AM/PM) - SIEMPRE en hora de CDMX
-      // IMPORTANTE: date ya debe ser el Date original parseado de Google Calendar
-      // No crear un nuevo Date, usar el original directamente
-      const formatTime = (date) => {
-        // Si date es un Date object, usar directamente con timeZone
-        if (date instanceof Date) {
-          return date.toLocaleTimeString('es-MX', { 
-            timeZone: 'America/Mexico_City',
-            hour: '2-digit', 
-            minute: '2-digit', 
-            hour12: true 
-          });
-        }
-        // Si es string, parsearlo primero
-        const dateObj = new Date(date);
-        return dateObj.toLocaleTimeString('es-MX', { 
-          timeZone: 'America/Mexico_City',
-          hour: '2-digit', 
-          minute: '2-digit', 
-          hour12: true 
-        });
-      };
+      // Use centralized date formatter
+      const { formatTimeCDMX } = require('./utils/date-formatter');
+      const formatTime = formatTimeCDMX;
       
       return {
         id: event.id,

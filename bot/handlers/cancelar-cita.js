@@ -20,86 +20,9 @@ const { getClientName, getClientFirstName } = require('../utils/name-utils');
  */
 function formatDateSpanish(dateInput) {
   try {
-    let date;
-    
-    if (dateInput instanceof Date) {
-      date = dateInput;
-    } else if (typeof dateInput === 'string') {
-      // Parsear directamente con new Date() - JavaScript manejará el timezone offset correctamente
-      date = new Date(dateInput);
-      
-      // Si falla, intentar otros formatos
-      if (isNaN(date.getTime())) {
-        // Try parsing as YYYY-MM-DD
-        if (dateInput.match(/^\d{4}-\d{2}-\d{2}/)) {
-          const [year, month, day] = dateInput.split('-').map(Number);
-          date = new Date(year, month - 1, day);
-        }
-        
-        // If still fails, try DD/MM/YYYY
-        if (isNaN(date.getTime()) && dateInput.match(/^\d{1,2}\/\d{1,2}\/\d{4}/)) {
-          const [day, month, year] = dateInput.split('/').map(Number);
-          date = new Date(year, month - 1, day);
-        }
-      }
-    } else {
-      console.error('Invalid date input type:', typeof dateInput);
-      throw new Error('Invalid date input');
-    }
-    
-    // Check if date is valid
-    if (isNaN(date.getTime())) {
-      console.error('Invalid date after parsing:', dateInput);
-      throw new Error('Invalid date');
-    }
-    
-    // Obtener componentes de fecha en zona horaria de CDMX usando toLocaleDateString
-    const dayOfWeekNames = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
-    const monthNames = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 
-                        'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-    
-    // Usar toLocaleDateString con timeZone para obtener los componentes en CDMX
-    const dateStr = date.toLocaleDateString('en-US', { 
-      timeZone: 'America/Mexico_City',
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-    
-    // Parsear el string formateado (ej: "Friday, March 20, 2026")
-    const match = dateStr.match(/(\w+), (\w+) (\d+), (\d+)/);
-    if (match) {
-      const [, weekdayEn, monthEn, day, year] = match;
-      // Convertir weekday y month a español
-      const weekdayMap = {
-        'Sunday': 'domingo', 'Monday': 'lunes', 'Tuesday': 'martes', 'Wednesday': 'miércoles',
-        'Thursday': 'jueves', 'Friday': 'viernes', 'Saturday': 'sábado'
-      };
-      const monthMap = {
-        'January': 'enero', 'February': 'febrero', 'March': 'marzo', 'April': 'abril',
-        'May': 'mayo', 'June': 'junio', 'July': 'julio', 'August': 'agosto',
-        'September': 'septiembre', 'October': 'octubre', 'November': 'noviembre', 'December': 'diciembre'
-      };
-      const dayOfWeek = weekdayMap[weekdayEn] || dayOfWeekNames[date.getDay()];
-      const month = monthMap[monthEn] || monthNames[date.getMonth()];
-      
-      // Capitalize first letter
-      const capitalizedDayOfWeek = dayOfWeek.charAt(0).toUpperCase() + dayOfWeek.slice(1);
-      
-      return `${capitalizedDayOfWeek}, ${parseInt(day)} de ${month} ${year}`;
-    }
-    
-    // Fallback: usar métodos tradicionales (menos preciso pero funciona)
-    const dayOfWeek = dayOfWeekNames[date.getDay()];
-    const day = date.getDate();
-    const month = monthNames[date.getMonth()];
-    const year = date.getFullYear();
-    
-    // Capitalize first letter
-    const capitalizedDayOfWeek = dayOfWeek.charAt(0).toUpperCase() + dayOfWeek.slice(1);
-    
-    return `${capitalizedDayOfWeek}, ${day} de ${month} ${year}`;
+    // Use centralized date formatter
+    const { formatDateSpanishCDMX } = require('../utils/date-formatter');
+    return formatDateSpanishCDMX(dateInput);
   } catch (error) {
     console.error('Error formateando fecha:', error, 'Input:', dateInput);
     // Last resort: try to extract date parts from string if possible
@@ -123,47 +46,9 @@ function formatDateSpanish(dateInput) {
  */
 function formatTimeSpanish(dateInput) {
   try {
-    let date;
-    
-    if (dateInput instanceof Date) {
-      // Si ya es un Date object, usarlo directamente
-      date = dateInput;
-    } else if (typeof dateInput === 'string') {
-      // Parsear directamente con new Date() - JavaScript manejará el timezone offset correctamente
-      // NO extraer componentes manualmente porque eso crea un Date en zona horaria del servidor
-      date = new Date(dateInput);
-      
-      // Verificar que la fecha sea válida
-      if (isNaN(date.getTime())) {
-        // Si falla, intentar extraer solo la hora como último recurso
-        const timeMatch = dateInput.match(/T(\d{2}):(\d{2})/);
-        if (timeMatch) {
-          const [, hour, minute] = timeMatch;
-          const hourNum = parseInt(hour);
-          const ampm = hourNum >= 12 ? 'PM' : 'AM';
-          const displayHour = hourNum > 12 ? hourNum - 12 : (hourNum === 0 ? 12 : hourNum);
-          return `${String(displayHour).padStart(2, '0')}:${minute} ${ampm}`;
-        }
-        throw new Error('Invalid date string');
-      }
-    } else {
-      console.error('Invalid time input type:', typeof dateInput);
-      throw new Error('Invalid time input');
-    }
-    
-    // Check if date is valid
-    if (isNaN(date.getTime())) {
-      console.error('Invalid date for time formatting:', dateInput);
-      throw new Error('Invalid date');
-    }
-    
-    // Formatear usando timeZone de CDMX - esto convertirá correctamente desde cualquier timezone
-    return date.toLocaleTimeString('es-MX', { 
-      timeZone: 'America/Mexico_City',
-      hour: '2-digit', 
-      minute: '2-digit', 
-      hour12: true 
-    });
+    // Use centralized date formatter
+    const { formatTimeCDMX } = require('../utils/date-formatter');
+    return formatTimeCDMX(dateInput);
   } catch (error) {
     console.error('Error formateando hora:', error, 'Input:', dateInput);
     throw error; // Re-throw to let caller handle

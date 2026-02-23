@@ -1580,31 +1580,18 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
             
             if (eventDetails.data) {
               const event = eventDetails.data;
-              // Parsear fecha directamente - new Date() manejará el timezone offset correctamente
-              // Luego formatearemos con timeZone: 'America/Mexico_City' para mostrar en CDMX
-              const startDate = event.start.dateTime ? new Date(event.start.dateTime) : new Date(event.start.date + 'T00:00:00');
+              // Use centralized date formatter
+              const { parseCalendarDate, formatDateCDMX, formatTimeCDMX } = require('./bot/utils/date-formatter');
               
-              const formatDate = (date) => {
-                const day = String(date.getDate()).padStart(2, '0');
-                const month = String(date.getMonth() + 1).padStart(2, '0');
-                const year = date.getFullYear();
-                return `${day}/${month}/${year}`;
-              };
-              const formatTime = (date) => {
-                return date.toLocaleTimeString('es-MX', { 
-                  timeZone: 'America/Mexico_City',
-                  hour: '2-digit', 
-                  minute: '2-digit', 
-                  hour12: true 
-                });
-              };
+              const startDateStr = event.start.dateTime || event.start.date;
+              const startDate = parseCalendarDate(startDateStr);
               
               existingEvent = {
                 id: event.id,
                 summary: event.summary,
                 start: event.start.dateTime || event.start.date,
-                formattedDate: formatDate(startDate),
-                formattedTime: formatTime(startDate)
+                formattedDate: formatDateCDMX(startDate),
+                formattedTime: formatTimeCDMX(startDate)
               };
               console.log(`✅ Cita encontrada en sesión: ${existingEvent.id}`);
             }
@@ -1801,10 +1788,10 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
             const existingEvent = eventResponse.data;
             const eventStart = existingEvent.start.dateTime || existingEvent.start.date;
             
-            // Format date and time
-            const { formatDateSpanish, formatTimeSpanish } = require('./bot/handlers/cancelar-cita');
-            formattedDate = formatDateSpanish(eventStart);
-            formattedTime = formatTimeSpanish(eventStart);
+            // Format date and time using centralized formatter
+            const { formatDateSpanishCDMX, formatTimeCDMX } = require('./bot/utils/date-formatter');
+            formattedDate = formatDateSpanishCDMX(eventStart);
+            formattedTime = formatTimeCDMX(eventStart);
           } catch (error) {
             console.warn('⚠️  No se pudo obtener detalles del evento antes de cancelar:', error.message);
           }
