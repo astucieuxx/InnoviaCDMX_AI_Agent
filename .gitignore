@@ -3,6 +3,9 @@
 .env.local
 .env.*.local
 
+# Configuración de teléfonos (puede contener información sensible)
+phone_config.json
+
 # Credenciales de Google (NUNCA subir a git)
 credentials.json
 client_secret_*.json

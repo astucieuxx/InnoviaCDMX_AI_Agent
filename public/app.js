@@ -1138,6 +1138,7 @@ async function loadConfig() {
         document.getElementById('business-name').value = data.business?.nombre || '';
         document.getElementById('business-address').value = data.business?.direccion || '';
         document.getElementById('admin-phone').value = data.adminPhone || '';
+        document.getElementById('bot-phone').value = data.botPhone || '';
         document.getElementById('horarios-martes-sabado').value = data.horarios?.martes_sabado || '';
         document.getElementById('horarios-domingos').value = data.horarios?.domingos || '';
         document.getElementById('catalogo-link').value = data.catalogo?.link || '';
@@ -1496,7 +1497,8 @@ document.getElementById('config-form')?.addEventListener('submit', async (e) => 
         precios: {
             precio_base: parseInt(document.getElementById('precio-base').value) || 0
         },
-        adminPhone: document.getElementById('admin-phone').value
+        adminPhone: document.getElementById('admin-phone').value,
+        botPhone: document.getElementById('bot-phone').value
     };
     
     try {

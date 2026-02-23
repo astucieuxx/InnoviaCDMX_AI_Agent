@@ -144,7 +144,20 @@ const VERIFY_TOKEN = process.env.VERIFY_TOKEN || 'mi_token_seguro_123';
 
 // Admin phone number for escalations
 // Format: +[country code][number] (e.g., +19179605545 for US, +525521920710 for Mexico)
-const ADMIN_PHONE = process.env.ADMIN_PHONE || '+19179605545';
+// Try to load from phone_config.json first, then fallback to env var or default
+let ADMIN_PHONE = process.env.ADMIN_PHONE || '+19179605545';
+try {
+  const phoneConfigPath = path.join(__dirname, 'phone_config.json');
+  if (fs.existsSync(phoneConfigPath)) {
+    const phoneConfig = JSON.parse(fs.readFileSync(phoneConfigPath, 'utf8'));
+    if (phoneConfig.adminPhone) {
+      ADMIN_PHONE = phoneConfig.adminPhone;
+      console.log(`✅ ADMIN_PHONE cargado desde phone_config.json: ${ADMIN_PHONE}`);
+    }
+  }
+} catch (error) {
+  console.warn('⚠️  No se pudo cargar phone_config.json, usando valor por defecto o variable de entorno');
+}
 
 // Configuración de Google Calendar
 const calendar = google.calendar('v3');
@@ -2806,12 +2819,29 @@ app.get('/api/config', async (req, res) => {
   try {
     const businessConfig = JSON.parse(await fs.promises.readFile(path.join(__dirname, 'business_config.json'), 'utf8'));
     
+    // Leer configuración de teléfonos (si existe)
+    let phoneConfig = { 
+      adminPhone: ADMIN_PHONE, 
+      botPhone: process.env.PHONE_NUMBER_ID || process.env.DISPLAY_PHONE_NUMBER || '' 
+    };
+    try {
+      const phoneConfigPath = path.join(__dirname, 'phone_config.json');
+      if (fs.existsSync(phoneConfigPath)) {
+        const phoneConfigData = await fs.promises.readFile(phoneConfigPath, 'utf8');
+        const savedConfig = JSON.parse(phoneConfigData);
+        phoneConfig = { ...phoneConfig, ...savedConfig };
+      }
+    } catch (phoneError) {
+      console.warn('⚠️  No se pudo leer phone_config.json, usando valores por defecto');
+    }
+    
     res.json({
       business: businessConfig.negocio,
       horarios: businessConfig.horarios,
       catalogo: businessConfig.catalogo,
       precios: businessConfig.precios,
-      adminPhone: ADMIN_PHONE
+      adminPhone: phoneConfig.adminPhone || ADMIN_PHONE,
+      botPhone: phoneConfig.botPhone || process.env.PHONE_NUMBER_ID || process.env.DISPLAY_PHONE_NUMBER || ''
     });
   } catch (error) {
     console.error('Error en /api/config:', error);
@@ -2822,7 +2852,7 @@ app.get('/api/config', async (req, res) => {
 // PUT /api/config - Actualizar configuración del bot
 app.put('/api/config', async (req, res) => {
   try {
-    const { business, horarios, catalogo, precios, adminPhone } = req.body;
+    const { business, horarios, catalogo, precios, adminPhone, botPhone } = req.body;
     
     // Leer configuración actual
     const currentConfig = JSON.parse(await fs.promises.readFile(path.join(__dirname, 'business_config.json'), 'utf8'));
@@ -2848,9 +2878,43 @@ app.put('/api/config', async (req, res) => {
       'utf8'
     );
     
-    // Actualizar ADMIN_PHONE si se proporcionó (nota: esto requiere reiniciar el servidor para tomar efecto)
-    if (adminPhone) {
-      console.log(`⚠️  ADMIN_PHONE actualizado a: ${adminPhone}. Reinicia el servidor para que tome efecto.`);
+    // Guardar configuración de teléfonos en archivo separado
+    const phoneConfigPath = path.join(__dirname, 'phone_config.json');
+    let phoneConfig = {};
+    
+    // Leer configuración existente si existe
+    try {
+      if (fs.existsSync(phoneConfigPath)) {
+        const existingData = await fs.promises.readFile(phoneConfigPath, 'utf8');
+        phoneConfig = JSON.parse(existingData);
+      }
+    } catch (readError) {
+      console.warn('⚠️  No se pudo leer phone_config.json existente, creando nuevo');
+    }
+    
+    // Actualizar solo los campos proporcionados
+    if (adminPhone !== undefined && adminPhone !== null && adminPhone !== '') {
+      phoneConfig.adminPhone = adminPhone;
+      console.log(`✅ ADMIN_PHONE actualizado a: ${adminPhone}`);
+    }
+    
+    if (botPhone !== undefined && botPhone !== null && botPhone !== '') {
+      phoneConfig.botPhone = botPhone;
+      console.log(`✅ BOT_PHONE actualizado a: ${botPhone}`);
+    }
+    
+    // Guardar configuración de teléfonos
+    await fs.promises.writeFile(
+      phoneConfigPath,
+      JSON.stringify(phoneConfig, null, 2),
+      'utf8'
+    );
+    
+    // Recargar ADMIN_PHONE en memoria si se actualizó
+    if (adminPhone && phoneConfig.adminPhone) {
+      // Actualizar la variable en memoria para que tome efecto inmediatamente
+      ADMIN_PHONE = phoneConfig.adminPhone;
+      console.log(`✅ ADMIN_PHONE actualizado en memoria a: ${ADMIN_PHONE}`);
     }
     
     res.json({ success: true, message: 'Configuración actualizada correctamente' });
