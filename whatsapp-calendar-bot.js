@@ -134,6 +134,109 @@ app.get('/api/logs', (req, res) => {
   }
 });
 
+// Endpoint temporal de diagnóstico para verificar citas en una fecha específica
+app.get('/api/check-appointments/:date', async (req, res) => {
+  try {
+    const { date } = req.params; // Formato: YYYY-MM-DD
+    const { hour, minute } = req.query; // Opcional: hora y minuto específicos
+    
+    if (!authClient) {
+      return res.status(500).json({ error: 'Google Auth no inicializado' });
+    }
+
+    let auth;
+    if (authClient && typeof authClient.getClient === 'function') {
+      auth = await authClient.getClient();
+    } else {
+      auth = authClient;
+    }
+
+    const targetCalendarId = citasNuevasCalendarId || process.env.CALENDAR_ID || 'primary';
+    
+    // Crear rango del día
+    const [year, month, day] = date.split('-').map(Number);
+    const startOfDay = new Date(year, month - 1, day, 0, 0, 0);
+    const endOfDay = new Date(year, month - 1, day, 23, 59, 59);
+
+    const events = await calendar.events.list({
+      auth: auth,
+      calendarId: targetCalendarId,
+      timeMin: startOfDay.toISOString(),
+      timeMax: endOfDay.toISOString(),
+      singleEvents: true,
+      orderBy: 'startTime',
+      timeZone: 'America/Mexico_City'
+    });
+
+    const eventItems = events.data.items || [];
+    
+    // Procesar eventos
+    const appointments = eventItems.map(e => {
+      let start, end;
+      
+      if (e.start.dateTime) {
+        const startStr = e.start.dateTime;
+        if (!startStr.endsWith('Z') && !startStr.match(/[+-]\d{2}:\d{2}$/)) {
+          start = new Date(`${startStr}-06:00`);
+          end = new Date(`${e.end.dateTime}-06:00`);
+        } else {
+          start = new Date(e.start.dateTime);
+          end = new Date(e.end.dateTime);
+        }
+      } else if (e.start.date) {
+        start = new Date(e.start.date + 'T00:00:00');
+        end = new Date(e.end.date + 'T23:59:59');
+      }
+
+      return {
+        id: e.id,
+        summary: e.summary || 'Sin título',
+        start: start.toISOString(),
+        end: end.toISOString(),
+        startCDMX: start.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' }),
+        endCDMX: end.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' }),
+        startTimeCDMX: start.toLocaleTimeString('es-MX', { timeZone: 'America/Mexico_City', hour: '2-digit', minute: '2-digit', hour12: true })
+      };
+    });
+
+    // Si se especifica hora, filtrar por bloque
+    let result = {
+      date,
+      total: appointments.length,
+      appointments: appointments
+    };
+
+    if (hour !== undefined && minute !== undefined) {
+      const blockHour = parseInt(hour);
+      const blockMinute = parseInt(minute);
+      const blockStart = new Date(`${date}T${String(blockHour).padStart(2, '0')}:${String(blockMinute).padStart(2, '0')}:00-06:00`);
+      const blockEnd = new Date(blockStart.getTime() + 90 * 60 * 1000);
+
+      const appointmentsInBlock = appointments.filter(apt => {
+        const aptStart = new Date(apt.start).getTime();
+        const aptEnd = new Date(apt.end).getTime();
+        const blockStartTime = blockStart.getTime();
+        const blockEndTime = blockEnd.getTime();
+        return aptStart < blockEndTime && aptEnd > blockStartTime;
+      });
+
+      result.block = {
+        hour: blockHour,
+        minute: blockMinute,
+        start: blockStart.toISOString(),
+        end: blockEnd.toISOString(),
+        count: appointmentsInBlock.length,
+        appointments: appointmentsInBlock
+      };
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error en /api/check-appointments:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Serve static files from public directory
 app.use(express.static('public'));
 
