@@ -723,109 +723,60 @@ async function findEventsByName(clientName, calendarClient, authClient, calendar
       let startDate, endDate;
       
       if (event.start.dateTime) {
-        // Si viene como dateTime (ISO string), parsearlo correctamente
-        const dateTimeStr = event.start.dateTime;
-        
-        // Si tiene timezone offset (ej: "2026-03-18T11:00:00-06:00"), extraer componentes en CDMX
-        if (dateTimeStr.includes('-') && dateTimeStr.match(/[+-]\d{2}:\d{2}$/)) {
-          // Parsear la fecha y obtener componentes en hora de CDMX usando toLocaleString
-          const tempDate = new Date(dateTimeStr);
-          // Usar toLocaleString con timeZone para obtener componentes en CDMX
-          const parts = tempDate.toLocaleString('en-US', { 
-            timeZone: 'America/Mexico_City',
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: false
-          });
-          // Formato: "MM/DD/YYYY, HH:MM:SS"
-          const match = parts.match(/(\d{2})\/(\d{2})\/(\d{4}), (\d{2}):(\d{2}):(\d{2})/);
-          if (match) {
-            const [, month, day, year, hour, minute, second] = match.map(Number);
-            startDate = new Date(year, month - 1, day, hour, minute, second || 0);
-          } else {
-            // Fallback: extraer directamente del string ISO
-            const dateMatch = dateTimeStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
-            if (dateMatch) {
-              const [, year, month, day, hour, minute, second] = dateMatch.map(Number);
-              startDate = new Date(year, month - 1, day, hour, minute, second || 0);
-            } else {
-              startDate = new Date(dateTimeStr);
-            }
-          }
-        } else {
-          // No tiene offset, extraer componentes directamente
-          const dateMatch = dateTimeStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
-          if (dateMatch) {
-            const [, year, month, day, hour, minute, second] = dateMatch.map(Number);
-            // Crear fecha interpretada como hora local de CDMX (no UTC)
-            startDate = new Date(year, month - 1, day, hour, minute, second || 0);
-          } else {
-            startDate = new Date(dateTimeStr);
-          }
-        }
+        // Parsear directamente con new Date() - JavaScript manejará el timezone offset correctamente
+        // Luego usaremos toLocaleTimeString con timeZone para formatear en CDMX
+        startDate = new Date(event.start.dateTime);
       } else {
         startDate = new Date(event.start.date + 'T00:00:00');
       }
       
       if (event.end.dateTime) {
-        const dateTimeStr = event.end.dateTime;
-        
-        // Si tiene timezone offset, extraer componentes en CDMX
-        if (dateTimeStr.includes('-') && dateTimeStr.match(/[+-]\d{2}:\d{2}$/)) {
-          const tempDate = new Date(dateTimeStr);
-          const parts = tempDate.toLocaleString('en-US', { 
-            timeZone: 'America/Mexico_City',
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: false
-          });
-          const match = parts.match(/(\d{2})\/(\d{2})\/(\d{4}), (\d{2}):(\d{2}):(\d{2})/);
-          if (match) {
-            const [, month, day, year, hour, minute, second] = match.map(Number);
-            endDate = new Date(year, month - 1, day, hour, minute, second || 0);
-          } else {
-            const dateMatch = dateTimeStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
-            if (dateMatch) {
-              const [, year, month, day, hour, minute, second] = dateMatch.map(Number);
-              endDate = new Date(year, month - 1, day, hour, minute, second || 0);
-            } else {
-              endDate = new Date(dateTimeStr);
-            }
-          }
-        } else {
-          const dateMatch = dateTimeStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
-          if (dateMatch) {
-            const [, year, month, day, hour, minute, second] = dateMatch.map(Number);
-            endDate = new Date(year, month - 1, day, hour, minute, second || 0);
-          } else {
-            endDate = new Date(dateTimeStr);
-          }
-        }
+        // Parsear directamente con new Date() - JavaScript manejará el timezone offset correctamente
+        endDate = new Date(event.end.dateTime);
       } else {
         endDate = new Date(event.end.date + 'T23:59:59');
       }
       
       // Format date for display (DD/MM/YYYY) - usando hora de CDMX
       const formatDate = (date) => {
-        // Usar toLocaleDateString con timeZone de CDMX para obtener los componentes correctos
-        const dateInCDMX = new Date(date.toLocaleString('en-US', { timeZone: 'America/Mexico_City' }));
-        const day = String(dateInCDMX.getDate()).padStart(2, '0');
-        const month = String(dateInCDMX.getMonth() + 1).padStart(2, '0');
-        const year = dateInCDMX.getFullYear();
+        // Usar toLocaleDateString directamente con timeZone para obtener componentes en CDMX
+        if (date instanceof Date) {
+          const parts = date.toLocaleDateString('en-US', { 
+            timeZone: 'America/Mexico_City',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+          });
+          // Formato: "MM/DD/YYYY" -> convertir a "DD/MM/YYYY"
+          const match = parts.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+          if (match) {
+            const [, month, day, year] = match;
+            return `${day}/${month}/${year}`;
+          }
+        }
+        // Fallback
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
         return `${day}/${month}/${year}`;
       };
       
       // Format time for display (HH:MM AM/PM) - SIEMPRE en hora de CDMX
+      // IMPORTANTE: date ya debe ser el Date original parseado de Google Calendar
+      // No crear un nuevo Date, usar el original directamente
       const formatTime = (date) => {
-        return date.toLocaleTimeString('es-MX', { 
+        // Si date es un Date object, usar directamente con timeZone
+        if (date instanceof Date) {
+          return date.toLocaleTimeString('es-MX', { 
+            timeZone: 'America/Mexico_City',
+            hour: '2-digit', 
+            minute: '2-digit', 
+            hour12: true 
+          });
+        }
+        // Si es string, parsearlo primero
+        const dateObj = new Date(date);
+        return dateObj.toLocaleTimeString('es-MX', { 
           timeZone: 'America/Mexico_City',
           hour: '2-digit', 
           minute: '2-digit', 
