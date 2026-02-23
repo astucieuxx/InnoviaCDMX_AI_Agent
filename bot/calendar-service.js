@@ -298,7 +298,7 @@ async function getAvailableSlots(date, calendarClient, authClient, innoviaCDMXCa
 
     // Convertir eventos azules directamente a slots disponibles
     // Cada evento azul es un spot disponible
-    const slots = availableSpots.map(spot => {
+    let slots = availableSpots.map(spot => {
       const startTimeCDMX = spot.start.toLocaleTimeString('es-MX', { 
         timeZone: 'America/Mexico_City', 
         hour: '2-digit', 
@@ -312,9 +312,34 @@ async function getAvailableSlots(date, calendarClient, authClient, innoviaCDMXCa
         end: spot.end.toISOString(),
         availableSpots: 1, // Cada evento azul es 1 spot disponible
         totalSpots: 1,
-        eventId: spot.id // Guardar el ID del evento azul para poder eliminarlo después
+        eventId: spot.id, // Guardar el ID del evento azul para poder eliminarlo después
+        startTimestamp: spot.start.getTime() // Guardar timestamp para ordenamiento
       };
     });
+    
+    // Eliminar duplicados: si hay múltiples slots con la misma hora o el mismo eventId
+    const seenEventIds = new Set();
+    const seenTimes = new Set();
+    slots = slots.filter(slot => {
+      // Eliminar si ya vimos este eventId
+      if (seenEventIds.has(slot.eventId)) {
+        console.log(`   ⏭️  Eliminando slot duplicado por eventId: ${slot.time} [${slot.eventId}]`);
+        return false;
+      }
+      // Eliminar si ya vimos esta hora exacta (mismo horario)
+      if (seenTimes.has(slot.time)) {
+        console.log(`   ⏭️  Eliminando slot duplicado por hora: ${slot.time} [${slot.eventId}]`);
+        return false;
+      }
+      seenEventIds.add(slot.eventId);
+      seenTimes.add(slot.time);
+      return true;
+    });
+    
+    // Ordenar slots cronológicamente por hora de inicio
+    slots.sort((a, b) => a.startTimestamp - b.startTimestamp);
+    
+    console.log(`   📊 Slots procesados: ${slots.length} (después de eliminar duplicados y ordenar)`);
 
     // Filtrar slots que están en domingo después de las 5:00 PM
     const dateObj = new Date(year, month - 1, day);
@@ -339,6 +364,8 @@ async function getAvailableSlots(date, calendarClient, authClient, innoviaCDMXCa
         }
         return !isAfter5PM;
       });
+      // Asegurar que los slots filtrados también estén ordenados
+      filteredSlots.sort((a, b) => a.startTimestamp - b.startTimestamp);
       console.log(`   📅 Slots disponibles en domingo: ${filteredSlots.length} (de ${slots.length} totales)`);
       return filteredSlots;
     }
