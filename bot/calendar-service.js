@@ -181,6 +181,18 @@ async function getAvailableSlots(date, calendarClient, authClient, calendarId, e
       });
 
     console.log(`   Citas encontradas: ${bookedEvents.length}`);
+    
+    // Log detallado de todas las citas para debugging
+    if (bookedEvents.length > 0) {
+      console.log(`   📋 Detalle de citas encontradas:`);
+      bookedEvents.forEach((event, idx) => {
+        const startCDMX = event.start.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' });
+        const endCDMX = event.end.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' });
+        console.log(`      ${idx + 1}. ${event.summary || 'Sin título'} [${event.id}]`);
+        console.log(`         CDMX: ${startCDMX} - ${endCDMX}`);
+        console.log(`         Timestamps: [${event.start.getTime()} - ${event.end.getTime()}]`);
+      });
+    }
 
     // Bloques de 90 minutos disponibles
     // Horarios: 11:00am, 12:30pm, 2:00pm, 3:30pm, 5:00pm, 6:30pm
@@ -258,18 +270,22 @@ async function getAvailableSlots(date, calendarClient, authClient, calendarId, e
       let citasEnBloque = 0;
       const citasEnEsteBloque = [];
       
-      console.log(`   🔍 Verificando bloque ${blockTime.hour}:${String(blockTime.minute).padStart(2, '0')} (${blockStart.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })} - ${blockEnd.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })})`);
+      // Obtener timestamps del bloque una vez
+      const blockStartTime = blockStart.getTime();
+      const blockEndTime = blockEnd.getTime();
       
-      bookedEvents.forEach(booked => {
+      console.log(`   🔍 Verificando bloque ${blockTime.hour}:${String(blockTime.minute).padStart(2, '0')}`);
+      console.log(`      Bloque CDMX: ${blockStart.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })} - ${blockEnd.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })}`);
+      console.log(`      Bloque timestamps: [${blockStartTime} - ${blockEndTime}]`);
+      console.log(`      Total citas a verificar: ${bookedEvents.length}`);
+      
+      bookedEvents.forEach((booked, index) => {
         // Una cita está en el bloque si se solapa con él
         // Convertir todas las fechas a timestamps para comparación precisa
         const bookedStart = new Date(booked.start);
         const bookedEnd = new Date(booked.end);
         
         // Obtener timestamps en milisegundos para comparación precisa
-        // Usar los timestamps directos ya que Date objects manejan timezone internamente
-        const blockStartTime = blockStart.getTime();
-        const blockEndTime = blockEnd.getTime();
         const bookedStartTime = bookedStart.getTime();
         const bookedEndTime = bookedEnd.getTime();
         
@@ -278,19 +294,28 @@ async function getAvailableSlots(date, calendarClient, authClient, calendarId, e
         // Usar comparación de timestamps para precisión
         const overlaps = bookedStartTime < blockEndTime && bookedEndTime > blockStartTime;
         
+        // Log detallado para debugging
+        const bookedStartCDMX = bookedStart.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' });
+        const bookedEndCDMX = bookedEnd.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' });
+        
+        console.log(`      Cita ${index + 1}: ${booked.summary || 'Sin título'}`);
+        console.log(`         CDMX: ${bookedStartCDMX} - ${bookedEndCDMX}`);
+        console.log(`         Timestamps: [${bookedStartTime} - ${bookedEndTime}]`);
+        console.log(`         Solapa? ${overlaps ? '✅ SÍ' : '❌ NO'}`);
+        
         if (overlaps) {
           citasEnBloque++;
           citasEnEsteBloque.push({
             summary: booked.summary,
-            start: bookedStart.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' }),
-            end: bookedEnd.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' }),
+            start: bookedStartCDMX,
+            end: bookedEndCDMX,
             id: booked.id
           });
-          console.log(`   📌 Cita encontrada en bloque ${blockTime.hour}:${String(blockTime.minute).padStart(2, '0')}: ${booked.summary || 'Sin título'}`);
-          console.log(`      Inicio: ${bookedStart.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })}, Fin: ${bookedEnd.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })}`);
-          console.log(`      Timestamps: bloque [${blockStartTime} - ${blockEndTime}], cita [${bookedStartTime} - ${bookedEndTime}]`);
+          console.log(`         ✅ CONTADA - Total en bloque: ${citasEnBloque}`);
         }
       });
+      
+      console.log(`   📊 RESUMEN bloque ${blockTime.hour}:${String(blockTime.minute).padStart(2, '0')}: ${citasEnBloque} citas encontradas`);
 
       // CRITICAL: El bloque está disponible SOLO si tiene MENOS de 2 citas (no <=, sino <)
       // Si tiene exactamente 2 citas, NO debe estar disponible
