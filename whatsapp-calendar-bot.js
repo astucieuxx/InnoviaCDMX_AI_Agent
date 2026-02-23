@@ -1923,12 +1923,13 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
         await sendWhatsAppMessage(cleanPhone, userReply);
         sessions.addToHistory(cleanPhone, 'assistant', userReply);
         
-        // Pause bot for 20 minutes to allow advisor to respond without bot interference
-        const pauseUntil = new Date(Date.now() + 20 * 60 * 1000); // 20 minutes from now
+        // Pause bot for 10 minutes to allow advisor to respond without bot interference
+        // This pause only applies to this specific conversation (session), not others
+        const pauseUntil = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
         sessions.updateSession(cleanPhone, {
           bot_paused_until: pauseUntil.toISOString()
         });
-        console.log(`⏸️  Bot pausado hasta ${pauseUntil.toISOString()} (20 minutos) para permitir que el asesor atienda al cliente`);
+        console.log(`⏸️  Bot pausado para esta conversación hasta ${pauseUntil.toISOString()} (10 minutos) para permitir que el asesor atienda al cliente`);
         
         return;
       } else if (incomingMessage === 'info_catalogo') {
