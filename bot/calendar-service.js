@@ -250,24 +250,48 @@ async function getAvailableSlots(date, calendarClient, authClient, innoviaCDMXCa
         // Los eventos azules (sin nombre) son los spots disponibles
         return { start, end, id: e.id, originalStart: e.start.dateTime || e.start.date, originalEnd: e.end.dateTime || e.end.date };
       })
-      .filter(event => !isNaN(event.start.getTime()) && !isNaN(event.end.getTime())); // Filtrar eventos con fechas inválidas
+      .filter(event => {
+        // Filtrar eventos con fechas inválidas
+        if (isNaN(event.start.getTime()) || isNaN(event.end.getTime())) {
+          return false;
+        }
+        
+        // CRITICAL: Solo considerar eventos que duran exactamente 90 minutos
+        // 90 minutos = 90 * 60 * 1000 = 5,400,000 milisegundos
+        const durationMs = event.end.getTime() - event.start.getTime();
+        const durationMinutes = durationMs / (60 * 1000);
+        const DURACION_ESPERADA_MINUTOS = 90;
+        const TOLERANCIA_MINUTOS = 1; // Permitir pequeña tolerancia (89-91 minutos)
+        
+        const is90Minutes = Math.abs(durationMinutes - DURACION_ESPERADA_MINUTOS) <= TOLERANCIA_MINUTOS;
+        
+        if (!is90Minutes) {
+          console.log(`   ⏭️  Excluyendo evento [${event.id}] - duración: ${durationMinutes.toFixed(1)} minutos (debe ser 90 minutos)`);
+          return false;
+        }
+        
+        return true;
+      });
 
-    console.log(`   Spots disponibles encontrados: ${availableSpots.length}`);
+    console.log(`   Spots disponibles encontrados (eventos azules sin nombre, duración 90 min): ${availableSpots.length}`);
     
     // Log detallado de todos los spots disponibles
     if (availableSpots.length > 0) {
-      console.log(`   📋 Detalle de spots disponibles (eventos azules sin nombre):`);
+      console.log(`   📋 Detalle de spots disponibles:`);
       availableSpots.forEach((spot, idx) => {
         const startCDMX = spot.start.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' });
         const endCDMX = spot.end.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' });
         const startTimeCDMX = spot.start.toLocaleTimeString('es-MX', { timeZone: 'America/Mexico_City', hour: '2-digit', minute: '2-digit', hour12: true });
+        const durationMs = spot.end.getTime() - spot.start.getTime();
+        const durationMinutes = durationMs / (60 * 1000);
         console.log(`      ${idx + 1}. Spot disponible [${spot.id}]`);
         console.log(`         Hora CDMX: ${startTimeCDMX}`);
+        console.log(`         Duración: ${durationMinutes.toFixed(1)} minutos`);
         console.log(`         Rango: ${startCDMX} - ${endCDMX}`);
         console.log(`         Timestamps: [${spot.start.getTime()} - ${spot.end.getTime()}]`);
       });
     } else {
-      console.log(`   ⚠️  NO se encontraron spots disponibles (eventos azules) en el calendario "Innovia CDMX" para ${date}`);
+      console.log(`   ⚠️  NO se encontraron spots disponibles (eventos azules de 90 min) en el calendario "Innovia CDMX" para ${date}`);
     }
 
     // Convertir eventos azules directamente a slots disponibles
