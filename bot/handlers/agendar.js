@@ -693,71 +693,18 @@ async function execute(session, message, calendarDeps = null) {
       };
     }
   } else {
-    // No calendar dependencies available - use default slots
-    console.warn('⚠️  Calendar dependencies not provided, using default slots');
+    // No calendar dependencies available - NO usar fallback a slots por defecto
+    console.error('❌ ERROR: Calendar dependencies not provided');
+    console.error('   ⚠️  El bot SOLO usa eventos azules del calendario "Innovia CDMX"');
+    console.error('   ⚠️  NO se usarán slots por defecto');
     
-    // Determinar si es domingo para excluir el 6:30pm
-    const [year, month, day] = fechaCitaDeseada.split('-').map(Number);
-    const dateObj = new Date(year, month - 1, day);
-    const dayOfWeek = dateObj.getDay();
-    const isSunday = dayOfWeek === 0;
-    
-    console.log(`   📅 [agendar handler] Verificando día de la semana para ${fechaCitaDeseada}: día ${dayOfWeek} (0=domingo)`);
-    console.log(`   📅 [agendar handler] Es domingo? ${isSunday}`);
-    
-    const allDefaultSlots = [
-      { time: '11:00 AM', start: `${fechaCitaDeseada}T11:00:00`, end: `${fechaCitaDeseada}T12:30:00`, availableSpots: 2, totalSpots: 2 },
-      { time: '12:30 PM', start: `${fechaCitaDeseada}T12:30:00`, end: `${fechaCitaDeseada}T14:00:00`, availableSpots: 2, totalSpots: 2 },
-      { time: '2:00 PM', start: `${fechaCitaDeseada}T14:00:00`, end: `${fechaCitaDeseada}T15:30:00`, availableSpots: 2, totalSpots: 2 },
-      { time: '3:30 PM', start: `${fechaCitaDeseada}T15:30:00`, end: `${fechaCitaDeseada}T17:00:00`, availableSpots: 2, totalSpots: 2 },
-      { time: '5:00 PM', start: `${fechaCitaDeseada}T17:00:00`, end: `${fechaCitaDeseada}T18:30:00`, availableSpots: 2, totalSpots: 2 },
-      { time: '6:30 PM', start: `${fechaCitaDeseada}T18:30:00`, end: `${fechaCitaDeseada}T20:00:00`, availableSpots: 2, totalSpots: 2 }
-    ];
-    
-    // Si es domingo, excluir el último slot (6:30pm)
-    const defaultSlots = isSunday ? allDefaultSlots.slice(0, -1) : allDefaultSlots;
-    
-    if (isSunday) {
-      console.log(`   📅 ✅ [agendar handler] Es domingo - excluyendo 6:30pm. Slots disponibles: ${defaultSlots.length}`);
-    }
-
-    let slotsMessage = `Bloques disponibles para ${formatDate(fechaCitaDeseada)} (90 min cada uno):`;
-
-    const buttons = defaultSlots
-      .map((slot, originalIndex) => {
-        // Only create button if slot has at least 1 available spot
-        if (!slot.availableSpots || slot.availableSpots <= 0) {
-          return null;
-        }
-        
-        // Format time without emojis and special chars (no spaces available shown)
-        let timeText = slot.time.replace(/[^\d:apm\s]/gi, '');
-        // Limit to 20 characters (WhatsApp limit)
-        if (timeText.length > 20) {
-          timeText = timeText.substring(0, 17) + '...';
-        }
-        return {
-          id: `slot_${originalIndex}`, // Use original index to match slots_disponibles array
-          title: timeText
-        };
-      })
-      .filter(button => button !== null); // Remove null entries
-
-    // Limit to 3 buttons (WhatsApp max)
-    const buttonsToShow = buttons.slice(0, 3);
-    
-    if (defaultSlots.length > 3) {
-      slotsMessage += `\n\n(Se muestran los primeros 3 bloques. Hay ${defaultSlots.length} bloques disponibles en total)`;
-    }
-
-      return {
-        reply: slotsMessage,
-        sessionUpdates: {
-          slots_disponibles: defaultSlots,
-          fecha_cita_solicitada: fechaCitaDeseada
-        },
-        buttons: buttonsToShow
-      };
+    return {
+      reply: `Disculpa, no puedo consultar la disponibilidad en este momento. Por favor, intenta más tarde o contacta directamente con nosotros. 💫`,
+      sessionUpdates: {
+        ...sessionUpdates,
+        pending_agendar_fecha: true // Keep flag since we couldn't check availability
+      }
+    };
   }
 }
 

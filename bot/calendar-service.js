@@ -100,8 +100,10 @@ async function getAvailableSlots(date, calendarClient, authClient, innoviaCDMXCa
     }
     
     if (!authClient) {
-      console.warn('⚠️  Google Auth no inicializado, usando horarios por defecto');
-      return getDefaultSlots(date);
+      console.error('❌ ERROR: Google Auth no inicializado');
+      console.error('   ⚠️  NO se pueden consultar eventos del calendario "Innovia CDMX"');
+      console.error('   ⚠️  Retornando array vacío - el bot SOLO usa eventos azules del calendario');
+      return [];
     }
 
     // Obtener cliente de autenticación (compatible con OAuth2Client y GoogleAuth)
@@ -122,8 +124,10 @@ async function getAvailableSlots(date, calendarClient, authClient, innoviaCDMXCa
     const endOfDay = new Date(year, month - 1, day, 23, 59, 59);   // Fin del día
 
     if (!innoviaCDMXCalendarId) {
-      console.warn('⚠️  No se encontró calendario "Innovia CDMX", usando horarios por defecto');
-      return getDefaultSlots(date);
+      console.error('❌ ERROR: No se encontró calendario "Innovia CDMX"');
+      console.error('   ⚠️  El bot SOLO usa eventos azules del calendario "Innovia CDMX"');
+      console.error('   ⚠️  Retornando array vacío - verifica que el calendario exista y esté compartido');
+      return [];
     }
 
     console.log(`📅 Consultando calendario "Innovia CDMX" para spots disponibles en ${date}`);
@@ -408,11 +412,10 @@ async function getAvailableSlots(date, calendarClient, authClient, innoviaCDMXCa
     console.error('❌ Error al consultar Google Calendar:', error.message);
     console.error('   Stack:', error.stack);
     console.error('   ⚠️  ERROR CRÍTICO: No se puede consultar Google Calendar');
-    console.error('   ⚠️  Usando horarios por defecto como FALLBACK (solo en caso de error de conexión)');
-    console.error('   ⚠️  Estos slots por defecto NO respetan la regla de máximo 2 citas por bloque');
-    const fallbackSlots = getDefaultSlots(date);
-    console.error(`   ⚠️  FALLBACK: Retornando ${fallbackSlots.length} slots por defecto para ${date}`);
-    return fallbackSlots;
+    console.error('   ⚠️  El bot SOLO usa eventos azules del calendario "Innovia CDMX"');
+    console.error('   ⚠️  NO se usará fallback a slots por defecto');
+    console.error('   ⚠️  Retornando array vacío - el usuario debe elegir otra fecha o verificar la conexión');
+    return [];
   }
 }
 
