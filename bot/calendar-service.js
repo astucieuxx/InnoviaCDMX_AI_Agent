@@ -279,7 +279,7 @@ async function getAvailableSlots(date, calendarClient, authClient, innoviaCDMXCa
     
     // Log detallado de todos los spots disponibles
     if (availableSpots.length > 0) {
-      console.log(`   📋 Detalle de spots disponibles:`);
+      console.log(`   📋 Detalle de spots disponibles (eventos azules sin nombre, duración 90 min):`);
       availableSpots.forEach((spot, idx) => {
         const startCDMX = spot.start.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' });
         const endCDMX = spot.end.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' });
@@ -291,9 +291,14 @@ async function getAvailableSlots(date, calendarClient, authClient, innoviaCDMXCa
         console.log(`         Duración: ${durationMinutes.toFixed(1)} minutos`);
         console.log(`         Rango: ${startCDMX} - ${endCDMX}`);
         console.log(`         Timestamps: [${spot.start.getTime()} - ${spot.end.getTime()}]`);
+        console.log(`         ⚠️  Este evento azul se convertirá en un slot disponible`);
       });
+      console.log(`   ✅ Total de eventos azules encontrados: ${availableSpots.length}`);
+      console.log(`   ⚠️  IMPORTANTE: Solo estos eventos azules se convertirán en slots disponibles`);
+      console.log(`   ⚠️  Si ves un slot de 5:30 PM, debe haber un evento azul a esa hora en Google Calendar`);
     } else {
       console.log(`   ⚠️  NO se encontraron spots disponibles (eventos azules de 90 min) en el calendario "Innovia CDMX" para ${date}`);
+      console.log(`   ⚠️  Si no hay eventos azules, NO se mostrarán slots (retornará array vacío)`);
     }
 
     // Convertir eventos azules directamente a slots disponibles
@@ -349,9 +354,13 @@ async function getAvailableSlots(date, calendarClient, authClient, innoviaCDMXCa
       const orderedTimes = slots.map(s => {
         const timestamp = s.startTimestamp || new Date(s.start).getTime();
         const time24h = new Date(s.start).toLocaleTimeString('en-US', {timeZone: 'America/Mexico_City', hour12: false});
-        return `${s.time} (${time24h}, ts:${timestamp})`;
+        return `${s.time} (${time24h}, ts:${timestamp}, eventId:${s.eventId})`;
       });
       console.log(`   📅 Orden cronológico verificado: ${orderedTimes.join(' → ')}`);
+      console.log(`   ⚠️  IMPORTANTE: Estos slots provienen SOLO de eventos azules en el calendario "Innovia CDMX"`);
+      console.log(`   ⚠️  Si ves un slot que no debería estar, verifica que NO haya un evento azul a esa hora en Google Calendar`);
+    } else {
+      console.log(`   ⚠️  NO se encontraron slots disponibles - retornando array vacío (NO usando getDefaultSlots)`);
     }
 
     // Filtrar slots que están en domingo después de las 5:00 PM
@@ -398,8 +407,12 @@ async function getAvailableSlots(date, calendarClient, authClient, innoviaCDMXCa
   } catch (error) {
     console.error('❌ Error al consultar Google Calendar:', error.message);
     console.error('   Stack:', error.stack);
-    console.warn('⚠️  Usando horarios por defecto');
-    return getDefaultSlots(date);
+    console.error('   ⚠️  ERROR CRÍTICO: No se puede consultar Google Calendar');
+    console.error('   ⚠️  Usando horarios por defecto como FALLBACK (solo en caso de error de conexión)');
+    console.error('   ⚠️  Estos slots por defecto NO respetan la regla de máximo 2 citas por bloque');
+    const fallbackSlots = getDefaultSlots(date);
+    console.error(`   ⚠️  FALLBACK: Retornando ${fallbackSlots.length} slots por defecto para ${date}`);
+    return fallbackSlots;
   }
 }
 
