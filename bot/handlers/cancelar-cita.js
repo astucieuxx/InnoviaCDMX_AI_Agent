@@ -123,14 +123,15 @@ function formatTimeSpanish(dateInput) {
         date = new Date(dateInput);
         
         // If that fails, try extracting time from ISO string
-      if (isNaN(date.getTime())) {
-        const timeMatch = dateInput.match(/T(\d{2}):(\d{2})/);
-        if (timeMatch) {
-          const [, hour, minute] = timeMatch;
-          const hourNum = parseInt(hour);
-          const ampm = hourNum >= 12 ? 'PM' : 'AM';
-          const displayHour = hourNum > 12 ? hourNum - 12 : (hourNum === 0 ? 12 : hourNum);
-          return `${String(displayHour).padStart(2, '0')}:${minute} ${ampm}`;
+        if (isNaN(date.getTime())) {
+          const timeMatch = dateInput.match(/T(\d{2}):(\d{2})/);
+          if (timeMatch) {
+            const [, hour, minute] = timeMatch;
+            const hourNum = parseInt(hour);
+            const ampm = hourNum >= 12 ? 'PM' : 'AM';
+            const displayHour = hourNum > 12 ? hourNum - 12 : (hourNum === 0 ? 12 : hourNum);
+            return `${String(displayHour).padStart(2, '0')}:${minute} ${ampm}`;
+          }
         }
       }
     } else {
@@ -145,6 +146,7 @@ function formatTimeSpanish(dateInput) {
     }
     
     return date.toLocaleTimeString('es-MX', { 
+      timeZone: 'America/Mexico_City',
       hour: '2-digit', 
       minute: '2-digit', 
       hour12: true 
