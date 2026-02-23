@@ -374,7 +374,7 @@ async function getAvailableSlots(date, calendarClient, authClient, innoviaCDMXCa
 
     if (isSunday) {
       console.log(`   📅 Es domingo - filtrando slots después de las 5:00 PM`);
-      const filteredSlots = slots.filter(slot => {
+      let filteredSlots = slots.filter(slot => {
         const slotDate = new Date(slot.start);
         const slotHour = slotDate.toLocaleTimeString('en-US', {
           timeZone: 'America/Mexico_City',
@@ -390,9 +390,32 @@ async function getAvailableSlots(date, calendarClient, authClient, innoviaCDMXCa
         }
         return !isAfter5PM;
       });
-      // Asegurar que los slots filtrados también estén ordenados
-      filteredSlots.sort((a, b) => a.startTimestamp - b.startTimestamp);
-      console.log(`   📅 Slots disponibles en domingo: ${filteredSlots.length} (de ${slots.length} totales)`);
+      
+      // Eliminar duplicados adicionales después del filtro de domingo
+      const seenEventIds = new Set();
+      const seenTimestamps = new Set();
+      filteredSlots = filteredSlots.filter(slot => {
+        const timestamp = slot.startTimestamp || new Date(slot.start).getTime();
+        if (seenEventIds.has(slot.eventId) || seenTimestamps.has(timestamp)) {
+          console.log(`      ⏭️  Eliminando slot duplicado en filtro de domingo: ${slot.time} [${slot.eventId}]`);
+          return false;
+        }
+        seenEventIds.add(slot.eventId);
+        seenTimestamps.add(timestamp);
+        return true;
+      });
+      
+      // Asegurar que los slots filtrados también estén ordenados cronológicamente
+      filteredSlots.sort((a, b) => {
+        const timeA = a.startTimestamp || new Date(a.start).getTime();
+        const timeB = b.startTimestamp || new Date(b.start).getTime();
+        return timeA - timeB;
+      });
+      
+      console.log(`   📅 Slots disponibles en domingo: ${filteredSlots.length} (de ${slots.length} totales, después de eliminar duplicados y ordenar)`);
+      if (filteredSlots.length > 0) {
+        console.log(`   📅 Orden cronológico (domingo): ${filteredSlots.map(s => s.time).join(' → ')}`);
+      }
       return filteredSlots;
     }
 

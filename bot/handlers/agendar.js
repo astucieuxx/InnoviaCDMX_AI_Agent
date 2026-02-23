@@ -642,15 +642,36 @@ async function execute(session, message, calendarDeps = null) {
       // Filter to only show slots with at least 1 available spot
       let availableSlots = slots.filter(slot => slot.availableSpots && slot.availableSpots > 0);
       
+      // Eliminar duplicados adicionales (por si acaso)
+      const seenEventIds = new Set();
+      const seenTimestamps = new Set();
+      availableSlots = availableSlots.filter(slot => {
+        const timestamp = slot.startTimestamp || new Date(slot.start).getTime();
+        // Eliminar si ya vimos este eventId
+        if (seenEventIds.has(slot.eventId)) {
+          console.log(`   ⏭️  [agendar] Eliminando slot duplicado por eventId: ${slot.time} [${slot.eventId}]`);
+          return false;
+        }
+        // Eliminar si ya vimos este timestamp exacto (mismo horario exacto)
+        if (seenTimestamps.has(timestamp)) {
+          console.log(`   ⏭️  [agendar] Eliminando slot duplicado por timestamp: ${slot.time} [${slot.eventId}]`);
+          return false;
+        }
+        seenEventIds.add(slot.eventId);
+        seenTimestamps.add(timestamp);
+        return true;
+      });
+      
       // Asegurar orden cronológico: ordenar por timestamp de inicio
-      // Usar startTimestamp si existe, sino parsear start (ISO string)
+      // IMPORTANTE: Ordenar DESPUÉS de eliminar duplicados
       availableSlots.sort((a, b) => {
         const timeA = a.startTimestamp || new Date(a.start).getTime();
         const timeB = b.startTimestamp || new Date(b.start).getTime();
         return timeA - timeB;
       });
       
-      console.log(`   📅 Slots ordenados cronológicamente: ${availableSlots.map(s => s.time).join(', ')}`);
+      console.log(`   📅 Slots finales (después de filtrar, eliminar duplicados y ordenar): ${availableSlots.length}`);
+      console.log(`   📅 Orden cronológico verificado: ${availableSlots.map(s => `${s.time} (ts:${s.startTimestamp || new Date(s.start).getTime()})`).join(' → ')}`);
 
       if (availableSlots.length === 0) {
         return {
