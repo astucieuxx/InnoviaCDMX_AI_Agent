@@ -217,6 +217,8 @@ async function getAvailableSlots(date, calendarClient, authClient, calendarId, e
     const MAX_CITAS_POR_BLOQUE = 2;
 
     for (const blockTime of blockTimes) {
+      // Crear bloques interpretando la hora como hora local de CDMX
+      // Usar el mismo método que se usa en createCalendarEvent para consistencia
       const blockStart = new Date(year, month - 1, day, blockTime.hour, blockTime.minute, 0);
       const blockEnd = new Date(blockStart.getTime() + 90 * 60 * 1000); // 90 minutos después
 
@@ -224,56 +226,73 @@ async function getAvailableSlots(date, calendarClient, authClient, calendarId, e
       let citasEnBloque = 0;
       const citasEnEsteBloque = [];
       
+      console.log(`   🔍 Verificando bloque ${blockTime.hour}:${String(blockTime.minute).padStart(2, '0')} (${blockStart.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })} - ${blockEnd.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })})`);
+      
       bookedEvents.forEach(booked => {
         // Una cita está en el bloque si se solapa con él
-        // Usar comparación más precisa para evitar problemas de timezone
+        // Convertir todas las fechas a timestamps para comparación precisa
         const bookedStart = new Date(booked.start);
         const bookedEnd = new Date(booked.end);
         
+        // Obtener timestamps en milisegundos para comparación precisa
+        // Usar los timestamps directos ya que Date objects manejan timezone internamente
+        const blockStartTime = blockStart.getTime();
+        const blockEndTime = blockEnd.getTime();
+        const bookedStartTime = bookedStart.getTime();
+        const bookedEndTime = bookedEnd.getTime();
+        
         // Check if the booked event overlaps with the block
         // Overlap occurs if: bookedStart < blockEnd AND bookedEnd > blockStart
-        const overlaps = bookedStart < blockEnd && bookedEnd > blockStart;
+        // Usar comparación de timestamps para precisión
+        const overlaps = bookedStartTime < blockEndTime && bookedEndTime > blockStartTime;
         
         if (overlaps) {
           citasEnBloque++;
           citasEnEsteBloque.push({
             summary: booked.summary,
-            start: bookedStart.toLocaleString('es-MX'),
-            end: bookedEnd.toLocaleString('es-MX')
+            start: bookedStart.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' }),
+            end: bookedEnd.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' }),
+            id: booked.id
           });
-          console.log(`   📌 Cita en bloque ${blockTime.hour}:${String(blockTime.minute).padStart(2, '0')}: ${booked.summary}`);
-          console.log(`      Inicio: ${bookedStart.toLocaleString('es-MX')}, Fin: ${bookedEnd.toLocaleString('es-MX')}`);
+          console.log(`   📌 Cita encontrada en bloque ${blockTime.hour}:${String(blockTime.minute).padStart(2, '0')}: ${booked.summary || 'Sin título'}`);
+          console.log(`      Inicio: ${bookedStart.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })}, Fin: ${bookedEnd.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })}`);
+          console.log(`      Timestamps: bloque [${blockStartTime} - ${blockEndTime}], cita [${bookedStartTime} - ${bookedEndTime}]`);
         }
       });
 
-      // El bloque está disponible si tiene menos de 2 citas
+      // CRITICAL: El bloque está disponible SOLO si tiene MENOS de 2 citas (no <=, sino <)
+      // Si tiene exactamente 2 citas, NO debe estar disponible
       if (citasEnBloque < MAX_CITAS_POR_BLOQUE) {
         const availableSpots = MAX_CITAS_POR_BLOQUE - citasEnBloque;
         slots.push({
-          time: blockStart.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: true }),
+          time: blockStart.toLocaleTimeString('es-MX', { timeZone: 'America/Mexico_City', hour: '2-digit', minute: '2-digit', hour12: true }),
           start: blockStart.toISOString(),
           end: blockEnd.toISOString(),
           availableSpots: availableSpots,
           totalSpots: MAX_CITAS_POR_BLOQUE
         });
-        console.log(`   ✅ Bloque ${blockTime.hour}:${String(blockTime.minute).padStart(2, '0')} disponible (${availableSpots}/${MAX_CITAS_POR_BLOQUE} espacios libres)`);
+        console.log(`   ✅ Bloque ${blockTime.hour}:${String(blockTime.minute).padStart(2, '0')} disponible (${availableSpots}/${MAX_CITAS_POR_BLOQUE} espacios libres, ${citasEnBloque} citas existentes)`);
         if (citasEnEsteBloque.length > 0) {
           console.log(`      Citas en este bloque: ${citasEnEsteBloque.length}`);
         }
       } else {
-        console.log(`   ❌ Bloque ${blockTime.hour}:${String(blockTime.minute).padStart(2, '0')} LLENO (${citasEnBloque}/${MAX_CITAS_POR_BLOQUE} citas)`);
+        console.log(`   ❌ Bloque ${blockTime.hour}:${String(blockTime.minute).padStart(2, '0')} LLENO (${citasEnBloque}/${MAX_CITAS_POR_BLOQUE} citas) - NO DISPONIBLE`);
         console.log(`      Detalles de citas:`);
         citasEnEsteBloque.forEach((cita, idx) => {
-          console.log(`        ${idx + 1}. ${cita.summary} (${cita.start} - ${cita.end})`);
+          console.log(`        ${idx + 1}. ${cita.summary} (${cita.start} - ${cita.end}) [ID: ${cita.id}]`);
         });
       }
     }
 
     console.log(`   📊 Total bloques disponibles: ${slots.length}`);
     
+    // CRITICAL: Si no hay bloques disponibles, retornar array vacío
+    // NO usar getDefaultSlots aquí porque eso mostraría slots que no respetan la regla de máximo 2 citas
+    // getDefaultSlots solo debe usarse cuando NO se puede consultar Google Calendar (fallback por error de conexión)
     if (slots.length === 0) {
-      console.warn('   ⚠️  No hay bloques disponibles, usando horarios por defecto');
-      return getDefaultSlots(date);
+      console.warn('   ⚠️  No hay bloques disponibles (todos los bloques tienen 2 citas o más)');
+      console.warn('   ⚠️  Retornando array vacío - el usuario debe elegir otra fecha');
+      return [];
     }
     
     return slots;
