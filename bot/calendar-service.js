@@ -167,18 +167,79 @@ async function getAvailableSlots(date, calendarClient, authClient, calendarId, e
         
         // Manejar eventos con hora (dateTime) y eventos de todo el día (date)
         if (e.start.dateTime) {
-          start = new Date(e.start.dateTime);
-          end = new Date(e.end.dateTime);
+          // CRITICAL: Parsear dateTime considerando el timezone
+          // Google Calendar puede devolver dateTime con o sin offset explícito
+          // Si viene sin offset pero tiene timeZone en la request, se interpreta como hora local de ese timezone
+          const startStr = e.start.dateTime;
+          const endStr = e.end.dateTime;
+          
+          // Google Calendar devuelve dateTime con timezone cuando se especifica timeZone en la request
+          // El string dateTime puede venir con offset explícito o sin él
+          // Si viene sin offset, JavaScript lo interpreta como hora local del servidor (puede ser UTC)
+          // Necesitamos asegurarnos de que se interprete como hora de CDMX
+          
+          // Log del formato original para debugging
+          console.log(`      📅 Parseando fecha de evento: ${e.summary || 'Sin título'}`);
+          console.log(`         dateTime original: ${startStr}`);
+          
+          // Si el string ya tiene offset (Z o +/-HH:MM), usarlo directamente
+          // Si no tiene offset, Google Calendar lo interpreta según el timeZone de la request
+          // Pero JavaScript lo interpretará como hora local del servidor, que puede ser UTC
+          // Necesitamos convertirlo a hora de CDMX
+          
+          let startParsed, endParsed;
+          
+          if (startStr.endsWith('Z') || startStr.match(/[+-]\d{2}:\d{2}$/)) {
+            // Ya tiene offset, parsear directamente
+            startParsed = new Date(startStr);
+            endParsed = new Date(endStr);
+            console.log(`         ✅ Tiene offset, parseado directo`);
+          } else {
+            // No tiene offset explícito
+            // Google Calendar devuelve esto cuando timeZone está especificado
+            // El string representa la hora en ese timezone, pero JavaScript lo interpreta como local
+            // Necesitamos agregar el offset de CDMX
+            // Para marzo 2026, CDMX está en horario estándar (UTC-6)
+            const startWithTZ = `${startStr}-06:00`;
+            const endWithTZ = `${endStr}-06:00`;
+            startParsed = new Date(startWithTZ);
+            endParsed = new Date(endWithTZ);
+            console.log(`         ⚠️  Sin offset, agregado -06:00 para CDMX`);
+            console.log(`         dateTime con offset: ${startWithTZ}`);
+          }
+          
+          start = startParsed;
+          end = endParsed;
+          
+          // Verificar que la fecha se parseó correctamente
+          if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+            console.error(`   ❌ Error parseando fecha de evento: ${e.summary || 'Sin título'}`);
+            console.error(`      start.dateTime: ${e.start.dateTime}`);
+            console.error(`      end.dateTime: ${e.end.dateTime}`);
+            // Fallback: intentar parsear sin modificar
+            start = new Date(e.start.dateTime);
+            end = new Date(e.end.dateTime);
+          } else {
+            // Verificar que la hora parseada sea correcta en CDMX
+            const startCDMX = start.toLocaleTimeString('es-MX', { timeZone: 'America/Mexico_City', hour: '2-digit', minute: '2-digit', hour12: true });
+            console.log(`         Hora parseada en CDMX: ${startCDMX}`);
+          }
         } else if (e.start.date) {
           // Evento de todo el día - considerar que ocupa todo el día
           start = new Date(e.start.date + 'T00:00:00');
           end = new Date(e.end.date + 'T23:59:59');
+        } else {
+          console.warn(`   ⚠️  Evento sin fecha válida: ${e.summary || 'Sin título'}`);
+          // Crear fechas inválidas que no se contarán
+          start = new Date(NaN);
+          end = new Date(NaN);
         }
         
         // Contar TODOS los eventos del calendario (todos son citas en este calendario)
         // No filtrar por título porque los eventos se crean solo con el nombre del cliente
-        return { start, end, summary: e.summary || 'Sin título', id: e.id };
-      });
+        return { start, end, summary: e.summary || 'Sin título', id: e.id, originalStart: e.start.dateTime || e.start.date, originalEnd: e.end.dateTime || e.end.date };
+      })
+      .filter(event => !isNaN(event.start.getTime()) && !isNaN(event.end.getTime())); // Filtrar eventos con fechas inválidas
 
     console.log(`   Citas encontradas: ${bookedEvents.length}`);
     
@@ -189,9 +250,13 @@ async function getAvailableSlots(date, calendarClient, authClient, calendarId, e
         const startCDMX = event.start.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' });
         const endCDMX = event.end.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' });
         console.log(`      ${idx + 1}. ${event.summary || 'Sin título'} [${event.id}]`);
+        console.log(`         Original: ${event.originalStart || 'N/A'} - ${event.originalEnd || 'N/A'}`);
         console.log(`         CDMX: ${startCDMX} - ${endCDMX}`);
         console.log(`         Timestamps: [${event.start.getTime()} - ${event.end.getTime()}]`);
+        console.log(`         Hora CDMX: ${event.start.toLocaleTimeString('es-MX', { timeZone: 'America/Mexico_City', hour: '2-digit', minute: '2-digit', hour12: true })} - ${event.end.toLocaleTimeString('es-MX', { timeZone: 'America/Mexico_City', hour: '2-digit', minute: '2-digit', hour12: true })}`);
       });
+    } else {
+      console.log(`   ⚠️  NO se encontraron citas en el calendario para ${date}`);
     }
 
     // Bloques de 90 minutos disponibles
@@ -315,7 +380,18 @@ async function getAvailableSlots(date, calendarClient, authClient, calendarId, e
         }
       });
       
-      console.log(`   📊 RESUMEN bloque ${blockTime.hour}:${String(blockTime.minute).padStart(2, '0')}: ${citasEnBloque} citas encontradas`);
+      console.log(`   📊 RESUMEN bloque ${blockTime.hour}:${String(blockTime.minute).padStart(2, '0')}: ${citasEnBloque} citas encontradas de ${bookedEvents.length} totales`);
+      
+      // CRITICAL: Verificación adicional - si hay 2 o más citas, el bloque NO debe estar disponible
+      if (citasEnBloque >= MAX_CITAS_POR_BLOQUE) {
+        console.log(`   🚫 BLOQUE LLENO - NO se agregará a slots disponibles (${citasEnBloque} >= ${MAX_CITAS_POR_BLOQUE})`);
+        if (citasEnEsteBloque.length > 0) {
+          console.log(`      Citas en este bloque:`);
+          citasEnEsteBloque.forEach((cita, idx) => {
+            console.log(`        ${idx + 1}. ${cita.summary} (${cita.start} - ${cita.end}) [ID: ${cita.id}]`);
+          });
+        }
+      }
 
       // CRITICAL: El bloque está disponible SOLO si tiene MENOS de 2 citas (no <=, sino <)
       // Si tiene exactamente 2 citas, NO debe estar disponible
