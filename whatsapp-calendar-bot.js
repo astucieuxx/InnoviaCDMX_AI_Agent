@@ -25,6 +25,8 @@ const { classifyIntent } = require('./bot/classifier');
 const { extractBrideProfile } = require('./bot/profile-extractor');
 const { handlers } = require('./bot/handlers');
 const { 
+  isSlotAvailable,
+  getAvailableSlots: getAvailableSlotsService,
   createCalendarEvent: createCalendarEventService,
   updateCalendarEvent: updateCalendarEventService,
   deleteCalendarEvent: deleteCalendarEventService,
@@ -1325,12 +1327,74 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
         
         const appointmentDateForEvent = sessionData.fecha_cita_solicitada || sessionData.fecha_cita;
         
+        // Create or update event in Google Calendar using calendar-service
+        const targetCalendarId = citasNuevasCalendarId || process.env.CALENDAR_ID || 'primary';
+        
+        // CRITICAL: Verificar disponibilidad del slot ANTES de crear la cita
+        // Esto previene que se agenden más de 2 citas en el mismo bloque
+        console.log(`🔍 Verificando disponibilidad del slot antes de agendar...`);
+        const slotAvailability = await isSlotAvailable(
+          selectedSlot.start,
+          calendar,
+          authClient,
+          targetCalendarId,
+          sessionData.calendar_event_id || null // Excluir evento actual si es rescheduling
+        );
+        
+        if (!slotAvailability.available) {
+          console.error(`❌ El slot ${selectedSlot.time} ya está lleno (${slotAvailability.currentCount}/${slotAvailability.maxCount} citas)`);
+          
+          // Obtener nuevos slots disponibles para mostrar al usuario
+          const newSlots = await getAvailableSlotsService(
+            appointmentDateForEvent,
+            calendar,
+            authClient,
+            targetCalendarId,
+            sessionData.calendar_event_id || null
+          );
+          
+          const availableSlots = newSlots.filter(slot => slot.availableSpots && slot.availableSpots > 0);
+          
+          if (availableSlots.length === 0) {
+            await sendWhatsAppMessage(cleanPhone, `❌ Lo siento, el horario ${selectedSlot.time} ya no está disponible. No hay horarios disponibles para ${appointmentDateForEvent}. Por favor, elige otra fecha.`);
+            sessions.addToHistory(cleanPhone, 'assistant', `Horario ${selectedSlot.time} ya no disponible.`);
+            return;
+          }
+          
+          // Mostrar nuevos slots disponibles
+          const slotButtons = availableSlots.slice(0, 3).map((slot, idx) => {
+            const timeText = slot.time.replace(/[^\d:apm\s]/gi, '');
+            return {
+              id: `slot_${idx}`,
+              title: timeText
+            };
+          });
+          
+          let slotsMessage = `❌ Lo siento, el horario ${selectedSlot.time} ya no está disponible (${slotAvailability.currentCount}/${slotAvailability.maxCount} citas en ese bloque).\n\nEstos son los horarios disponibles ahora:\n`;
+          availableSlots.slice(0, 3).forEach((slot, idx) => {
+            slotsMessage += `\n${idx + 1}. ${slot.time} (${slot.availableSpots} espacio${slot.availableSpots > 1 ? 's' : ''} disponible${slot.availableSpots > 1 ? 's' : ''})`;
+          });
+          
+          if (availableSlots.length > 3) {
+            slotsMessage += `\n\n(Se muestran los primeros 3 bloques. Hay ${availableSlots.length} bloques disponibles en total)`;
+          }
+          
+          // Actualizar slots disponibles en la sesión
+          sessions.updateSession(cleanPhone, {
+            slots_disponibles: availableSlots,
+            fecha_cita_solicitada: appointmentDateForEvent
+          });
+          
+          await sendWhatsAppMessage(cleanPhone, slotsMessage, { buttons: slotButtons });
+          sessions.addToHistory(cleanPhone, 'assistant', slotsMessage);
+          return;
+        }
+        
+        console.log(`✅ Slot verificado: ${slotAvailability.currentCount}/${slotAvailability.maxCount} citas - DISPONIBLE`);
         console.log(`📅 Creando evento en Google Calendar...`);
         console.log(`   Fecha de cita: ${appointmentDateForEvent}`);
         console.log(`   Hora inicio: ${selectedSlot.start}`);
         
-        // Create or update event in Google Calendar using calendar-service
-        const targetCalendarId = citasNuevasCalendarId || process.env.CALENDAR_ID || 'primary';
         let calendarEvent;
         
         // Check if we're rescheduling (have existing eventId)
