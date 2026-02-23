@@ -584,11 +584,12 @@ async function execute(session, message, calendarDeps = null) {
       // If we're moving an appointment, exclude the old event from availability count
       const excludeEventId = session.calendar_event_id || null;
       
+      // Obtener slots disponibles del calendario "Innovia CDMX" (eventos azules sin nombre)
       const slots = await getAvailableSlots(
         fechaCitaDeseada,
         calendarDeps.calendarClient,
         calendarDeps.authClient,
-        calendarDeps.calendarId || 'primary',
+        calendarDeps.innoviaCDMXCalendarId || 'primary', // Calendario "Innovia CDMX" para spots disponibles
         excludeEventId // Exclude the event being moved from count
       );
 

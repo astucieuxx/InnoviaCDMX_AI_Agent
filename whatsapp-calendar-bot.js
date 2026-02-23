@@ -267,7 +267,8 @@ try {
 // Configuración de Google Calendar
 const calendar = google.calendar('v3');
 let authClient;
-let citasNuevasCalendarId = null; // ID del calendario "CITAS NUEVAS"
+let citasNuevasCalendarId = null; // ID del calendario "CITAS NUEVAS" (donde se guardan las citas agendadas)
+let innoviaCDMXCalendarId = null; // ID del calendario "Innovia CDMX" (eventos azules sin nombre = spots disponibles)
 
 // Inicializar autenticación de Google
 async function initGoogleAuth() {
@@ -405,9 +406,10 @@ async function initGoogleAuth() {
     console.warn('⚠️  El bot funcionará pero NO consultará Google Calendar');
   }
   
-  // Buscar el calendario "CITAS NUEVAS" después de inicializar auth
+  // Buscar los calendarios necesarios después de inicializar auth
   if (authClient) {
     await findCitasNuevasCalendar();
+    await findInnoviaCDMXCalendar();
   }
 }
 
@@ -479,6 +481,71 @@ async function findCitasNuevasCalendar() {
     console.error('❌ Error buscando calendario "CITAS NUEVAS":', error.message);
     console.warn('   Usando CALENDAR_ID de variables de entorno o "primary"');
     citasNuevasCalendarId = process.env.CALENDAR_ID || 'primary';
+  }
+}
+
+// Función para buscar el calendario "Innovia CDMX" por nombre
+async function findInnoviaCDMXCalendar() {
+  try {
+    if (!authClient) {
+      console.warn('⚠️  Google Auth no inicializado, no se puede buscar calendario');
+      return;
+    }
+
+    let auth;
+    if (authClient && typeof authClient.getClient === 'function') {
+      auth = await authClient.getClient();
+    } else {
+      auth = authClient;
+    }
+
+    console.log('🔍 Buscando calendario "Innovia CDMX"...');
+    
+    // Listar todos los calendarios del usuario
+    const calendarList = await calendar.calendarList.list({
+      auth: auth,
+      minAccessRole: 'writer' // Solo calendarios donde podemos escribir
+    });
+
+    console.log(`   Calendarios encontrados: ${calendarList.data.items.length}`);
+    
+    // Buscar el calendario con nombre "Innovia CDMX" (case-insensitive)
+    const innoviaCDMX = calendarList.data.items.find(cal => {
+      if (!cal.summary) return false;
+      const nameUpper = cal.summary.toUpperCase().trim();
+      return nameUpper === 'INNOVIA CDMX' || nameUpper.includes('INNOVIA CDMX');
+    });
+
+    if (innoviaCDMX) {
+      innoviaCDMXCalendarId = innoviaCDMX.id;
+      console.log(`✅ Calendario "Innovia CDMX" encontrado: ${innoviaCDMXCalendarId}`);
+      console.log(`   Nombre: ${innoviaCDMX.summary}`);
+      console.log(`   Color: ${innoviaCDMX.backgroundColor || 'N/A'}`);
+      console.log(`   📌 Este calendario contiene los eventos azules (spots disponibles)`);
+    } else {
+      console.warn('⚠️  No se encontró calendario "Innovia CDMX"');
+      console.warn('   Buscando por nombre alternativo...');
+      
+      // Intentar buscar por variaciones del nombre
+      const alternativeNames = ['INNOVIA', 'CDMX'];
+      const alternative = calendarList.data.items.find(cal => {
+        if (!cal.summary) return false;
+        const nameUpper = cal.summary.toUpperCase().trim();
+        return alternativeNames.some(alt => nameUpper.includes(alt));
+      });
+      
+      if (alternative) {
+        innoviaCDMXCalendarId = alternative.id;
+        console.warn(`   ⚠️  Calendario alternativo encontrado: "${alternative.summary}" (ID: ${innoviaCDMXCalendarId})`);
+        console.warn('   Por favor, asegúrate de que el calendario se llame exactamente "Innovia CDMX"');
+      } else {
+        console.error('   ❌ No se encontró calendario "Innovia CDMX"');
+        console.error('   El bot NO podrá determinar spots disponibles sin este calendario');
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error buscando calendario "Innovia CDMX":', error.message);
+    console.error('   El bot NO podrá determinar spots disponibles sin este calendario');
   }
 }
 
@@ -1433,67 +1500,95 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
         // Create or update event in Google Calendar using calendar-service
         const targetCalendarId = citasNuevasCalendarId || process.env.CALENDAR_ID || 'primary';
         
-        // CRITICAL: Verificar disponibilidad del slot ANTES de crear la cita
-        // Esto previene que se agenden más de 2 citas en el mismo bloque
-        console.log(`🔍 Verificando disponibilidad del slot antes de agendar...`);
-        const slotAvailability = await isSlotAvailable(
-          selectedSlot.start,
-          calendar,
-          authClient,
-          targetCalendarId,
-          sessionData.calendar_event_id || null // Excluir evento actual si es rescheduling
-        );
-        
-        if (!slotAvailability.available) {
-          console.error(`❌ El slot ${selectedSlot.time} ya está lleno (${slotAvailability.currentCount}/${slotAvailability.maxCount} citas)`);
-          
-          // Obtener nuevos slots disponibles para mostrar al usuario
-          const newSlots = await getAvailableSlotsService(
-            appointmentDateForEvent,
-            calendar,
-            authClient,
-            targetCalendarId,
-            sessionData.calendar_event_id || null
-          );
-          
-          const availableSlots = newSlots.filter(slot => slot.availableSpots && slot.availableSpots > 0);
-          
-          if (availableSlots.length === 0) {
-            await sendWhatsAppMessage(cleanPhone, `❌ Lo siento, el horario ${selectedSlot.time} ya no está disponible. No hay horarios disponibles para ${appointmentDateForEvent}. Por favor, elige otra fecha.`);
-            sessions.addToHistory(cleanPhone, 'assistant', `Horario ${selectedSlot.time} ya no disponible.`);
-            return;
-          }
-          
-          // Mostrar nuevos slots disponibles
-          const slotButtons = availableSlots.slice(0, 3).map((slot, idx) => {
-            const timeText = slot.time.replace(/[^\d:apm\s]/gi, '');
-            return {
-              id: `slot_${idx}`,
-              title: timeText
-            };
-          });
-          
-          let slotsMessage = `❌ Lo siento, el horario ${selectedSlot.time} ya no está disponible (${slotAvailability.currentCount}/${slotAvailability.maxCount} citas en ese bloque).\n\nEstos son los horarios disponibles ahora:\n`;
-          availableSlots.slice(0, 3).forEach((slot, idx) => {
-            slotsMessage += `\n${idx + 1}. ${slot.time} (${slot.availableSpots} espacio${slot.availableSpots > 1 ? 's' : ''} disponible${slot.availableSpots > 1 ? 's' : ''})`;
-          });
-          
-          if (availableSlots.length > 3) {
-            slotsMessage += `\n\n(Se muestran los primeros 3 bloques. Hay ${availableSlots.length} bloques disponibles en total)`;
-          }
-          
-          // Actualizar slots disponibles en la sesión
-          sessions.updateSession(cleanPhone, {
-            slots_disponibles: availableSlots,
-            fecha_cita_solicitada: appointmentDateForEvent
-          });
-          
-          await sendWhatsAppMessage(cleanPhone, slotsMessage, { buttons: slotButtons });
-          sessions.addToHistory(cleanPhone, 'assistant', slotsMessage);
+        // CRITICAL: Verificar que el evento azul (spot disponible) todavía existe
+        // Si el slot está en la lista, el evento azul debería existir, pero verificamos por seguridad
+        if (!selectedSlot.eventId) {
+          console.error(`❌ El slot ${selectedSlot.time} no tiene eventId - no se puede verificar disponibilidad`);
+          await sendWhatsAppMessage(cleanPhone, `❌ Lo siento, hubo un error al verificar la disponibilidad del horario ${selectedSlot.time}. Por favor, intenta de nuevo.`);
+          sessions.addToHistory(cleanPhone, 'assistant', `Error verificando disponibilidad de ${selectedSlot.time}.`);
           return;
         }
         
-        console.log(`✅ Slot verificado: ${slotAvailability.currentCount}/${slotAvailability.maxCount} citas - DISPONIBLE`);
+        console.log(`🔍 Verificando que el evento azul (spot disponible) todavía existe...`);
+        console.log(`   Event ID del spot: ${selectedSlot.eventId}`);
+        
+        // Verificar que el evento azul existe en el calendario "Innovia CDMX"
+        if (innoviaCDMXCalendarId) {
+          try {
+            let auth;
+            if (authClient && typeof authClient.getClient === 'function') {
+              auth = await authClient.getClient();
+            } else {
+              auth = authClient;
+            }
+            
+            const spotEvent = await calendar.events.get({
+              auth: auth,
+              calendarId: innoviaCDMXCalendarId,
+              eventId: selectedSlot.eventId
+            });
+            
+            if (!spotEvent.data) {
+              console.error(`❌ El evento azul ${selectedSlot.eventId} ya no existe - el spot ya fue tomado`);
+              
+              // Obtener nuevos slots disponibles
+              const newSlots = await getAvailableSlotsService(
+                appointmentDateForEvent,
+                calendar,
+                authClient,
+                innoviaCDMXCalendarId,
+                null
+              );
+              
+              const availableSlots = newSlots.filter(slot => slot.availableSpots && slot.availableSpots > 0);
+              
+              if (availableSlots.length === 0) {
+                await sendWhatsAppMessage(cleanPhone, `❌ Lo siento, el horario ${selectedSlot.time} ya no está disponible. No hay horarios disponibles para ${appointmentDateForEvent}. Por favor, elige otra fecha.`);
+                sessions.addToHistory(cleanPhone, 'assistant', `Horario ${selectedSlot.time} ya no disponible.`);
+                return;
+              }
+              
+              // Mostrar nuevos slots disponibles
+              const slotButtons = availableSlots.slice(0, 3).map((slot, idx) => {
+                const timeText = slot.time.replace(/[^\d:apm\s]/gi, '');
+                return {
+                  id: `slot_${idx}`,
+                  title: timeText
+                };
+              });
+              
+              let slotsMessage = `❌ Lo siento, el horario ${selectedSlot.time} ya no está disponible.\n\nEstos son los horarios disponibles ahora:\n`;
+              availableSlots.slice(0, 3).forEach((slot, idx) => {
+                slotsMessage += `\n${idx + 1}. ${slot.time}`;
+              });
+              
+              if (availableSlots.length > 3) {
+                slotsMessage += `\n\n(Se muestran los primeros 3. Hay ${availableSlots.length} horarios disponibles en total)`;
+              }
+              
+              // Actualizar slots disponibles en la sesión
+              sessions.updateSession(cleanPhone, {
+                slots_disponibles: availableSlots,
+                fecha_cita_solicitada: appointmentDateForEvent
+              });
+              
+              await sendWhatsAppMessage(cleanPhone, slotsMessage, { buttons: slotButtons });
+              sessions.addToHistory(cleanPhone, 'assistant', slotsMessage);
+              return;
+            }
+            
+            console.log(`✅ Evento azul verificado - el spot ${selectedSlot.time} está disponible`);
+          } catch (error) {
+            if (error.code === 404) {
+              console.error(`❌ El evento azul ${selectedSlot.eventId} no existe - el spot ya fue tomado`);
+              await sendWhatsAppMessage(cleanPhone, `❌ Lo siento, el horario ${selectedSlot.time} ya no está disponible. Por favor, elige otro horario.`);
+              sessions.addToHistory(cleanPhone, 'assistant', `Horario ${selectedSlot.time} ya no disponible.`);
+              return;
+            }
+            console.error(`❌ Error verificando evento azul:`, error.message);
+            // Continuar de todas formas - mejor intentar agendar que fallar
+          }
+        }
         console.log(`📅 Creando evento en Google Calendar...`);
         console.log(`   Fecha de cita: ${appointmentDateForEvent}`);
         console.log(`   Hora inicio: ${selectedSlot.start}`);
@@ -1550,6 +1645,42 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
             console.log(`📅 ============================================`);
             console.log(`📅 ✅ EVENTO CREADO CONFIRMADO`);
             console.log(`📅 ============================================`);
+            
+            // CRITICAL: Eliminar el evento azul correspondiente del calendario "Innovia CDMX"
+            // El evento azul representa el spot disponible que acabamos de usar
+            if (selectedSlot.eventId && innoviaCDMXCalendarId) {
+              try {
+                console.log(`🗑️  Eliminando evento azul (spot disponible) del calendario "Innovia CDMX"...`);
+                console.log(`   Event ID a eliminar: ${selectedSlot.eventId}`);
+                
+                let auth;
+                if (authClient && typeof authClient.getClient === 'function') {
+                  auth = await authClient.getClient();
+                } else {
+                  auth = authClient;
+                }
+                
+                await calendar.events.delete({
+                  auth: auth,
+                  calendarId: innoviaCDMXCalendarId,
+                  eventId: selectedSlot.eventId
+                });
+                
+                console.log(`✅ Evento azul eliminado exitosamente del calendario "Innovia CDMX"`);
+                console.log(`   El spot ${selectedSlot.time} ya no está disponible`);
+              } catch (error) {
+                console.error(`❌ Error eliminando evento azul del calendario "Innovia CDMX":`, error.message);
+                console.error(`   Esto es crítico - el spot seguirá apareciendo como disponible`);
+                // No fallar el proceso completo, pero loggear el error
+              }
+            } else {
+              if (!selectedSlot.eventId) {
+                console.warn(`⚠️  No se encontró eventId en el slot seleccionado - no se puede eliminar el evento azul`);
+              }
+              if (!innoviaCDMXCalendarId) {
+                console.warn(`⚠️  No se encontró calendario "Innovia CDMX" - no se puede eliminar el evento azul`);
+              }
+            }
             console.log(`📅 ID del evento: ${calendarEvent.id}`);
             console.log(`📅 Link directo: ${calendarEvent.htmlLink || 'N/A'}`);
             console.log(`📅 Calendario: ${targetCalendarId}`);
@@ -1680,7 +1811,8 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
         const calendarDeps = {
           calendarClient: calendar,
           authClient: authClient,
-          calendarId: targetCalendarId
+          calendarId: targetCalendarId, // Calendario "CITAS NUEVAS" para guardar citas
+          innoviaCDMXCalendarId: innoviaCDMXCalendarId // Calendario "Innovia CDMX" para spots disponibles
         };
         
         // Use agendar handler to collect info (it will ask for name/fecha_boda if missing)
@@ -1704,7 +1836,8 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
         const calendarDeps = {
           calendarClient: calendar,
           authClient: authClient,
-          calendarId: targetCalendarId
+          calendarId: targetCalendarId, // Calendario "CITAS NUEVAS" para guardar citas
+          innoviaCDMXCalendarId: innoviaCDMXCalendarId // Calendario "Innovia CDMX" para spots disponibles
         };
         const agendarNuevaHandler = handlers['AGENDAR_NUEVA'];
         const result = await agendarNuevaHandler.execute(session, 'quiero agendar', calendarDeps);
@@ -1920,7 +2053,8 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
         const calendarDeps = {
           calendarClient: calendar,
           authClient: authClient,
-          calendarId: targetCalendarId
+          calendarId: targetCalendarId, // Calendario "CITAS NUEVAS" para guardar citas
+          innoviaCDMXCalendarId: innoviaCDMXCalendarId // Calendario "Innovia CDMX" para spots disponibles
         };
         const cancelarCitaHandler = handlers['CANCELAR_CITA'];
         const result = await cancelarCitaHandler.execute(session, 'cancelar', calendarDeps);
@@ -2290,7 +2424,8 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
       calendarDeps = {
         calendarClient: calendar,
         authClient: authClient,
-        calendarId: targetCalendarId
+        calendarId: targetCalendarId, // Calendario "CITAS NUEVAS" para guardar citas
+        innoviaCDMXCalendarId: innoviaCDMXCalendarId // Calendario "Innovia CDMX" para spots disponibles
       };
     }
     

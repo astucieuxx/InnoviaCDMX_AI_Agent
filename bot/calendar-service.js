@@ -82,15 +82,16 @@ function getDefaultSlots(date) {
 }
 
 /**
- * Get available slots from Google Calendar
+ * Get available slots from Google Calendar "Innovia CDMX"
+ * Los spots disponibles son los eventos azules (sin nombre) en el calendario "Innovia CDMX"
  * @param {string} date - Date in YYYY-MM-DD format
  * @param {Object} calendarClient - Google Calendar API client
  * @param {Object} authClient - Google Auth client
- * @param {string} calendarId - Calendar ID to query
- * @param {string} excludeEventId - Optional: Event ID to exclude from count (when moving appointment)
+ * @param {string} innoviaCDMXCalendarId - Calendar ID del calendario "Innovia CDMX" (eventos azules = spots disponibles)
+ * @param {string} excludeEventId - Optional: Event ID to exclude (when moving appointment)
  * @returns {Promise<Array>} Array of available slot objects
  */
-async function getAvailableSlots(date, calendarClient, authClient, calendarId, excludeEventId = null) {
+async function getAvailableSlots(date, calendarClient, authClient, innoviaCDMXCalendarId, excludeEventId = null) {
   try {
     // Verificar si el día está abierto
     if (!isDayOpen(date)) {
@@ -118,22 +119,27 @@ async function getAvailableSlots(date, calendarClient, authClient, calendarId, e
     const startOfDay = new Date(year, month - 1, day, 11, 0, 0); // 11:00 AM hora local
     const endOfDay = new Date(year, month - 1, day, 20, 0, 0);   // 8:00 PM hora local
 
-    console.log(`📅 Consultando Google Calendar para ${date}`);
+    if (!innoviaCDMXCalendarId) {
+      console.warn('⚠️  No se encontró calendario "Innovia CDMX", usando horarios por defecto');
+      return getDefaultSlots(date);
+    }
+
+    console.log(`📅 Consultando calendario "Innovia CDMX" para spots disponibles en ${date}`);
     console.log(`   Rango: ${startOfDay.toLocaleString('es-MX')} - ${endOfDay.toLocaleString('es-MX')}`);
-    console.log(`   📌 Calendar ID usado: ${calendarId}`);
+    console.log(`   📌 Calendar ID usado: ${innoviaCDMXCalendarId}`);
     
     // Try to get calendar name for better logging
     try {
       const calendarInfo = await calendarClient.calendars.get({
         auth: auth,
-        calendarId: calendarId
+        calendarId: innoviaCDMXCalendarId
       });
       const calendarName = calendarInfo.data.summary || 'Sin nombre';
       console.log(`   📌 Nombre del calendario: "${calendarName}"`);
-      if (calendarName.toUpperCase().includes('CITAS NUEVAS')) {
-        console.log(`   ✅ Confirmado: Se está usando el calendario "CITAS NUEVAS"`);
+      if (calendarName.toUpperCase().includes('INNOVIA CDMX')) {
+        console.log(`   ✅ Confirmado: Se está usando el calendario "Innovia CDMX"`);
       } else {
-        console.warn(`   ⚠️  ADVERTENCIA: El calendario usado NO es "CITAS NUEVAS" (es: "${calendarName}")`);
+        console.warn(`   ⚠️  ADVERTENCIA: El calendario usado NO es "Innovia CDMX" (es: "${calendarName}")`);
       }
     } catch (error) {
       console.warn(`   ⚠️  No se pudo obtener nombre del calendario: ${error.message}`);
@@ -141,7 +147,7 @@ async function getAvailableSlots(date, calendarClient, authClient, calendarId, e
 
     const events = await calendarClient.events.list({
       auth: auth,
-      calendarId: calendarId,
+      calendarId: innoviaCDMXCalendarId,
       timeMin: startOfDay.toISOString(),
       timeMax: endOfDay.toISOString(),
       singleEvents: true,
@@ -150,17 +156,23 @@ async function getAvailableSlots(date, calendarClient, authClient, calendarId, e
     });
 
     const eventItems = events.data.items || [];
-    console.log(`   Eventos encontrados: ${eventItems.length}`);
+    console.log(`   Eventos azules encontrados (spots disponibles): ${eventItems.length}`);
 
-    // Procesar eventos y convertir a fechas locales
-    const bookedEvents = eventItems
+    // Procesar eventos azules (spots disponibles)
+    // Estos eventos NO tienen nombre (o tienen nombre vacío) y representan horarios disponibles
+    const availableSpots = eventItems
       .filter(e => {
         // Exclude the event we're moving (if provided)
         if (excludeEventId && e.id === excludeEventId) {
-          console.log(`   ⏭️  Excluyendo evento ${e.id} del conteo (se está moviendo)`);
+          console.log(`   ⏭️  Excluyendo evento ${e.id} (se está moviendo)`);
           return false;
         }
-        return true;
+        // Solo incluir eventos sin nombre (o con nombre vacío) - estos son los spots disponibles
+        const hasNoName = !e.summary || e.summary.trim() === '';
+        if (!hasNoName) {
+          console.log(`   ⏭️  Excluyendo evento con nombre "${e.summary}" (solo eventos sin nombre son spots disponibles)`);
+        }
+        return hasNoName;
       })
       .map(e => {
         let start, end;
@@ -235,186 +247,74 @@ async function getAvailableSlots(date, calendarClient, authClient, calendarId, e
           end = new Date(NaN);
         }
         
-        // Contar TODOS los eventos del calendario (todos son citas en este calendario)
-        // No filtrar por título porque los eventos se crean solo con el nombre del cliente
-        return { start, end, summary: e.summary || 'Sin título', id: e.id, originalStart: e.start.dateTime || e.start.date, originalEnd: e.end.dateTime || e.end.date };
+        // Los eventos azules (sin nombre) son los spots disponibles
+        return { start, end, id: e.id, originalStart: e.start.dateTime || e.start.date, originalEnd: e.end.dateTime || e.end.date };
       })
       .filter(event => !isNaN(event.start.getTime()) && !isNaN(event.end.getTime())); // Filtrar eventos con fechas inválidas
 
-    console.log(`   Citas encontradas: ${bookedEvents.length}`);
+    console.log(`   Spots disponibles encontrados: ${availableSpots.length}`);
     
-    // Log detallado de todas las citas para debugging
-    if (bookedEvents.length > 0) {
-      console.log(`   📋 Detalle de citas encontradas:`);
-      bookedEvents.forEach((event, idx) => {
-        const startCDMX = event.start.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' });
-        const endCDMX = event.end.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' });
-        console.log(`      ${idx + 1}. ${event.summary || 'Sin título'} [${event.id}]`);
-        console.log(`         Original: ${event.originalStart || 'N/A'} - ${event.originalEnd || 'N/A'}`);
-        console.log(`         CDMX: ${startCDMX} - ${endCDMX}`);
-        console.log(`         Timestamps: [${event.start.getTime()} - ${event.end.getTime()}]`);
-        console.log(`         Hora CDMX: ${event.start.toLocaleTimeString('es-MX', { timeZone: 'America/Mexico_City', hour: '2-digit', minute: '2-digit', hour12: true })} - ${event.end.toLocaleTimeString('es-MX', { timeZone: 'America/Mexico_City', hour: '2-digit', minute: '2-digit', hour12: true })}`);
+    // Log detallado de todos los spots disponibles
+    if (availableSpots.length > 0) {
+      console.log(`   📋 Detalle de spots disponibles (eventos azules sin nombre):`);
+      availableSpots.forEach((spot, idx) => {
+        const startCDMX = spot.start.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' });
+        const endCDMX = spot.end.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' });
+        const startTimeCDMX = spot.start.toLocaleTimeString('es-MX', { timeZone: 'America/Mexico_City', hour: '2-digit', minute: '2-digit', hour12: true });
+        console.log(`      ${idx + 1}. Spot disponible [${spot.id}]`);
+        console.log(`         Hora CDMX: ${startTimeCDMX}`);
+        console.log(`         Rango: ${startCDMX} - ${endCDMX}`);
+        console.log(`         Timestamps: [${spot.start.getTime()} - ${spot.end.getTime()}]`);
       });
     } else {
-      console.log(`   ⚠️  NO se encontraron citas en el calendario para ${date}`);
+      console.log(`   ⚠️  NO se encontraron spots disponibles (eventos azules) en el calendario "Innovia CDMX" para ${date}`);
     }
 
-    // Bloques de 90 minutos disponibles
-    // Horarios: 11:00am, 12:30pm, 2:00pm, 3:30pm, 5:00pm, 6:30pm
-    // Los domingos solo hasta las 5:00pm (no se ofrece 6:30pm)
-    const allBlockTimes = [
-      { hour: 11, minute: 0 },   // 11:00am - 12:30pm
-      { hour: 12, minute: 30 },  // 12:30pm - 2:00pm
-      { hour: 14, minute: 0 },   // 2:00pm - 3:30pm
-      { hour: 15, minute: 30 },  // 3:30pm - 5:00pm
-      { hour: 17, minute: 0 },   // 5:00pm - 6:30pm
-      { hour: 18, minute: 30 }   // 6:30pm - 8:00pm
-    ];
+    // Convertir eventos azules directamente a slots disponibles
+    // Cada evento azul es un spot disponible
+    const slots = availableSpots.map(spot => {
+      const startTimeCDMX = spot.start.toLocaleTimeString('es-MX', { 
+        timeZone: 'America/Mexico_City', 
+        hour: '2-digit', 
+        minute: '2-digit', 
+        hour12: true 
+      });
+      
+      return {
+        time: startTimeCDMX,
+        start: spot.start.toISOString(),
+        end: spot.end.toISOString(),
+        availableSpots: 1, // Cada evento azul es 1 spot disponible
+        totalSpots: 1,
+        eventId: spot.id // Guardar el ID del evento azul para poder eliminarlo después
+      };
+    });
 
-    // Determinar si es domingo (0 = domingo en JavaScript)
+    // Filtrar slots que están en domingo después de las 5:00 PM
     const dateObj = new Date(year, month - 1, day);
     const dayOfWeek = dateObj.getDay();
     const isSunday = dayOfWeek === 0;
 
-    console.log(`   📅 Verificando día de la semana para ${date}: día ${dayOfWeek} (0=domingo, 1=lunes...)`);
-
-    // Si es domingo, excluir el último bloque (6:30pm)
-    const blockTimes = isSunday 
-      ? allBlockTimes.slice(0, -1)  // Todos excepto el último
-      : allBlockTimes;
-
     if (isSunday) {
-      console.log(`   📅 ✅ Es domingo - solo horarios hasta las 5:00pm (excluyendo 6:30pm)`);
-      console.log(`   📅 Bloques disponibles: ${blockTimes.length} (debería ser 5, no 6)`);
-    } else {
-      console.log(`   📅 No es domingo - todos los horarios disponibles (incluyendo 6:30pm)`);
-    }
-
-    const slots = [];
-    const MAX_CITAS_POR_BLOQUE = 2;
-
-    for (const blockTime of blockTimes) {
-      // Crear bloques interpretando la hora como hora de CDMX
-      // Método: usar el mismo enfoque que createCalendarEvent
-      // Crear string ISO con offset de CDMX (típicamente -06:00 o -05:00 según horario de verano)
-      
-      const blockStartStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(blockTime.hour).padStart(2, '0')}:${String(blockTime.minute).padStart(2, '0')}:00`;
-      
-      // Intentar primero con horario estándar (UTC-6)
-      let blockStart = new Date(`${blockStartStr}-06:00`);
-      let blockEnd = new Date(blockStart.getTime() + 90 * 60 * 1000);
-      
-      // Verificar que la hora creada sea correcta en CDMX
-      const actualCDMXHour = blockStart.toLocaleString('en-US', {
-        timeZone: 'America/Mexico_City',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
-      });
-      const expectedHour = `${String(blockTime.hour).padStart(2, '0')}:${String(blockTime.minute).padStart(2, '0')}`;
-      
-      // Si no coincide, probar con horario de verano (UTC-5)
-      if (!actualCDMXHour.includes(expectedHour)) {
-        blockStart = new Date(`${blockStartStr}-05:00`);
-        blockEnd = new Date(blockStart.getTime() + 90 * 60 * 1000);
-        
-        // Verificar nuevamente
-        const actualCDMXHourDST = blockStart.toLocaleString('en-US', {
+      console.log(`   📅 Es domingo - filtrando slots después de las 5:00 PM`);
+      const filteredSlots = slots.filter(slot => {
+        const slotDate = new Date(slot.start);
+        const slotHour = slotDate.toLocaleTimeString('en-US', {
           timeZone: 'America/Mexico_City',
           hour: '2-digit',
           minute: '2-digit',
           hour12: false
         });
-        
-        if (!actualCDMXHourDST.includes(expectedHour)) {
-          console.warn(`   ⚠️  No se pudo crear bloque con hora correcta en CDMX. Esperada: ${expectedHour}, Obtenida: ${actualCDMXHourDST}`);
+        const hour = parseInt(slotHour.split(':')[0]);
+        // Excluir slots después de las 5:00 PM (17:00)
+        const isAfter5PM = hour >= 17;
+        if (isAfter5PM) {
+          console.log(`      ⏭️  Excluyendo slot ${slot.time} (después de 5:00 PM en domingo)`);
         }
-      }
-
-      // Contar cuántas citas hay en este bloque
-      let citasEnBloque = 0;
-      const citasEnEsteBloque = [];
-      
-      // Obtener timestamps del bloque una vez
-      const blockStartTime = blockStart.getTime();
-      const blockEndTime = blockEnd.getTime();
-      
-      console.log(`   🔍 Verificando bloque ${blockTime.hour}:${String(blockTime.minute).padStart(2, '0')}`);
-      console.log(`      Bloque CDMX: ${blockStart.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })} - ${blockEnd.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })}`);
-      console.log(`      Bloque timestamps: [${blockStartTime} - ${blockEndTime}]`);
-      console.log(`      Total citas a verificar: ${bookedEvents.length}`);
-      
-      bookedEvents.forEach((booked, index) => {
-        // Una cita está en el bloque si se solapa con él
-        // Convertir todas las fechas a timestamps para comparación precisa
-        const bookedStart = new Date(booked.start);
-        const bookedEnd = new Date(booked.end);
-        
-        // Obtener timestamps en milisegundos para comparación precisa
-        const bookedStartTime = bookedStart.getTime();
-        const bookedEndTime = bookedEnd.getTime();
-        
-        // Check if the booked event overlaps with the block
-        // Overlap occurs if: bookedStart < blockEnd AND bookedEnd > blockStart
-        // Usar comparación de timestamps para precisión
-        const overlaps = bookedStartTime < blockEndTime && bookedEndTime > blockStartTime;
-        
-        // Log detallado para debugging
-        const bookedStartCDMX = bookedStart.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' });
-        const bookedEndCDMX = bookedEnd.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' });
-        
-        console.log(`      Cita ${index + 1}: ${booked.summary || 'Sin título'}`);
-        console.log(`         CDMX: ${bookedStartCDMX} - ${bookedEndCDMX}`);
-        console.log(`         Timestamps: [${bookedStartTime} - ${bookedEndTime}]`);
-        console.log(`         Solapa? ${overlaps ? '✅ SÍ' : '❌ NO'}`);
-        
-        if (overlaps) {
-          citasEnBloque++;
-          citasEnEsteBloque.push({
-            summary: booked.summary,
-            start: bookedStartCDMX,
-            end: bookedEndCDMX,
-            id: booked.id
-          });
-          console.log(`         ✅ CONTADA - Total en bloque: ${citasEnBloque}`);
-        }
+        return !isAfter5PM;
       });
-      
-      console.log(`   📊 RESUMEN bloque ${blockTime.hour}:${String(blockTime.minute).padStart(2, '0')}: ${citasEnBloque} citas encontradas de ${bookedEvents.length} totales`);
-      
-      // CRITICAL: Verificación adicional - si hay 2 o más citas, el bloque NO debe estar disponible
-      if (citasEnBloque >= MAX_CITAS_POR_BLOQUE) {
-        console.log(`   🚫 BLOQUE LLENO - NO se agregará a slots disponibles (${citasEnBloque} >= ${MAX_CITAS_POR_BLOQUE})`);
-        if (citasEnEsteBloque.length > 0) {
-          console.log(`      Citas en este bloque:`);
-          citasEnEsteBloque.forEach((cita, idx) => {
-            console.log(`        ${idx + 1}. ${cita.summary} (${cita.start} - ${cita.end}) [ID: ${cita.id}]`);
-          });
-        }
-      }
-
-      // CRITICAL: El bloque está disponible SOLO si tiene MENOS de 2 citas (no <=, sino <)
-      // Si tiene exactamente 2 citas, NO debe estar disponible
-      if (citasEnBloque < MAX_CITAS_POR_BLOQUE) {
-        const availableSpots = MAX_CITAS_POR_BLOQUE - citasEnBloque;
-        slots.push({
-          time: blockStart.toLocaleTimeString('es-MX', { timeZone: 'America/Mexico_City', hour: '2-digit', minute: '2-digit', hour12: true }),
-          start: blockStart.toISOString(),
-          end: blockEnd.toISOString(),
-          availableSpots: availableSpots,
-          totalSpots: MAX_CITAS_POR_BLOQUE
-        });
-        console.log(`   ✅ Bloque ${blockTime.hour}:${String(blockTime.minute).padStart(2, '0')} disponible (${availableSpots}/${MAX_CITAS_POR_BLOQUE} espacios libres, ${citasEnBloque} citas existentes)`);
-        if (citasEnEsteBloque.length > 0) {
-          console.log(`      Citas en este bloque: ${citasEnEsteBloque.length}`);
-        }
-      } else {
-        console.log(`   ❌ Bloque ${blockTime.hour}:${String(blockTime.minute).padStart(2, '0')} LLENO (${citasEnBloque}/${MAX_CITAS_POR_BLOQUE} citas) - NO DISPONIBLE`);
-        console.log(`      Detalles de citas:`);
-        citasEnEsteBloque.forEach((cita, idx) => {
-          console.log(`        ${idx + 1}. ${cita.summary} (${cita.start} - ${cita.end}) [ID: ${cita.id}]`);
-        });
-      }
+      console.log(`   📅 Slots disponibles en domingo: ${filteredSlots.length} (de ${slots.length} totales)`);
+      return filteredSlots;
     }
 
     console.log(`   📊 Total bloques disponibles: ${slots.length}`);
