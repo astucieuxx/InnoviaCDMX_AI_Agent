@@ -217,10 +217,42 @@ async function getAvailableSlots(date, calendarClient, authClient, calendarId, e
     const MAX_CITAS_POR_BLOQUE = 2;
 
     for (const blockTime of blockTimes) {
-      // Crear bloques interpretando la hora como hora local de CDMX
-      // Usar el mismo método que se usa en createCalendarEvent para consistencia
-      const blockStart = new Date(year, month - 1, day, blockTime.hour, blockTime.minute, 0);
-      const blockEnd = new Date(blockStart.getTime() + 90 * 60 * 1000); // 90 minutos después
+      // Crear bloques interpretando la hora como hora de CDMX
+      // Método: usar el mismo enfoque que createCalendarEvent
+      // Crear string ISO con offset de CDMX (típicamente -06:00 o -05:00 según horario de verano)
+      
+      const blockStartStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(blockTime.hour).padStart(2, '0')}:${String(blockTime.minute).padStart(2, '0')}:00`;
+      
+      // Intentar primero con horario estándar (UTC-6)
+      let blockStart = new Date(`${blockStartStr}-06:00`);
+      let blockEnd = new Date(blockStart.getTime() + 90 * 60 * 1000);
+      
+      // Verificar que la hora creada sea correcta en CDMX
+      const actualCDMXHour = blockStart.toLocaleString('en-US', {
+        timeZone: 'America/Mexico_City',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+      const expectedHour = `${String(blockTime.hour).padStart(2, '0')}:${String(blockTime.minute).padStart(2, '0')}`;
+      
+      // Si no coincide, probar con horario de verano (UTC-5)
+      if (!actualCDMXHour.includes(expectedHour)) {
+        blockStart = new Date(`${blockStartStr}-05:00`);
+        blockEnd = new Date(blockStart.getTime() + 90 * 60 * 1000);
+        
+        // Verificar nuevamente
+        const actualCDMXHourDST = blockStart.toLocaleString('en-US', {
+          timeZone: 'America/Mexico_City',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        });
+        
+        if (!actualCDMXHourDST.includes(expectedHour)) {
+          console.warn(`   ⚠️  No se pudo crear bloque con hora correcta en CDMX. Esperada: ${expectedHour}, Obtenida: ${actualCDMXHourDST}`);
+        }
+      }
 
       // Contar cuántas citas hay en este bloque
       let citasEnBloque = 0;
