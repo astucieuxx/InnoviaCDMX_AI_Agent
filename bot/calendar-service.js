@@ -337,10 +337,22 @@ async function getAvailableSlots(date, calendarClient, authClient, innoviaCDMXCa
     });
     
     // Ordenar slots cronológicamente por hora de inicio
-    slots.sort((a, b) => a.startTimestamp - b.startTimestamp);
+    // IMPORTANTE: Ordenar ANTES de cualquier otra operación para asegurar orden correcto
+    slots.sort((a, b) => {
+      const timeA = a.startTimestamp || new Date(a.start).getTime();
+      const timeB = b.startTimestamp || new Date(b.start).getTime();
+      return timeA - timeB;
+    });
     
     console.log(`   📊 Slots procesados: ${slots.length} (después de eliminar duplicados y ordenar)`);
-    console.log(`   📅 Orden cronológico de slots: ${slots.map(s => `${s.time} (${new Date(s.start).toLocaleTimeString('en-US', {timeZone: 'America/Mexico_City', hour12: false})})`).join(' → ')}`);
+    if (slots.length > 0) {
+      const orderedTimes = slots.map(s => {
+        const timestamp = s.startTimestamp || new Date(s.start).getTime();
+        const time24h = new Date(s.start).toLocaleTimeString('en-US', {timeZone: 'America/Mexico_City', hour12: false});
+        return `${s.time} (${time24h}, ts:${timestamp})`;
+      });
+      console.log(`   📅 Orden cronológico verificado: ${orderedTimes.join(' → ')}`);
+    }
 
     // Filtrar slots que están en domingo después de las 5:00 PM
     const dateObj = new Date(year, month - 1, day);
