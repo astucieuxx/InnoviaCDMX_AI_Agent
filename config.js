@@ -244,10 +244,14 @@ function loadBotMessages() {
 
 /**
  * Reload bot messages from file (useful after updates)
+ * This function clears the cache and forces a fresh load from disk
  */
 function reloadBotMessages() {
-  botMessages = null;
-  return loadBotMessages();
+  console.log('🔄 Recargando mensajes del bot desde archivo...');
+  botMessages = null; // Clear cache
+  const reloaded = loadBotMessages();
+  console.log(`✅ Mensajes recargados. Flujos disponibles: ${Object.keys(reloaded).join(', ')}`);
+  return reloaded;
 }
 
 /**

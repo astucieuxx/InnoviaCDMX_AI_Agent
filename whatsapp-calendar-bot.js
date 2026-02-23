@@ -2926,11 +2926,16 @@ app.put('/api/messages', async (req, res) => {
       'utf8'
     );
     
+    console.log('✅ Archivo bot_messages.json guardado correctamente');
+    
     // Recargar mensajes en memoria para que los cambios se apliquen inmediatamente
+    // IMPORTANTE: Usar require cache busting para forzar recarga del módulo
+    delete require.cache[require.resolve('./config')];
     const { reloadBotMessages } = require('./config');
-    reloadBotMessages();
+    const reloaded = reloadBotMessages();
     
     console.log('✅ Mensajes del bot actualizados y recargados en memoria');
+    console.log(`   Verificando mensaje de prueba: ${reloaded?.saludo?.mensajes?.primer_contacto?.texto?.substring(0, 50) || 'N/A'}...`);
     
     res.json({ success: true, message: 'Mensajes actualizados correctamente' });
   } catch (error) {
