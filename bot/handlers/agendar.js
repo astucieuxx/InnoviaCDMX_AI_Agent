@@ -640,7 +640,17 @@ async function execute(session, message, calendarDeps = null) {
       }
 
       // Filter to only show slots with at least 1 available spot
-      const availableSlots = slots.filter(slot => slot.availableSpots && slot.availableSpots > 0);
+      let availableSlots = slots.filter(slot => slot.availableSpots && slot.availableSpots > 0);
+      
+      // Asegurar orden cronológico: ordenar por timestamp de inicio
+      // Usar startTimestamp si existe, sino parsear start (ISO string)
+      availableSlots.sort((a, b) => {
+        const timeA = a.startTimestamp || new Date(a.start).getTime();
+        const timeB = b.startTimestamp || new Date(b.start).getTime();
+        return timeA - timeB;
+      });
+      
+      console.log(`   📅 Slots ordenados cronológicamente: ${availableSlots.map(s => s.time).join(', ')}`);
 
       if (availableSlots.length === 0) {
         return {
