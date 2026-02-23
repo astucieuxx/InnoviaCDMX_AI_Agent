@@ -723,16 +723,49 @@ async function findEventsByName(clientName, calendarClient, authClient, calendar
       let startDate, endDate;
       
       if (event.start.dateTime) {
-        // Si viene como dateTime (ISO string), parsearlo y convertirlo a hora local de CDMX
+        // Si viene como dateTime (ISO string), parsearlo correctamente
         const dateTimeStr = event.start.dateTime;
-        // Extraer componentes de fecha/hora (puede venir con o sin timezone)
-        const dateMatch = dateTimeStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
-        if (dateMatch) {
-          const [, year, month, day, hour, minute, second] = dateMatch.map(Number);
-          // Crear fecha interpretada como hora local de CDMX (no UTC)
-          startDate = new Date(year, month - 1, day, hour, minute, second || 0);
+        
+        // Si tiene timezone offset (ej: "2026-03-18T11:00:00-06:00"), extraer componentes en CDMX
+        if (dateTimeStr.includes('-') && dateTimeStr.match(/[+-]\d{2}:\d{2}$/)) {
+          // Parsear la fecha y obtener componentes en hora de CDMX usando toLocaleString
+          const tempDate = new Date(dateTimeStr);
+          // Usar toLocaleString con timeZone para obtener componentes en CDMX
+          const parts = tempDate.toLocaleString('en-US', { 
+            timeZone: 'America/Mexico_City',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+          });
+          // Formato: "MM/DD/YYYY, HH:MM:SS"
+          const match = parts.match(/(\d{2})\/(\d{2})\/(\d{4}), (\d{2}):(\d{2}):(\d{2})/);
+          if (match) {
+            const [, month, day, year, hour, minute, second] = match.map(Number);
+            startDate = new Date(year, month - 1, day, hour, minute, second || 0);
+          } else {
+            // Fallback: extraer directamente del string ISO
+            const dateMatch = dateTimeStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+            if (dateMatch) {
+              const [, year, month, day, hour, minute, second] = dateMatch.map(Number);
+              startDate = new Date(year, month - 1, day, hour, minute, second || 0);
+            } else {
+              startDate = new Date(dateTimeStr);
+            }
+          }
         } else {
-          startDate = new Date(dateTimeStr);
+          // No tiene offset, extraer componentes directamente
+          const dateMatch = dateTimeStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+          if (dateMatch) {
+            const [, year, month, day, hour, minute, second] = dateMatch.map(Number);
+            // Crear fecha interpretada como hora local de CDMX (no UTC)
+            startDate = new Date(year, month - 1, day, hour, minute, second || 0);
+          } else {
+            startDate = new Date(dateTimeStr);
+          }
         }
       } else {
         startDate = new Date(event.start.date + 'T00:00:00');
@@ -740,12 +773,41 @@ async function findEventsByName(clientName, calendarClient, authClient, calendar
       
       if (event.end.dateTime) {
         const dateTimeStr = event.end.dateTime;
-        const dateMatch = dateTimeStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
-        if (dateMatch) {
-          const [, year, month, day, hour, minute, second] = dateMatch.map(Number);
-          endDate = new Date(year, month - 1, day, hour, minute, second || 0);
+        
+        // Si tiene timezone offset, extraer componentes en CDMX
+        if (dateTimeStr.includes('-') && dateTimeStr.match(/[+-]\d{2}:\d{2}$/)) {
+          const tempDate = new Date(dateTimeStr);
+          const parts = tempDate.toLocaleString('en-US', { 
+            timeZone: 'America/Mexico_City',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+          });
+          const match = parts.match(/(\d{2})\/(\d{2})\/(\d{4}), (\d{2}):(\d{2}):(\d{2})/);
+          if (match) {
+            const [, month, day, year, hour, minute, second] = match.map(Number);
+            endDate = new Date(year, month - 1, day, hour, minute, second || 0);
+          } else {
+            const dateMatch = dateTimeStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+            if (dateMatch) {
+              const [, year, month, day, hour, minute, second] = dateMatch.map(Number);
+              endDate = new Date(year, month - 1, day, hour, minute, second || 0);
+            } else {
+              endDate = new Date(dateTimeStr);
+            }
+          }
         } else {
-          endDate = new Date(dateTimeStr);
+          const dateMatch = dateTimeStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+          if (dateMatch) {
+            const [, year, month, day, hour, minute, second] = dateMatch.map(Number);
+            endDate = new Date(year, month - 1, day, hour, minute, second || 0);
+          } else {
+            endDate = new Date(dateTimeStr);
+          }
         }
       } else {
         endDate = new Date(event.end.date + 'T23:59:59');

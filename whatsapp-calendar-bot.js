@@ -1567,7 +1567,54 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
             
             if (eventDetails.data) {
               const event = eventDetails.data;
-              const startDate = event.start.dateTime ? new Date(event.start.dateTime) : new Date(event.start.date);
+              // Parsear fecha correctamente considerando timezone de CDMX
+              let startDate;
+              const dateTimeStr = event.start.dateTime || event.start.date;
+              
+              if (event.start.dateTime) {
+                // Si tiene timezone offset, extraer componentes en hora de CDMX
+                if (dateTimeStr.includes('-') && dateTimeStr.match(/[+-]\d{2}:\d{2}$/)) {
+                  const tempDate = new Date(dateTimeStr);
+                  // Usar toLocaleString con timeZone para obtener componentes en CDMX
+                  const parts = tempDate.toLocaleString('en-US', { 
+                    timeZone: 'America/Mexico_City',
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                  });
+                  // Formato: "MM/DD/YYYY, HH:MM:SS"
+                  const match = parts.match(/(\d{2})\/(\d{2})\/(\d{4}), (\d{2}):(\d{2}):(\d{2})/);
+                  if (match) {
+                    const [, month, day, year, hour, minute, second] = match.map(Number);
+                    startDate = new Date(year, month - 1, day, hour, minute, second || 0);
+                  } else {
+                    // Fallback: extraer directamente del string ISO
+                    const dateMatch = dateTimeStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+                    if (dateMatch) {
+                      const [, year, month, day, hour, minute, second] = dateMatch.map(Number);
+                      startDate = new Date(year, month - 1, day, hour, minute, second || 0);
+                    } else {
+                      startDate = new Date(dateTimeStr);
+                    }
+                  }
+                } else {
+                  // Sin offset, extraer componentes directamente
+                  const dateMatch = dateTimeStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+                  if (dateMatch) {
+                    const [, year, month, day, hour, minute, second] = dateMatch.map(Number);
+                    startDate = new Date(year, month - 1, day, hour, minute, second || 0);
+                  } else {
+                    startDate = new Date(dateTimeStr);
+                  }
+                }
+              } else {
+                startDate = new Date(event.start.date + 'T00:00:00');
+              }
+              
               const formatDate = (date) => {
                 const day = String(date.getDate()).padStart(2, '0');
                 const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -1576,6 +1623,7 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
               };
               const formatTime = (date) => {
                 return date.toLocaleTimeString('es-MX', { 
+                  timeZone: 'America/Mexico_City',
                   hour: '2-digit', 
                   minute: '2-digit', 
                   hour12: true 
