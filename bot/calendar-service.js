@@ -116,8 +116,10 @@ async function getAvailableSlots(date, calendarClient, authClient, innoviaCDMXCa
     
     // Crear fechas en zona horaria local (America/Mexico_City)
     const [year, month, day] = date.split('-').map(Number);
-    const startOfDay = new Date(year, month - 1, day, 11, 0, 0); // 11:00 AM hora local
-    const endOfDay = new Date(year, month - 1, day, 20, 0, 0);   // 8:00 PM hora local
+    // CRITICAL: Consultar desde las 00:00 hasta las 23:59 para capturar TODOS los eventos del día
+    // No limitar a 11:00 AM - 8:00 PM porque los eventos azules pueden estar en cualquier horario
+    const startOfDay = new Date(year, month - 1, day, 0, 0, 0); // Inicio del día
+    const endOfDay = new Date(year, month - 1, day, 23, 59, 59);   // Fin del día
 
     if (!innoviaCDMXCalendarId) {
       console.warn('⚠️  No se encontró calendario "Innovia CDMX", usando horarios por defecto');
