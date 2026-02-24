@@ -308,6 +308,15 @@ async function getAvailableSlots(date, calendarClient, authClient, innoviaCDMXCa
     // Convertir eventos azules directamente a slots disponibles
     // Cada evento azul es un spot disponible
     let slots = availableSpots.map(spot => {
+      // CRITICAL: Calcular timestamp ANTES de formatear para asegurar consistencia
+      const startTimestamp = spot.start.getTime();
+      
+      // Verificar que el timestamp es válido
+      if (isNaN(startTimestamp)) {
+        console.error(`   ❌ ERROR: Timestamp inválido para evento ${spot.id}`);
+        console.error(`      start: ${spot.start}, timestamp: ${startTimestamp}`);
+      }
+      
       const startTimeCDMX = spot.start.toLocaleTimeString('es-MX', { 
         timeZone: 'America/Mexico_City', 
         hour: '2-digit', 
@@ -315,15 +324,21 @@ async function getAvailableSlots(date, calendarClient, authClient, innoviaCDMXCa
         hour12: true 
       });
       
-      return {
+      const slot = {
         time: startTimeCDMX,
         start: spot.start.toISOString(),
         end: spot.end.toISOString(),
         availableSpots: 1, // Cada evento azul es 1 spot disponible
         totalSpots: 1,
         eventId: spot.id, // Guardar el ID del evento azul para poder eliminarlo después
-        startTimestamp: spot.start.getTime() // Guardar timestamp para ordenamiento
+        startTimestamp: startTimestamp // Guardar timestamp para ordenamiento (CRITICAL)
       };
+      
+      // Log para diagnóstico
+      const time24h = spot.start.toLocaleTimeString('en-US', {timeZone: 'America/Mexico_City', hour12: false});
+      console.log(`      📌 Slot creado: ${startTimeCDMX} (${time24h}) - timestamp: ${startTimestamp} - eventId: ${spot.id}`);
+      
+      return slot;
     });
     
     // Eliminar duplicados: si hay múltiples slots con la misma hora o el mismo eventId
@@ -347,14 +362,60 @@ async function getAvailableSlots(date, calendarClient, authClient, innoviaCDMXCa
     
     // Ordenar slots cronológicamente por hora de inicio (más temprano primero)
     // IMPORTANTE: Ordenar ANTES de cualquier otra operación para asegurar orden correcto
+    console.log(`   🔄 Ordenando ${slots.length} slots cronológicamente...`);
+    
+    // Log ANTES de ordenar
+    console.log(`   📋 Slots ANTES de ordenar:`);
+    slots.forEach((slot, idx) => {
+      const timestamp = slot.startTimestamp || (slot.start ? new Date(slot.start).getTime() : 0);
+      const time24h = slot.start ? new Date(slot.start).toLocaleTimeString('en-US', {timeZone: 'America/Mexico_City', hour12: false}) : 'N/A';
+      console.log(`      ${idx + 1}. ${slot.time} (${time24h}) - timestamp: ${timestamp} - eventId: ${slot.eventId}`);
+    });
+    
     slots.sort((a, b) => {
-      // Calcular timestamps de forma robusta
-      const timeA = a.startTimestamp || (a.start ? new Date(a.start).getTime() : 0);
-      const timeB = b.startTimestamp || (b.start ? new Date(b.start).getTime() : 0);
+      // CRITICAL: Usar startTimestamp directamente si está disponible (más confiable)
+      // Solo usar fallback si startTimestamp no existe
+      const timeA = a.startTimestamp !== undefined && a.startTimestamp !== null 
+        ? a.startTimestamp 
+        : (a.start ? new Date(a.start).getTime() : 0);
+      const timeB = b.startTimestamp !== undefined && b.startTimestamp !== null 
+        ? b.startTimestamp 
+        : (b.start ? new Date(b.start).getTime() : 0);
+      
+      // Verificar que los timestamps son válidos
+      if (isNaN(timeA) || isNaN(timeB)) {
+        console.error(`   ❌ ERROR: Timestamp inválido en ordenamiento - a: ${timeA}, b: ${timeB}`);
+        console.error(`      Slot A: ${a.time} (${a.start}) - startTimestamp: ${a.startTimestamp}`);
+        console.error(`      Slot B: ${b.time} (${b.start}) - startTimestamp: ${b.startTimestamp}`);
+      }
       
       // Orden ascendente: más temprano primero (timeA - timeB)
-      return timeA - timeB;
+      const result = timeA - timeB;
+      return result;
     });
+    
+    // Log DESPUÉS de ordenar
+    console.log(`   📋 Slots DESPUÉS de ordenar:`);
+    slots.forEach((slot, idx) => {
+      const timestamp = slot.startTimestamp || (slot.start ? new Date(slot.start).getTime() : 0);
+      const time24h = slot.start ? new Date(slot.start).toLocaleTimeString('en-US', {timeZone: 'America/Mexico_City', hour12: false}) : 'N/A';
+      console.log(`      ${idx + 1}. ${slot.time} (${time24h}) - timestamp: ${timestamp} - eventId: ${slot.eventId}`);
+    });
+    
+    // Verificar que el ordenamiento funcionó
+    const isOrdered = slots.every((slot, index) => {
+      if (index === 0) return true;
+      const prevTimestamp = slots[index - 1].startTimestamp || 
+                           (slots[index - 1].start ? new Date(slots[index - 1].start).getTime() : 0);
+      const currTimestamp = slot.startTimestamp || (slot.start ? new Date(slot.start).getTime() : 0);
+      return currTimestamp >= prevTimestamp;
+    });
+    
+    if (!isOrdered) {
+      console.error(`   ❌ ERROR CRÍTICO: Los slots NO están ordenados cronológicamente después del sort!`);
+    } else {
+      console.log(`   ✅ Ordenamiento verificado: Los slots están en orden cronológico correcto`);
+    }
     
     console.log(`   📊 Slots procesados: ${slots.length} (después de eliminar duplicados y ordenar)`);
     if (slots.length > 0) {

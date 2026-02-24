@@ -677,25 +677,44 @@ async function execute(session, message, calendarDeps = null) {
       
       // Asegurar orden cronológico: ordenar por timestamp de inicio (más temprano primero)
       // IMPORTANTE: Ordenar DESPUÉS de eliminar duplicados
+      console.log(`   🔄 [agendar] Ordenando ${availableSlots.length} slots cronológicamente...`);
+      
+      // Log ANTES de ordenar
+      console.log(`   📋 [agendar] Slots ANTES de ordenar:`);
+      availableSlots.forEach((slot, idx) => {
+        const timestamp = slot.startTimestamp || (slot.start ? new Date(slot.start).getTime() : 0);
+        const time24h = slot.start ? new Date(slot.start).toLocaleTimeString('en-US', {timeZone: 'America/Mexico_City', hour12: false}) : 'N/A';
+        console.log(`      ${idx + 1}. ${slot.time} (${time24h}) - timestamp: ${timestamp} - eventId: ${slot.eventId || 'N/A'}`);
+      });
+      
       // Usar una función de comparación robusta que maneje todos los casos
       availableSlots.sort((a, b) => {
-        // Calcular timestamps de forma consistente
-        const timeA = a.startTimestamp || (a.start ? new Date(a.start).getTime() : 0);
-        const timeB = b.startTimestamp || (b.start ? new Date(b.start).getTime() : 0);
+        // CRITICAL: Usar startTimestamp directamente si está disponible (más confiable)
+        // Solo usar fallback si startTimestamp no existe
+        const timeA = a.startTimestamp !== undefined && a.startTimestamp !== null 
+          ? a.startTimestamp 
+          : (a.start ? new Date(a.start).getTime() : 0);
+        const timeB = b.startTimestamp !== undefined && b.startTimestamp !== null 
+          ? b.startTimestamp 
+          : (b.start ? new Date(b.start).getTime() : 0);
         
-        // Si ambos tienen timestamps válidos, comparar directamente
-        if (timeA > 0 && timeB > 0) {
-          return timeA - timeB; // Orden ascendente: más temprano primero
+        // Verificar que los timestamps son válidos
+        if (isNaN(timeA) || isNaN(timeB)) {
+          console.error(`   ❌ [agendar] ERROR: Timestamp inválido en ordenamiento - a: ${timeA}, b: ${timeB}`);
+          console.error(`      Slot A: ${a.time} (${a.start}) - startTimestamp: ${a.startTimestamp}`);
+          console.error(`      Slot B: ${b.time} (${b.start}) - startTimestamp: ${b.startTimestamp}`);
         }
         
-        // Si uno no tiene timestamp válido, intentar parsear desde el string de tiempo
-        if (timeA === 0 || timeB === 0) {
-          // Fallback: intentar parsear desde slot.time si está disponible
-          // Esto es un fallback de emergencia, normalmente no debería ser necesario
-          console.warn(`   ⚠️  Slot sin timestamp válido: a=${a.time} (ts:${timeA}), b=${b.time} (ts:${timeB})`);
-        }
-        
+        // Orden ascendente: más temprano primero (timeA - timeB)
         return timeA - timeB;
+      });
+      
+      // Log DESPUÉS de ordenar
+      console.log(`   📋 [agendar] Slots DESPUÉS de ordenar:`);
+      availableSlots.forEach((slot, idx) => {
+        const timestamp = slot.startTimestamp || (slot.start ? new Date(slot.start).getTime() : 0);
+        const time24h = slot.start ? new Date(slot.start).toLocaleTimeString('en-US', {timeZone: 'America/Mexico_City', hour12: false}) : 'N/A';
+        console.log(`      ${idx + 1}. ${slot.time} (${time24h}) - timestamp: ${timestamp} - eventId: ${slot.eventId || 'N/A'}`);
       });
       
       // Verificar que el ordenamiento funcionó correctamente
