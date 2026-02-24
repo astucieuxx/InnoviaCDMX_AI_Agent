@@ -1646,12 +1646,14 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
             console.log(`📅 ✅ EVENTO CREADO CONFIRMADO`);
             console.log(`📅 ============================================`);
             
-            // CRITICAL: Eliminar el evento azul correspondiente del calendario "Innovia CDMX"
+            // CRITICAL: Eliminar SOLO el evento azul específico del calendario "Innovia CDMX"
             // El evento azul representa el spot disponible que acabamos de usar
+            // IMPORTANTE: Solo eliminamos el evento con el eventId específico, NO todos los eventos del horario
             if (selectedSlot.eventId && innoviaCDMXCalendarId) {
               try {
                 console.log(`🗑️  Eliminando evento azul (spot disponible) del calendario "Innovia CDMX"...`);
                 console.log(`   Event ID a eliminar: ${selectedSlot.eventId}`);
+                console.log(`   ⚠️  IMPORTANTE: Solo se eliminará este evento específico, NO otros eventos del calendario`);
                 
                 let auth;
                 if (authClient && typeof authClient.getClient === 'function') {
@@ -1660,16 +1662,46 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
                   auth = authClient;
                 }
                 
-                await calendar.events.delete({
-                  auth: auth,
-                  calendarId: innoviaCDMXCalendarId,
-                  eventId: selectedSlot.eventId
-                });
-                
-                console.log(`✅ Evento azul eliminado exitosamente del calendario "Innovia CDMX"`);
-                console.log(`   El spot ${selectedSlot.time} ya no está disponible`);
+                // CRITICAL: Verificar que el evento existe y es realmente un evento azul (sin nombre)
+                // antes de eliminarlo para evitar eliminar eventos incorrectos
+                try {
+                  const eventToDelete = await calendar.events.get({
+                    auth: auth,
+                    calendarId: innoviaCDMXCalendarId,
+                    eventId: selectedSlot.eventId
+                  });
+                  
+                  // Verificar que el evento no tiene nombre (es un evento azul)
+                  if (eventToDelete.data.summary && eventToDelete.data.summary.trim() !== '') {
+                    console.warn(`   ⚠️  ADVERTENCIA: El evento ${selectedSlot.eventId} tiene nombre "${eventToDelete.data.summary}"`);
+                    console.warn(`   ⚠️  Este NO es un evento azul (sin nombre) - NO se eliminará para evitar pérdida de datos`);
+                    console.warn(`   ⚠️  Solo se eliminan eventos azules (sin nombre) que representan spots disponibles`);
+                    // NO eliminar este evento - tiene nombre, no es un evento azul
+                  } else {
+                    // El evento no tiene nombre (es un evento azul) - proceder a eliminarlo
+                    console.log(`   ✅ Verificado: El evento es un evento azul (sin nombre) - procediendo a eliminar`);
+                    
+                    await calendar.events.delete({
+                      auth: auth,
+                      calendarId: innoviaCDMXCalendarId,
+                      eventId: selectedSlot.eventId
+                    });
+                    
+                    console.log(`✅ Evento azul eliminado exitosamente del calendario "Innovia CDMX"`);
+                    console.log(`   Event ID eliminado: ${selectedSlot.eventId}`);
+                    console.log(`   El spot ${selectedSlot.time} ya no está disponible`);
+                    console.log(`   ⚠️  IMPORTANTE: Solo se eliminó este evento específico, otros eventos del calendario NO fueron afectados`);
+                  }
+                } catch (getError) {
+                  if (getError.code === 404) {
+                    console.warn(`   ⚠️  El evento ${selectedSlot.eventId} ya no existe - puede que ya haya sido eliminado`);
+                  } else {
+                    throw getError; // Re-lanzar el error si no es 404
+                  }
+                }
               } catch (error) {
                 console.error(`❌ Error eliminando evento azul del calendario "Innovia CDMX":`, error.message);
+                console.error(`   Event ID que se intentó eliminar: ${selectedSlot.eventId}`);
                 console.error(`   Esto es crítico - el spot seguirá apareciendo como disponible`);
                 // No fallar el proceso completo, pero loggear el error
               }
