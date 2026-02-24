@@ -637,23 +637,79 @@ async function createCalendarEvent(name, phone, email, dateStart, fechaBoda, cal
     }
     
     // Calcular fecha de fin: siempre 90 minutos después del inicio
-    // IMPORTANTE: dateStart viene como ISO string (puede estar en UTC)
-    // Necesitamos interpretarlo como hora local de CDMX
+    // CRITICAL: dateStart viene como ISO string que representa una hora en CDMX
+    // El problema: si el servidor está en UTC, new Date() interpretará la hora como UTC
+    // Solución: extraer componentes y crear un string ISO con el offset de CDMX correcto
     let startDate;
+    
+    console.log(`   📅 [createCalendarEvent] dateStart recibido: ${dateStart}`);
+    
     if (typeof dateStart === 'string' && dateStart.includes('T')) {
-      // Si viene como ISO string, parsearlo y tratarlo como hora local de CDMX
-      // Ejemplo: "2026-03-18T12:30:00.000Z" -> interpretar como 12:30 PM hora de CDMX
+      // Parsear la fecha/hora del string ISO
+      // El string puede venir como "2026-03-04T17:30:00.000Z" o "2026-03-04T17:30:00-06:00"
+      // Necesitamos extraer los componentes y crear una fecha que represente esa hora en CDMX
+      
       const dateMatch = dateStart.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
       if (dateMatch) {
         const [, year, month, day, hour, minute, second] = dateMatch.map(Number);
-        // Crear fecha en zona horaria local de CDMX (no UTC)
-        startDate = new Date(year, month - 1, day, hour, minute, second || 0);
-        console.log(`   📅 Fecha parseada como hora local CDMX: ${startDate.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })}`);
+        
+        // CRITICAL: Crear un string ISO con el offset de CDMX correcto
+        // Para marzo 2026, CDMX está en horario estándar (UTC-6)
+        // Para abril-octubre 2026, CDMX está en horario de verano (UTC-5)
+        // Determinar el offset correcto según la fecha
+        
+        // Función para obtener el offset de CDMX según la fecha
+        // DST en México generalmente va de abril a octubre
+        const getCDMXOffset = (y, m, d) => {
+          // Crear una fecha en esa fecha específica a mediodía
+          const testDate = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+          
+          // Obtener la hora en CDMX
+          const cdmxHour = parseInt(testDate.toLocaleString('en-US', { 
+            timeZone: 'America/Mexico_City',
+            hour: '2-digit',
+            hour12: false
+          }));
+          
+          // Si la hora en CDMX es diferente a 12, hay un offset
+          // Si cdmxHour es 6, entonces el offset es -6 (UTC-6)
+          // Si cdmxHour es 7, entonces el offset es -5 (UTC-5)
+          const offsetHours = 12 - cdmxHour;
+          
+          return offsetHours;
+        };
+        
+        const offsetHours = getCDMXOffset(year, month, day);
+        
+        // Crear el string ISO con el offset correcto
+        const offsetStr = offsetHours >= 0 
+          ? `+${String(Math.abs(offsetHours)).padStart(2, '0')}:00` 
+          : `-${String(Math.abs(offsetHours)).padStart(2, '0')}:00`;
+        
+        const isoString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00${offsetStr}`;
+        
+        startDate = new Date(isoString);
+        
+        console.log(`   📅 [createCalendarEvent] Fecha parseada como hora CDMX:`);
+        console.log(`      Input: ${dateStart}`);
+        console.log(`      Componentes extraídos: ${year}-${month}-${day} ${hour}:${minute}`);
+        console.log(`      Offset calculado: ${offsetHours} horas`);
+        console.log(`      ISO string creado: ${isoString}`);
+        console.log(`      Fecha final: ${startDate.toISOString()}`);
+        console.log(`      Hora en CDMX: ${startDate.toLocaleString('es-MX', { timeZone: 'America/Mexico_City', hour: '2-digit', minute: '2-digit', hour12: true })}`);
       } else {
+        // Si no podemos parsear, intentar parsear directamente
+        console.warn(`   ⚠️  No se pudo parsear dateStart con regex, usando new Date() directamente`);
         startDate = new Date(dateStart);
       }
     } else {
       startDate = new Date(dateStart);
+    }
+    
+    // Verificar que la fecha se parseó correctamente
+    if (isNaN(startDate.getTime())) {
+      console.error(`   ❌ ERROR: No se pudo parsear dateStart: ${dateStart}`);
+      throw new Error(`Fecha inválida: ${dateStart}`);
     }
     
     const endDate = new Date(startDate.getTime() + 90 * 60 * 1000); // 90 minutos
