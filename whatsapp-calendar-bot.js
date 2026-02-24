@@ -134,6 +134,60 @@ app.get('/api/logs', (req, res) => {
   }
 });
 
+// Endpoint de diagnóstico para verificar horarios disponibles en una fecha específica
+app.get('/api/check-slots/:date', async (req, res) => {
+  try {
+    const { date } = req.params; // Formato: YYYY-MM-DD
+    
+    if (!authClient) {
+      return res.status(500).json({ error: 'Google Auth no inicializado' });
+    }
+
+    let auth;
+    if (authClient && typeof authClient.getClient === 'function') {
+      auth = await authClient.getClient();
+    } else {
+      auth = authClient;
+    }
+
+    if (!innoviaCDMXCalendarId) {
+      return res.status(500).json({ error: 'Calendario "Innovia CDMX" no encontrado' });
+    }
+
+    // Usar la misma lógica que getAvailableSlots
+    const { getAvailableSlots: getAvailableSlotsService } = require('./bot/calendar-service');
+    
+    const slots = await getAvailableSlotsService(
+      date,
+      calendar,
+      authClient,
+      innoviaCDMXCalendarId,
+      null
+    );
+
+    // Formatear respuesta
+    const formattedSlots = slots.map(slot => ({
+      time: slot.time,
+      start: slot.start,
+      end: slot.end,
+      eventId: slot.eventId,
+      startTimestamp: slot.startTimestamp,
+      availableSpots: slot.availableSpots,
+      totalSpots: slot.totalSpots
+    }));
+
+    res.json({
+      date: date,
+      totalSlots: slots.length,
+      slots: formattedSlots,
+      slotsByTime: formattedSlots.map(s => s.time).join(', ')
+    });
+  } catch (error) {
+    console.error('Error en /api/check-slots:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Endpoint temporal de diagnóstico para verificar citas en una fecha específica
 app.get('/api/check-appointments/:date', async (req, res) => {
   try {
