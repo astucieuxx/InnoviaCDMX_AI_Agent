@@ -116,12 +116,45 @@ async function getAvailableSlots(date, calendarClient, authClient, innoviaCDMXCa
       auth = authClient;
     }
     
-    // Crear fechas en zona horaria local (America/Mexico_City)
+    // CRITICAL: Crear fechas interpretándolas como hora de CDMX, no como hora local del servidor
+    // El problema: new Date(year, month - 1, day, 0, 0, 0) crea la fecha en la zona horaria LOCAL del servidor
+    // Si el servidor está en UTC, esto puede causar que se consulte el día incorrecto
+    // Solución: crear strings ISO con el offset de CDMX correcto
     const [year, month, day] = date.split('-').map(Number);
-    // CRITICAL: Consultar desde las 00:00 hasta las 23:59 para capturar TODOS los eventos del día
-    // No limitar a 11:00 AM - 8:00 PM porque los eventos azules pueden estar en cualquier horario
-    const startOfDay = new Date(year, month - 1, day, 0, 0, 0); // Inicio del día
-    const endOfDay = new Date(year, month - 1, day, 23, 59, 59);   // Fin del día
+    
+    // Calcular el offset de CDMX para esta fecha específica
+    const getCDMXOffset = (y, m, d) => {
+      const testDate = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+      const cdmxHour = parseInt(testDate.toLocaleString('en-US', { 
+        timeZone: 'America/Mexico_City',
+        hour: '2-digit',
+        hour12: false
+      }));
+      const offsetHours = 12 - cdmxHour;
+      return offsetHours;
+    };
+    
+    const offsetHours = getCDMXOffset(year, month, day);
+    const offsetStr = offsetHours >= 0 
+      ? `+${String(Math.abs(offsetHours)).padStart(2, '0')}:00` 
+      : `-${String(Math.abs(offsetHours)).padStart(2, '0')}:00`;
+    
+    // CRITICAL: Crear strings ISO con el offset de CDMX para que se interpreten correctamente
+    // Inicio del día: 00:00:00 en CDMX
+    const startOfDayISO = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00${offsetStr}`;
+    // Fin del día: 23:59:59 en CDMX
+    const endOfDayISO = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T23:59:59${offsetStr}`;
+    
+    const startOfDay = new Date(startOfDayISO);
+    const endOfDay = new Date(endOfDayISO);
+    
+    console.log(`   📅 [getAvailableSlots] Fechas creadas para consulta:`);
+    console.log(`      Fecha solicitada: ${date} (${year}-${month}-${day})`);
+    console.log(`      Offset CDMX: ${offsetHours} horas`);
+    console.log(`      startOfDay ISO: ${startOfDayISO} -> ${startOfDay.toISOString()}`);
+    console.log(`      endOfDay ISO: ${endOfDayISO} -> ${endOfDay.toISOString()}`);
+    console.log(`      startOfDay en CDMX: ${startOfDay.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })}`);
+    console.log(`      endOfDay en CDMX: ${endOfDay.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })}`);
 
     if (!innoviaCDMXCalendarId) {
       console.error('❌ ERROR: No se encontró calendario "Innovia CDMX"');
