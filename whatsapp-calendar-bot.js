@@ -1771,24 +1771,43 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
         
         // Extract date from selected slot (format: ISO string like "2026-03-04T11:00:00.000Z")
         // Convert to YYYY-MM-DD format for fecha_cita
+        // CRITICAL: Parse date components directly from ISO string to avoid timezone shifts
         let fechaCitaFormatted = null;
         if (selectedSlot.start) {
           try {
-            const slotDate = new Date(selectedSlot.start);
-            const year = slotDate.getFullYear();
-            const month = String(slotDate.getMonth() + 1).padStart(2, '0');
-            const day = String(slotDate.getDate()).padStart(2, '0');
-            fechaCitaFormatted = `${year}-${month}-${day}`;
-            console.log(`📅 Fecha de cita formateada: ${fechaCitaFormatted} (desde slot: ${selectedSlot.start})`);
+            // CRITICAL: Extract date components directly from ISO string to avoid timezone issues
+            // Don't use new Date() and getFullYear()/getMonth()/getDate() as they can shift the date
+            // Example: "2026-03-04T17:30:00-06:00" should be March 4, not March 3
+            const dateMatch = selectedSlot.start.match(/^(\d{4})-(\d{2})-(\d{2})T/);
+            if (dateMatch) {
+              // Extract components directly from string (no timezone conversion)
+              const year = dateMatch[1];
+              const month = dateMatch[2];
+              const day = dateMatch[3];
+              fechaCitaFormatted = `${year}-${month}-${day}`;
+              console.log(`📅 Fecha de cita formateada: ${fechaCitaFormatted} (desde slot: ${selectedSlot.start})`);
+              console.log(`   ⚠️  IMPORTANTE: Fecha extraída directamente del string ISO para evitar cambios de timezone`);
+            } else {
+              // Fallback: try parsing with Date but extract components carefully
+              const slotDate = new Date(selectedSlot.start);
+              // Use UTC methods to avoid timezone shifts
+              const year = slotDate.getUTCFullYear();
+              const month = String(slotDate.getUTCMonth() + 1).padStart(2, '0');
+              const day = String(slotDate.getUTCDate()).padStart(2, '0');
+              fechaCitaFormatted = `${year}-${month}-${day}`;
+              console.log(`📅 Fecha de cita formateada (fallback UTC): ${fechaCitaFormatted} (desde slot: ${selectedSlot.start})`);
+            }
           } catch (error) {
             console.error('❌ Error formateando fecha de cita:', error);
             // Fallback to appointmentDateForEvent if available
             if (appointmentDateForEvent) {
               fechaCitaFormatted = appointmentDateForEvent;
+              console.log(`📅 Usando fecha de sesión como fallback: ${fechaCitaFormatted}`);
             }
           }
         } else if (appointmentDateForEvent) {
           fechaCitaFormatted = appointmentDateForEvent;
+          console.log(`📅 Usando fecha de sesión: ${fechaCitaFormatted}`);
         }
         
         // Si aún no tenemos fecha, intentar extraerla del evento de Google Calendar
