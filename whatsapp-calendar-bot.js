@@ -134,12 +134,31 @@ app.get('/api/logs', (req, res) => {
   }
 });
 
+// Endpoint de prueba para verificar que el servidor responde
+app.get('/api/test', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    message: 'Servidor funcionando correctamente',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Endpoint de diagnóstico para verificar horarios disponibles en una fecha específica
 app.get('/api/check-slots/:date', async (req, res) => {
   try {
     const { date } = req.params; // Formato: YYYY-MM-DD
     
+    console.log(`📅 [check-slots] Consultando horarios para: ${date}`);
+    
+    // Validar formato de fecha
+    if (!date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      return res.status(400).json({ 
+        error: 'Formato de fecha inválido. Use YYYY-MM-DD (ej: 2026-03-04)' 
+      });
+    }
+    
     if (!authClient) {
+      console.error('❌ [check-slots] Google Auth no inicializado');
       return res.status(500).json({ error: 'Google Auth no inicializado' });
     }
 
@@ -151,8 +170,11 @@ app.get('/api/check-slots/:date', async (req, res) => {
     }
 
     if (!innoviaCDMXCalendarId) {
+      console.error('❌ [check-slots] Calendario "Innovia CDMX" no encontrado');
       return res.status(500).json({ error: 'Calendario "Innovia CDMX" no encontrado' });
     }
+
+    console.log(`📅 [check-slots] Usando calendario: ${innoviaCDMXCalendarId}`);
 
     // Usar la misma lógica que getAvailableSlots
     const { getAvailableSlots: getAvailableSlotsService } = require('./bot/calendar-service');
@@ -164,6 +186,8 @@ app.get('/api/check-slots/:date', async (req, res) => {
       innoviaCDMXCalendarId,
       null
     );
+
+    console.log(`📅 [check-slots] Slots encontrados: ${slots.length}`);
 
     // Formatear respuesta
     const formattedSlots = slots.map(slot => ({
@@ -183,8 +207,11 @@ app.get('/api/check-slots/:date', async (req, res) => {
       slotsByTime: formattedSlots.map(s => s.time).join(', ')
     });
   } catch (error) {
-    console.error('Error en /api/check-slots:', error);
-    res.status(500).json({ error: error.message });
+    console.error('❌ [check-slots] Error:', error);
+    res.status(500).json({ 
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 
