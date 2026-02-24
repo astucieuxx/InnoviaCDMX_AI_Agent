@@ -18,10 +18,20 @@ const {
   getBusinessHours
 } = require('../../config');
 
-// Initialize OpenAI client for date extraction
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+// Lazy initialization of OpenAI client (only when needed)
+let openai = null;
+
+function getOpenAIClient() {
+  if (!openai) {
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error('OPENAI_API_KEY no está configurado en las variables de entorno');
+    }
+    openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY
+    });
+  }
+  return openai;
+}
 
 /**
  * Extract appointment date from message using focused OpenAI call
@@ -57,7 +67,8 @@ IMPORTANTE:
 Responde SOLO con una fecha en formato YYYY-MM-DD o la palabra "null" si no hay fecha de visita mencionada.
 No agregues explicaciones, solo la fecha o "null".`;
 
-    const response = await openai.chat.completions.create({
+    const client = getOpenAIClient();
+    const response = await client.chat.completions.create({
       model: 'gpt-4o',
       messages: [
         { role: 'system', content: systemPrompt },

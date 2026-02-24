@@ -8,10 +8,20 @@
 
 const OpenAI = require('openai');
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+// Lazy initialization of OpenAI client (only when needed)
+let openai = null;
+
+function getOpenAIClient() {
+  if (!openai) {
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error('OPENAI_API_KEY no está configurado en las variables de entorno');
+    }
+    openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY
+    });
+  }
+  return openai;
+}
 
 /**
  * Extract client profile (nombre_cliente and fecha_boda) from conversation
@@ -70,7 +80,8 @@ No agregues explicaciones, solo el JSON.`;
 
     console.log(`🔍 Extrayendo perfil de cliente (${conversationHistory.length} mensajes)`);
 
-    const response = await openai.chat.completions.create({
+    const client = getOpenAIClient();
+    const response = await client.chat.completions.create({
       model: 'gpt-4o',
       messages: messages,
       max_tokens: 100,

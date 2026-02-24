@@ -19,10 +19,20 @@ const {
   getConversationFlow
 } = require('./config');
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+// Lazy initialization of OpenAI client (only when needed)
+let openai = null;
+
+function getOpenAIClient() {
+  if (!openai) {
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error('OPENAI_API_KEY no está configurado en las variables de entorno');
+    }
+    openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY
+    });
+  }
+  return openai;
+}
 
 /**
  * Build system prompt from business configuration
@@ -158,9 +168,7 @@ FORMATO DE RESPUESTAS:
  */
 async function getAIResponse(session, userMessage) {
   try {
-    if (!process.env.OPENAI_API_KEY) {
-      throw new Error('OPENAI_API_KEY no está configurado en las variables de entorno');
-    }
+    const client = getOpenAIClient();
 
     // Build messages array
     const messages = [
@@ -176,7 +184,7 @@ async function getAIResponse(session, userMessage) {
 
     console.log(`🤖 Llamando a OpenAI con ${messages.length} mensajes en contexto`);
 
-    const response = await openai.chat.completions.create({
+    const response = await client.chat.completions.create({
       model: 'gpt-4o',
       messages: messages,
       max_tokens: 500,
@@ -227,7 +235,8 @@ async function extractConversationData(session) {
 
     console.log(`🔍 Extrayendo datos de conversación (${session.historial.length} mensajes)`);
 
-    const response = await openai.chat.completions.create({
+    const client = getOpenAIClient();
+    const response = await client.chat.completions.create({
       model: 'gpt-4o',
       messages: messages,
       max_tokens: 100,
