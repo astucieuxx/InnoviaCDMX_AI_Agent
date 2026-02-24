@@ -657,32 +657,64 @@ async function execute(session, message, calendarDeps = null) {
       const seenEventIds = new Set();
       const seenTimestamps = new Set();
       availableSlots = availableSlots.filter(slot => {
-        const timestamp = slot.startTimestamp || new Date(slot.start).getTime();
+        // Calcular timestamp de forma consistente
+        const timestamp = slot.startTimestamp || (slot.start ? new Date(slot.start).getTime() : 0);
+        
         // Eliminar si ya vimos este eventId
-        if (seenEventIds.has(slot.eventId)) {
+        if (slot.eventId && seenEventIds.has(slot.eventId)) {
           console.log(`   ⏭️  [agendar] Eliminando slot duplicado por eventId: ${slot.time} [${slot.eventId}]`);
           return false;
         }
         // Eliminar si ya vimos este timestamp exacto (mismo horario exacto)
-        if (seenTimestamps.has(timestamp)) {
+        if (timestamp > 0 && seenTimestamps.has(timestamp)) {
           console.log(`   ⏭️  [agendar] Eliminando slot duplicado por timestamp: ${slot.time} [${slot.eventId}]`);
           return false;
         }
-        seenEventIds.add(slot.eventId);
-        seenTimestamps.add(timestamp);
+        if (slot.eventId) seenEventIds.add(slot.eventId);
+        if (timestamp > 0) seenTimestamps.add(timestamp);
         return true;
       });
       
-      // Asegurar orden cronológico: ordenar por timestamp de inicio
+      // Asegurar orden cronológico: ordenar por timestamp de inicio (más temprano primero)
       // IMPORTANTE: Ordenar DESPUÉS de eliminar duplicados
+      // Usar una función de comparación robusta que maneje todos los casos
       availableSlots.sort((a, b) => {
-        const timeA = a.startTimestamp || new Date(a.start).getTime();
-        const timeB = b.startTimestamp || new Date(b.start).getTime();
+        // Calcular timestamps de forma consistente
+        const timeA = a.startTimestamp || (a.start ? new Date(a.start).getTime() : 0);
+        const timeB = b.startTimestamp || (b.start ? new Date(b.start).getTime() : 0);
+        
+        // Si ambos tienen timestamps válidos, comparar directamente
+        if (timeA > 0 && timeB > 0) {
+          return timeA - timeB; // Orden ascendente: más temprano primero
+        }
+        
+        // Si uno no tiene timestamp válido, intentar parsear desde el string de tiempo
+        if (timeA === 0 || timeB === 0) {
+          // Fallback: intentar parsear desde slot.time si está disponible
+          // Esto es un fallback de emergencia, normalmente no debería ser necesario
+          console.warn(`   ⚠️  Slot sin timestamp válido: a=${a.time} (ts:${timeA}), b=${b.time} (ts:${timeB})`);
+        }
+        
         return timeA - timeB;
       });
       
+      // Verificar que el ordenamiento funcionó correctamente
+      const isOrdered = availableSlots.every((slot, index) => {
+        if (index === 0) return true;
+        const prevTimestamp = availableSlots[index - 1].startTimestamp || 
+                             (availableSlots[index - 1].start ? new Date(availableSlots[index - 1].start).getTime() : 0);
+        const currTimestamp = slot.startTimestamp || (slot.start ? new Date(slot.start).getTime() : 0);
+        return currTimestamp >= prevTimestamp;
+      });
+      
+      if (!isOrdered) {
+        console.error(`   ❌ ERROR: Los slots NO están ordenados cronológicamente después del sort!`);
+        console.error(`   Slots: ${availableSlots.map(s => `${s.time} (ts:${s.startTimestamp || new Date(s.start).getTime()})`).join(', ')}`);
+      }
+      
       console.log(`   📅 Slots finales (después de filtrar, eliminar duplicados y ordenar): ${availableSlots.length}`);
       console.log(`   📅 Orden cronológico verificado: ${availableSlots.map(s => `${s.time} (ts:${s.startTimestamp || new Date(s.start).getTime()})`).join(' → ')}`);
+      console.log(`   ✅ Ordenamiento correcto: ${isOrdered ? 'SÍ' : 'NO'}`);
 
       if (availableSlots.length === 0) {
         return {
@@ -694,10 +726,20 @@ async function execute(session, message, calendarDeps = null) {
         };
       }
 
+      // VERIFICACIÓN FINAL: Asegurar orden cronológico justo antes de mostrar
+      // Esto garantiza que los slots se muestren siempre en orden (más temprano primero)
+      availableSlots.sort((a, b) => {
+        const timeA = a.startTimestamp || (a.start ? new Date(a.start).getTime() : 0);
+        const timeB = b.startTimestamp || (b.start ? new Date(b.start).getTime() : 0);
+        return timeA - timeB; // Orden ascendente: más temprano primero
+      });
+      
+      console.log(`   ✅ ORDENAMIENTO FINAL: ${availableSlots.map(s => s.time).join(' → ')}`);
+      
       // Show all available slots as numbered list
       let replyText = `Horarios disponibles para ${formatDate(fechaCitaDeseada)}:\n\n`;
       
-      // Create numbered list with all available slots
+      // Create numbered list with all available slots (ya están ordenados cronológicamente)
       availableSlots.forEach((slot, index) => {
         replyText += `${index + 1}. ${slot.time}\n`;
       });

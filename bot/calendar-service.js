@@ -345,11 +345,14 @@ async function getAvailableSlots(date, calendarClient, authClient, innoviaCDMXCa
       return true;
     });
     
-    // Ordenar slots cronológicamente por hora de inicio
+    // Ordenar slots cronológicamente por hora de inicio (más temprano primero)
     // IMPORTANTE: Ordenar ANTES de cualquier otra operación para asegurar orden correcto
     slots.sort((a, b) => {
-      const timeA = a.startTimestamp || new Date(a.start).getTime();
-      const timeB = b.startTimestamp || new Date(b.start).getTime();
+      // Calcular timestamps de forma robusta
+      const timeA = a.startTimestamp || (a.start ? new Date(a.start).getTime() : 0);
+      const timeB = b.startTimestamp || (b.start ? new Date(b.start).getTime() : 0);
+      
+      // Orden ascendente: más temprano primero (timeA - timeB)
       return timeA - timeB;
     });
     
