@@ -1410,10 +1410,21 @@ app.post('/webhook', async (req, res) => {
         const cleanPhone = senderPhone.replace(/\D/g, '');
         const TEST_PHONE_FULL = '525521920710';
         const TEST_PHONE_SHORT = '5521920710';
+        
+        // Comparaciones exactas
         const exactMatchFull = cleanPhone === TEST_PHONE_FULL;
         const exactMatchShort = cleanPhone === TEST_PHONE_SHORT;
-        const endsWithMatch = cleanPhone.length >= 10 && cleanPhone.length <= 12 && cleanPhone.endsWith(TEST_PHONE_SHORT);
-        const phoneMatches = exactMatchFull || exactMatchShort || endsWithMatch;
+        
+        // Comparación por terminación (últimos 10 dígitos)
+        const endsWithMatch = cleanPhone.length >= 10 && cleanPhone.endsWith(TEST_PHONE_SHORT);
+        
+        // Comparación por últimos dígitos (para manejar códigos de país diferentes)
+        // El número puede venir como 5215521920710 (52 + 1 + 5521920710)
+        // Necesitamos comparar los últimos 10 dígitos
+        const last10Digits = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
+        const last10Match = last10Digits === TEST_PHONE_SHORT;
+        
+        const phoneMatches = exactMatchFull || exactMatchShort || endsWithMatch || last10Match;
         
         console.log('\n🧪 ============================================');
         console.log('🧪 MODO DE PRUEBAS - VERIFICACIÓN EN WEBHOOK');
