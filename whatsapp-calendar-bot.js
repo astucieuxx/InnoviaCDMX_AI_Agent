@@ -1453,15 +1453,40 @@ function getTestModeStatus() {
 function setTestModeStatus(active) {
   try {
     const statusPath = path.join(__dirname, 'test_mode_status.json');
+    console.log(`💾 [SET TEST MODE] Guardando estado en: ${statusPath}`);
+    console.log(`💾 [SET TEST MODE] Estado a guardar: ${active}`);
+    
     const statusData = { active, updatedAt: new Date().toISOString() };
-    fs.writeFileSync(statusPath, JSON.stringify(statusData, null, 2));
-    console.log(`✅ Estado del modo de pruebas actualizado: ${active ? 'ACTIVO' : 'DESACTIVADO'}`);
-    if (active) {
-      console.log(`   ⚠️  MODO DE PRUEBAS ACTIVO: El bot solo responderá a +525521920710`);
+    const jsonData = JSON.stringify(statusData, null, 2);
+    console.log(`💾 [SET TEST MODE] Datos a escribir: ${jsonData}`);
+    
+    fs.writeFileSync(statusPath, jsonData, 'utf8');
+    console.log(`💾 [SET TEST MODE] Archivo escrito exitosamente`);
+    
+    // Verificar que se escribió correctamente
+    if (fs.existsSync(statusPath)) {
+      const verifyData = fs.readFileSync(statusPath, 'utf8');
+      const verifyStatus = JSON.parse(verifyData);
+      console.log(`💾 [SET TEST MODE] Verificación: archivo existe, contenido: ${verifyData}`);
+      console.log(`💾 [SET TEST MODE] Verificación: active = ${verifyStatus.active}`);
+      
+      if (verifyStatus.active === active) {
+        console.log(`✅ [SET TEST MODE] Estado del modo de pruebas actualizado correctamente: ${active ? 'ACTIVO' : 'DESACTIVADO'}`);
+        if (active) {
+          console.log(`   ⚠️  MODO DE PRUEBAS ACTIVO: El bot solo responderá a +525521920710`);
+        }
+        return true;
+      } else {
+        console.error(`❌ [SET TEST MODE] Error: El estado guardado (${verifyStatus.active}) no coincide con el solicitado (${active})`);
+        return false;
+      }
+    } else {
+      console.error(`❌ [SET TEST MODE] Error: El archivo no existe después de escribirlo`);
+      return false;
     }
-    return true;
   } catch (error) {
-    console.error('Error guardando estado del modo de pruebas:', error);
+    console.error('❌ [SET TEST MODE] Error guardando estado del modo de pruebas:', error);
+    console.error('   Stack:', error.stack);
     return false;
   }
 }
@@ -3665,24 +3690,38 @@ app.get('/api/test-mode-status', (req, res) => {
 // PUT /api/test-mode-status - Actualizar estado del modo de pruebas
 app.put('/api/test-mode-status', (req, res) => {
   try {
+    console.log(`\n🔧 ============================================`);
+    console.log(`🔧 PUT /api/test-mode-status - ACTUALIZANDO ESTADO`);
+    console.log(`🔧 ============================================`);
+    console.log(`🔧 Body recibido:`, JSON.stringify(req.body, null, 2));
+    
     const { active } = req.body;
+    console.log(`🔧 active recibido: ${active}, tipo: ${typeof active}`);
     
     if (typeof active !== 'boolean') {
+      console.error(`❌ Error: active no es boolean, es ${typeof active}`);
       return res.status(400).json({ error: 'Se requiere el campo "active" (boolean)' });
     }
     
+    console.log(`🔧 Llamando a setTestModeStatus(${active})...`);
     const success = setTestModeStatus(active);
+    console.log(`🔧 setTestModeStatus retornó: ${success}`);
     
     if (success) {
       const message = active 
         ? 'Modo de pruebas activado - El bot solo responderá a +525521920710'
         : 'Modo de pruebas desactivado - El bot responderá a todos';
+      console.log(`✅ Estado actualizado exitosamente: ${active}`);
+      console.log(`🔧 ============================================\n`);
       res.json({ success: true, active, message });
     } else {
+      console.error(`❌ Error: setTestModeStatus retornó false`);
+      console.log(`🔧 ============================================\n`);
       res.status(500).json({ error: 'Error al guardar el estado del modo de pruebas' });
     }
   } catch (error) {
-    console.error('Error en PUT /api/test-mode-status:', error);
+    console.error('❌ Error en PUT /api/test-mode-status:', error);
+    console.error('   Stack:', error.stack);
     res.status(500).json({ error: error.message });
   }
 });
