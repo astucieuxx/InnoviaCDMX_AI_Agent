@@ -1143,8 +1143,25 @@ async function sendWhatsAppMessage(phoneNumber, message, options = {}) {
   }
 }
 
-// Serve index.html at root (must be before /webhook)
+// Endpoint raíz para verificar que el servidor está funcionando
 app.get('/', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    message: 'Bot de WhatsApp funcionando',
+    endpoints: {
+      test: '/api/test',
+      checkSlots: '/api/check-slots/:date',
+      checkAppointments: '/api/check-appointments/:date',
+      logs: '/api/logs',
+      stats: '/api/stats',
+      analytics: '/api/analytics'
+    },
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Serve index.html at /dashboard (para no interferir con el endpoint raíz)
+app.get('/dashboard', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
