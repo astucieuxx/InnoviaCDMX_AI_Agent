@@ -1147,63 +1147,94 @@ async function loadConfig() {
         console.error('Error cargando configuración:', error);
     }
     
-    // Cargar estado del bot
-    loadBotStatus();
-    // Cargar estado del modo de pruebas
-    loadTestModeStatus();
+    // Cargar estado del bot (unificado)
+    loadBotMode();
 }
 
-// Cargar estado del bot
-async function loadBotStatus() {
+// Cargar estado del bot (unificado: inactive, test, active)
+async function loadBotMode() {
     try {
-        const response = await fetch('/api/bot-status');
+        const response = await fetch('/api/bot-mode');
         const data = await response.json();
-        updateBotStatusUI(data.active);
+        updateBotModeUI(data.mode || 'active');
     } catch (error) {
         console.error('Error cargando estado del bot:', error);
-        updateBotStatusUI(true); // Por defecto activo si hay error
+        updateBotModeUI('active'); // Por defecto activo si hay error
     }
 }
 
-// Actualizar UI del estado del bot
-function updateBotStatusUI(isActive) {
-    const statusText = document.getElementById('bot-status-text');
-    const statusIndicator = document.getElementById('bot-status-indicator');
-    const toggleButton = document.getElementById('toggle-bot-status');
-    const toggleText = document.getElementById('toggle-bot-text');
+// Actualizar UI del estado del bot (unificado)
+function updateBotModeUI(mode) {
+    const statusText = document.getElementById('bot-mode-status-text');
+    const statusIndicator = document.getElementById('bot-mode-status-indicator');
+    const toggleButton = document.getElementById('toggle-bot-mode');
+    const toggleText = document.getElementById('toggle-bot-mode-text');
+    
+    const modeConfig = {
+        'inactive': {
+            text: 'Bot inactivo - No responderá a ningún mensaje',
+            color: '#ff4444',
+            shadow: 'rgba(255, 68, 68, 0.5)',
+            buttonText: '▶️ Activar Bot',
+            buttonBg: 'linear-gradient(135deg, #00ff88 0%, #059669 100%)',
+            nextMode: 'test'
+        },
+        'test': {
+            text: 'Modo de pruebas - Solo responderá a +525521920710',
+            color: '#ffb800',
+            shadow: 'rgba(255, 184, 0, 0.5)',
+            buttonText: '🌐 Activar para Todos',
+            buttonBg: 'linear-gradient(135deg, #00ff88 0%, #059669 100%)',
+            nextMode: 'active'
+        },
+        'active': {
+            text: 'Bot activo - Responderá a todos los números',
+            color: '#00ff88',
+            shadow: 'rgba(0, 255, 136, 0.5)',
+            buttonText: '⏸️ Desactivar Bot',
+            buttonBg: 'linear-gradient(135deg, #ff4444 0%, #dc2626 100%)',
+            nextMode: 'inactive'
+        }
+    };
+    
+    const config = modeConfig[mode] || modeConfig['active'];
     
     if (statusText) {
-        statusText.textContent = isActive ? 'AI Agent activo y respondiendo mensajes' : 'AI Agent inactivo - No responderá mensajes';
+        statusText.textContent = config.text;
     }
     
     if (statusIndicator) {
-        statusIndicator.style.background = isActive ? '#00ff88' : '#ff4444';
-        statusIndicator.style.boxShadow = isActive 
-            ? '0 0 10px rgba(0, 255, 136, 0.5)' 
-            : '0 0 10px rgba(255, 68, 68, 0.5)';
+        statusIndicator.style.background = config.color;
+        statusIndicator.style.boxShadow = `0 0 10px ${config.shadow}`;
     }
     
-    if (toggleButton) {
-        toggleButton.textContent = isActive ? '⏸️ Desactivar AI Agent' : '▶️ Activar AI Agent';
-        toggleButton.style.background = isActive 
-            ? 'linear-gradient(135deg, #ff4444 0%, #dc2626 100%)'
-            : 'linear-gradient(135deg, #00ff88 0%, #059669 100%)';
+    if (toggleButton && toggleText) {
+        toggleText.textContent = config.buttonText;
+        toggleButton.style.background = config.buttonBg;
+        toggleButton.dataset.nextMode = config.nextMode;
     }
 }
 
-// Toggle estado del bot
-async function toggleBotStatus() {
+// Toggle estado del bot (cicla entre los 3 estados)
+async function toggleBotMode() {
     try {
-        const response = await fetch('/api/bot-status');
+        const response = await fetch('/api/bot-mode');
         const currentData = await response.json();
-        const newStatus = !currentData.active;
+        const currentMode = currentData.mode || 'active';
         
-        const updateResponse = await fetch('/api/bot-status', {
+        // Ciclar: inactive -> test -> active -> inactive
+        const nextMode = {
+            'inactive': 'test',
+            'test': 'active',
+            'active': 'inactive'
+        }[currentMode] || 'inactive';
+        
+        const updateResponse = await fetch('/api/bot-mode', {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ active: newStatus })
+            body: JSON.stringify({ mode: nextMode })
         });
         
         if (!updateResponse.ok) {
@@ -1211,14 +1242,14 @@ async function toggleBotStatus() {
         }
         
         const result = await updateResponse.json();
-        updateBotStatusUI(newStatus);
+        updateBotModeUI(nextMode);
         
         // Mostrar mensaje de confirmación
-        const statusMessage = document.getElementById('bot-status-message');
+        const statusMessage = document.getElementById('bot-mode-status-message');
         if (statusMessage) {
             statusMessage.style.display = 'block';
             statusMessage.className = 'status-message success';
-            statusMessage.textContent = result.message || `AI Agent ${newStatus ? 'activado' : 'desactivado'} correctamente`;
+            statusMessage.textContent = result.message || `Estado actualizado a: ${nextMode}`;
             
             setTimeout(() => {
                 statusMessage.style.display = 'none';
@@ -1226,109 +1257,20 @@ async function toggleBotStatus() {
         }
     } catch (error) {
         console.error('Error cambiando estado del bot:', error);
-        const statusMessage = document.getElementById('bot-status-message');
+        const statusMessage = document.getElementById('bot-mode-status-message');
         if (statusMessage) {
             statusMessage.style.display = 'block';
             statusMessage.className = 'status-message error';
-            statusMessage.textContent = 'Error al cambiar el estado del AI Agent';
-        }
-    }
-}
-
-// Cargar estado del modo de pruebas
-async function loadTestModeStatus() {
-    try {
-        const response = await fetch('/api/test-mode-status');
-        const data = await response.json();
-        updateTestModeStatusUI(data.active);
-    } catch (error) {
-        console.error('Error cargando estado del modo de pruebas:', error);
-        updateTestModeStatusUI(false); // Por defecto desactivado si hay error
-    }
-}
-
-// Actualizar UI del estado del modo de pruebas
-function updateTestModeStatusUI(isActive) {
-    const statusText = document.getElementById('test-mode-status-text');
-    const statusIndicator = document.getElementById('test-mode-status-indicator');
-    const toggleButton = document.getElementById('toggle-test-mode');
-    const toggleText = document.getElementById('toggle-test-mode-text');
-    
-    if (statusText) {
-        statusText.textContent = isActive 
-            ? 'Modo de pruebas activo - Solo responderá a +525521920710' 
-            : 'Modo de pruebas desactivado - El bot responderá a todos';
-    }
-    
-    if (statusIndicator) {
-        statusIndicator.style.background = isActive ? '#ffb800' : '#00ff88';
-        statusIndicator.style.boxShadow = isActive 
-            ? '0 0 10px rgba(255, 184, 0, 0.5)' 
-            : '0 0 10px rgba(0, 255, 136, 0.5)';
-    }
-    
-    if (toggleButton) {
-        toggleText.textContent = isActive ? '🔒 Desactivar Modo de Pruebas' : '🧪 Activar Modo de Pruebas';
-        toggleButton.style.background = isActive 
-            ? 'linear-gradient(135deg, #ffb800 0%, #f59e0b 100%)'
-            : 'linear-gradient(135deg, #00ff88 0%, #059669 100%)';
-    }
-}
-
-// Toggle del modo de pruebas
-async function toggleTestMode() {
-    try {
-        const response = await fetch('/api/test-mode-status');
-        const currentData = await response.json();
-        const newStatus = !currentData.active;
-        
-        const updateResponse = await fetch('/api/test-mode-status', {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ active: newStatus })
-        });
-        
-        if (!updateResponse.ok) {
-            throw new Error('Error al actualizar el estado del modo de pruebas');
-        }
-        
-        const result = await updateResponse.json();
-        updateTestModeStatusUI(newStatus);
-        
-        // Mostrar mensaje de confirmación
-        const statusMessage = document.getElementById('test-mode-status-message');
-        if (statusMessage) {
-            statusMessage.style.display = 'block';
-            statusMessage.className = 'status-message success';
-            statusMessage.textContent = result.message || `Modo de pruebas ${newStatus ? 'activado' : 'desactivado'} correctamente`;
-            
-            setTimeout(() => {
-                statusMessage.style.display = 'none';
-            }, 3000);
-        }
-    } catch (error) {
-        console.error('Error cambiando estado del modo de pruebas:', error);
-        const statusMessage = document.getElementById('test-mode-status-message');
-        if (statusMessage) {
-            statusMessage.style.display = 'block';
-            statusMessage.className = 'status-message error';
-            statusMessage.textContent = 'Error al cambiar el estado del modo de pruebas';
+            statusMessage.textContent = 'Error al cambiar el estado del bot';
         }
     }
 }
 
 // Event listener para el botón de toggle
 document.addEventListener('DOMContentLoaded', () => {
-    const toggleButton = document.getElementById('toggle-bot-status');
+    const toggleButton = document.getElementById('toggle-bot-mode');
     if (toggleButton) {
-        toggleButton.addEventListener('click', toggleBotStatus);
-    }
-    
-    const toggleTestModeButton = document.getElementById('toggle-test-mode');
-    if (toggleTestModeButton) {
-        toggleTestModeButton.addEventListener('click', toggleTestMode);
+        toggleButton.addEventListener('click', toggleBotMode);
     }
     
     // Event listeners para logs

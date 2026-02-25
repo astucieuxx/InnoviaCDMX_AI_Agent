@@ -966,12 +966,12 @@ async function sendTypingIndicator(phoneNumber, action = 'typing_on') {
   // Limpiar número de teléfono
   const cleanPhone = phoneNumber.replace(/\D/g, '');
   
-  // CAPA DE SEGURIDAD: Verificar modo de pruebas ANTES de enviar cualquier indicador
-  console.log(`🔍 [TYPING CHECK] Verificando modo de pruebas antes de enviar typing indicator a ${phoneNumber} (${cleanPhone})`);
-  const testModeActive = getTestModeStatus();
-  console.log(`🔍 [TYPING CHECK] testModeActive = ${testModeActive}`);
+  // CAPA DE SEGURIDAD: Verificar estado del bot ANTES de enviar cualquier indicador
+  const botMode = getBotMode();
   
-  if (testModeActive) {
+  if (botMode === 'inactive') {
+    return; // No enviar typing indicator si el bot está inactivo
+  } else if (botMode === 'test') {
     const TEST_PHONE_FULL = '525521920710';
     const TEST_PHONE_SHORT = '5521920710';
     const exactMatchFull = cleanPhone === TEST_PHONE_FULL;
@@ -979,14 +979,8 @@ async function sendTypingIndicator(phoneNumber, action = 'typing_on') {
     const endsWithMatch = cleanPhone.length >= 10 && cleanPhone.length <= 12 && cleanPhone.endsWith(TEST_PHONE_SHORT);
     const phoneMatches = exactMatchFull || exactMatchShort || endsWithMatch;
     
-    console.log(`🔍 [TYPING CHECK] Comparaciones: full=${exactMatchFull}, short=${exactMatchShort}, endsWith=${endsWithMatch}, matches=${phoneMatches}`);
-    
     if (!phoneMatches) {
-      console.log(`🧪 🚫 [TYPING CHECK] BLOQUEO - MODO DE PRUEBAS ACTIVO: ${phoneNumber} (${cleanPhone})`);
-      // NO enviar el indicador, retornar silenciosamente
-      return;
-    } else {
-      console.log(`🧪 ✅ [TYPING CHECK] Número permitido, enviando typing indicator`);
+      return; // No enviar typing indicator si no es el número de pruebas
     }
   }
   
@@ -1043,12 +1037,14 @@ async function sendWhatsAppMessage(phoneNumber, message, options = {}) {
   // Definir fuera del try para que esté disponible en el catch
   const cleanPhone = phoneNumber ? phoneNumber.replace(/\D/g, '') : 'unknown';
   
-  // CAPA DE SEGURIDAD: Verificar modo de pruebas ANTES de enviar cualquier mensaje
-  console.log(`🔍 [SEND MSG CHECK] Verificando modo de pruebas antes de enviar mensaje a ${phoneNumber} (${cleanPhone})`);
-  const testModeActive = getTestModeStatus();
-  console.log(`🔍 [SEND MSG CHECK] testModeActive = ${testModeActive}`);
+  // CAPA DE SEGURIDAD: Verificar estado del bot ANTES de enviar cualquier mensaje
+  const botMode = getBotMode();
+  console.log(`🔍 [SEND MSG CHECK] Modo del bot: ${botMode}, enviando a ${phoneNumber} (${cleanPhone})`);
   
-  if (testModeActive) {
+  if (botMode === 'inactive') {
+    console.log(`⏸️  [SEND MSG CHECK] Bot INACTIVO - Mensaje BLOQUEADO`);
+    return { success: false, blocked: true, reason: 'bot_inactive' };
+  } else if (botMode === 'test') {
     const TEST_PHONE_FULL = '525521920710';
     const TEST_PHONE_SHORT = '5521920710';
     const exactMatchFull = cleanPhone === TEST_PHONE_FULL;
@@ -1056,20 +1052,9 @@ async function sendWhatsAppMessage(phoneNumber, message, options = {}) {
     const endsWithMatch = cleanPhone.length >= 10 && cleanPhone.length <= 12 && cleanPhone.endsWith(TEST_PHONE_SHORT);
     const phoneMatches = exactMatchFull || exactMatchShort || endsWithMatch;
     
-    console.log(`🔍 [SEND MSG CHECK] Comparaciones: full=${exactMatchFull}, short=${exactMatchShort}, endsWith=${endsWithMatch}, matches=${phoneMatches}`);
-    
     if (!phoneMatches) {
-      console.log(`🧪 ============================================`);
-      console.log(`🧪 🚫 BLOQUEO EN sendWhatsAppMessage`);
-      console.log(`🧪 ============================================`);
-      console.log(`🧪 MODO DE PRUEBAS ACTIVO - Mensaje BLOQUEADO`);
-      console.log(`🧪 Intento de enviar mensaje a ${phoneNumber} (limpio: ${cleanPhone})`);
-      console.log(`🧪 Solo se permiten mensajes a +525521920710`);
-      console.log(`🧪 ============================================`);
-      // NO enviar el mensaje, retornar sin error para evitar que se propague
+      console.log(`🧪 [SEND MSG CHECK] MODO DE PRUEBAS - Mensaje BLOQUEADO a ${phoneNumber} (${cleanPhone})`);
       return { success: false, blocked: true, reason: 'test_mode_active' };
-    } else {
-      console.log(`🧪 ✅ [SEND MSG CHECK] Número permitido, enviando mensaje`);
     }
   }
   
@@ -1385,29 +1370,50 @@ app.post('/webhook', async (req, res) => {
   }
 });
 
-// Función para obtener el estado del bot (activo/inactivo)
-function getBotStatus() {
+// Sistema unificado de estado del bot
+// Modos: 'inactive' (inactivo), 'test' (solo +525521920710), 'active' (todos)
+function getBotMode() {
   try {
     const statusPath = path.join(__dirname, 'bot_status.json');
     if (fs.existsSync(statusPath)) {
       const statusData = fs.readFileSync(statusPath, 'utf8');
       const status = JSON.parse(statusData);
-      return status.active !== false; // Por defecto activo si no existe el archivo
+      // Compatibilidad con formato antiguo
+      if (status.mode) {
+        return status.mode; // 'inactive', 'test', o 'active'
+      } else if (status.active !== undefined) {
+        // Migrar formato antiguo: active=true -> 'active', active=false -> 'inactive'
+        return status.active ? 'active' : 'inactive';
+      }
     }
-    return true; // Por defecto activo
+    return 'active'; // Por defecto activo
   } catch (error) {
     console.error('Error leyendo estado del bot:', error);
-    return true; // Por defecto activo si hay error
+    return 'active'; // Por defecto activo si hay error
   }
 }
 
 // Función para guardar el estado del bot
-function setBotStatus(active) {
+function setBotMode(mode) {
   try {
+    if (!['inactive', 'test', 'active'].includes(mode)) {
+      console.error(`❌ Modo inválido: ${mode}. Debe ser 'inactive', 'test', o 'active'`);
+      return false;
+    }
+    
     const statusPath = path.join(__dirname, 'bot_status.json');
-    const statusData = { active, updatedAt: new Date().toISOString() };
+    const statusData = { 
+      mode, 
+      updatedAt: new Date().toISOString() 
+    };
     fs.writeFileSync(statusPath, JSON.stringify(statusData, null, 2));
-    console.log(`✅ Estado del bot actualizado: ${active ? 'ACTIVO' : 'INACTIVO'}`);
+    
+    const modeNames = {
+      'inactive': 'INACTIVO',
+      'test': 'MODO DE PRUEBAS (solo +525521920710)',
+      'active': 'ACTIVO (todos los números)'
+    };
+    console.log(`✅ Estado del bot actualizado: ${modeNames[mode]}`);
     return true;
   } catch (error) {
     console.error('Error guardando estado del bot:', error);
@@ -1415,80 +1421,25 @@ function setBotStatus(active) {
   }
 }
 
-// Función para obtener el estado del modo de pruebas
-// IMPORTANTE: Lee el archivo cada vez (sin caché) para asegurar estado actualizado
-function getTestModeStatus() {
-  try {
-    const statusPath = path.join(__dirname, 'test_mode_status.json');
-    console.log(`🔍 [TEST MODE] Leyendo archivo: ${statusPath}`);
-    console.log(`🔍 [TEST MODE] ¿Existe?: ${fs.existsSync(statusPath)}`);
-    
-    if (fs.existsSync(statusPath)) {
-      const statusData = fs.readFileSync(statusPath, 'utf8');
-      console.log(`🔍 [TEST MODE] Contenido del archivo: ${statusData}`);
-      const status = JSON.parse(statusData);
-      const isActive = status.active === true;
-      console.log(`🔍 [TEST MODE] status.active = ${status.active}, isActive = ${isActive}`);
-      
-      if (isActive) {
-        console.log(`🧪 ============================================`);
-        console.log(`🧪 MODO DE PRUEBAS ESTÁ ACTIVO`);
-        console.log(`🧪 ============================================`);
-      } else {
-        console.log(`✅ [TEST MODE] Modo de pruebas DESACTIVADO`);
-      }
-      return isActive;
-    } else {
-      console.log(`⚠️  [TEST MODE] Archivo no existe, modo de pruebas DESACTIVADO por defecto`);
-      return false; // Por defecto desactivado
-    }
-  } catch (error) {
-    console.error('❌ [TEST MODE] Error leyendo estado del modo de pruebas:', error);
-    console.error('   Stack:', error.stack);
-    return false; // Por defecto desactivado si hay error
-  }
+// Funciones de compatibilidad (deprecadas, usar getBotMode/setBotMode)
+function getBotStatus() {
+  const mode = getBotMode();
+  return mode === 'active' || mode === 'test'; // Activo si está en 'active' o 'test'
 }
 
-// Función para guardar el estado del modo de pruebas
+function setBotStatus(active) {
+  return setBotMode(active ? 'active' : 'inactive');
+}
+
+// Función de compatibilidad (deprecada, usar getBotMode)
+function getTestModeStatus() {
+  const mode = getBotMode();
+  return mode === 'test';
+}
+
+// Función de compatibilidad (deprecada, usar setBotMode)
 function setTestModeStatus(active) {
-  try {
-    const statusPath = path.join(__dirname, 'test_mode_status.json');
-    console.log(`💾 [SET TEST MODE] Guardando estado en: ${statusPath}`);
-    console.log(`💾 [SET TEST MODE] Estado a guardar: ${active}`);
-    
-    const statusData = { active, updatedAt: new Date().toISOString() };
-    const jsonData = JSON.stringify(statusData, null, 2);
-    console.log(`💾 [SET TEST MODE] Datos a escribir: ${jsonData}`);
-    
-    fs.writeFileSync(statusPath, jsonData, 'utf8');
-    console.log(`💾 [SET TEST MODE] Archivo escrito exitosamente`);
-    
-    // Verificar que se escribió correctamente
-    if (fs.existsSync(statusPath)) {
-      const verifyData = fs.readFileSync(statusPath, 'utf8');
-      const verifyStatus = JSON.parse(verifyData);
-      console.log(`💾 [SET TEST MODE] Verificación: archivo existe, contenido: ${verifyData}`);
-      console.log(`💾 [SET TEST MODE] Verificación: active = ${verifyStatus.active}`);
-      
-      if (verifyStatus.active === active) {
-        console.log(`✅ [SET TEST MODE] Estado del modo de pruebas actualizado correctamente: ${active ? 'ACTIVO' : 'DESACTIVADO'}`);
-        if (active) {
-          console.log(`   ⚠️  MODO DE PRUEBAS ACTIVO: El bot solo responderá a +525521920710`);
-        }
-        return true;
-      } else {
-        console.error(`❌ [SET TEST MODE] Error: El estado guardado (${verifyStatus.active}) no coincide con el solicitado (${active})`);
-        return false;
-      }
-    } else {
-      console.error(`❌ [SET TEST MODE] Error: El archivo no existe después de escribirlo`);
-      return false;
-    }
-  } catch (error) {
-    console.error('❌ [SET TEST MODE] Error guardando estado del modo de pruebas:', error);
-    console.error('   Stack:', error.stack);
-    return false;
-  }
+  return setBotMode(active ? 'test' : 'active');
 }
 
 // Función para procesar mensajes entrantes (NUEVA ARQUITECTURA BASADA EN INTENTS)
@@ -1500,65 +1451,51 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
   console.log(`🚨 Mensaje: ${incomingMessage}`);
   console.log(`🚨 ============================================\n`);
   
-  // CRITICAL: Verificar modo de pruebas PRIMERO, antes de cualquier otra cosa
-  // Esto debe ser lo primero para evitar cualquier procesamiento o envío de mensajes
-  console.log(`🔍 [TEST MODE CHECK] Iniciando verificación del modo de pruebas...`);
-  const testModeActive = getTestModeStatus();
-  console.log(`🔍 [TEST MODE CHECK] testModeActive = ${testModeActive}`);
+  // CRITICAL: Verificar estado del bot PRIMERO, antes de cualquier otra cosa
+  // Modos: 'inactive' (bloquear todo), 'test' (solo +525521920710), 'active' (todos)
+  const botMode = getBotMode();
+  console.log(`🔍 [BOT MODE CHECK] Modo actual del bot: ${botMode}`);
   
   const cleanPhone = senderPhone.replace(/\D/g, '');
-  console.log(`🔍 [TEST MODE CHECK] Número limpio: ${cleanPhone}`);
-  
   const TEST_PHONE_FULL = '525521920710'; // Con código de país
-  const TEST_PHONE_SHORT = '5521920710'; // Sin código de país (últimos 10 dígitos)
+  const TEST_PHONE_SHORT = '5521920710'; // Sin código de país
   
-  console.log(`🔍 [TEST MODE CHECK] TEST_PHONE_FULL: ${TEST_PHONE_FULL}`);
-  console.log(`🔍 [TEST MODE CHECK] TEST_PHONE_SHORT: ${TEST_PHONE_SHORT}`);
-  
-  if (testModeActive) {
-    console.log(`🧪 [TEST MODE CHECK] Modo de pruebas ACTIVO - Verificando número...`);
+  // Verificar según el modo
+  if (botMode === 'inactive') {
+    console.log(`⏸️  ============================================`);
+    console.log(`⏸️  BOT INACTIVO - MENSAJE BLOQUEADO`);
+    console.log(`⏸️  ============================================`);
+    console.log(`⏸️  Número recibido: ${senderPhone}`);
+    console.log(`⏸️  ⚠️  NO se procesará, NO se enviará respuesta`);
+    console.log(`⏸️  ============================================`);
+    // NO guardar en historial, NO enviar mensaje, NO hacer nada
+    return;
+  } else if (botMode === 'test') {
+    console.log(`🧪 [BOT MODE CHECK] Modo de pruebas ACTIVO - Verificando número...`);
     
     // Comparación estricta: solo aceptar números exactos
     const exactMatchFull = cleanPhone === TEST_PHONE_FULL;
     const exactMatchShort = cleanPhone === TEST_PHONE_SHORT;
     const endsWithMatch = cleanPhone.length >= 10 && cleanPhone.length <= 12 && cleanPhone.endsWith(TEST_PHONE_SHORT);
-    
-    console.log(`🔍 [TEST MODE CHECK] exactMatchFull (${cleanPhone} === ${TEST_PHONE_FULL}): ${exactMatchFull}`);
-    console.log(`🔍 [TEST MODE CHECK] exactMatchShort (${cleanPhone} === ${TEST_PHONE_SHORT}): ${exactMatchShort}`);
-    console.log(`🔍 [TEST MODE CHECK] endsWithMatch: ${endsWithMatch}`);
-    
     const phoneMatches = exactMatchFull || exactMatchShort || endsWithMatch;
-    console.log(`🔍 [TEST MODE CHECK] phoneMatches: ${phoneMatches}`);
+    
+    console.log(`🔍 [BOT MODE CHECK] Comparaciones: full=${exactMatchFull}, short=${exactMatchShort}, endsWith=${endsWithMatch}, matches=${phoneMatches}`);
     
     if (!phoneMatches) {
       console.log(`🧪 ============================================`);
-      console.log(`🧪 🚫 BLOQUEO TOTAL - MODO DE PRUEBAS ACTIVO`);
+      console.log(`🧪 🚫 BLOQUEO - MODO DE PRUEBAS ACTIVO`);
       console.log(`🧪 ============================================`);
-      console.log(`🧪 Número recibido: ${senderPhone}`);
-      console.log(`🧪 Número limpio: ${cleanPhone}`);
+      console.log(`🧪 Número recibido: ${senderPhone} (limpio: ${cleanPhone})`);
       console.log(`🧪 Número permitido: +525521920710`);
-      console.log(`🧪 Comparaciones:`);
-      console.log(`🧪   - ${cleanPhone} === ${TEST_PHONE_FULL}? ${exactMatchFull}`);
-      console.log(`🧪   - ${cleanPhone} === ${TEST_PHONE_SHORT}? ${exactMatchShort}`);
-      console.log(`🧪   - endsWith(${TEST_PHONE_SHORT})? ${endsWithMatch}`);
       console.log(`🧪 ⚠️  BLOQUEADO: NO se procesará, NO se enviará respuesta`);
       console.log(`🧪 ============================================`);
       // NO guardar en historial, NO enviar mensaje, NO hacer nada
-      // Return inmediato sin procesar nada
       return;
     } else {
       console.log(`🧪 ✅ MODO DE PRUEBAS: Número permitido (${cleanPhone}) - Continuando procesamiento`);
     }
-  } else {
-    console.log(`✅ [TEST MODE CHECK] Modo de pruebas DESACTIVADO - Continuando procesamiento normal`);
-  }
-  
-  // Verificar si el bot está activo (solo si pasó la verificación de modo de pruebas)
-  if (!getBotStatus()) {
-    console.log(`⏸️  Bot está INACTIVO. Mensaje de ${senderPhone} no será procesado.`);
-    // Guardar mensaje en historial pero no responder
-    sessions.addToHistory(cleanPhone, 'user', options.buttonTitle || incomingMessage);
-    return;
+  } else if (botMode === 'active') {
+    console.log(`✅ [BOT MODE CHECK] Bot ACTIVO - Procesando mensaje normalmente`);
   }
   
   // Enviar indicador de "escribiendo..." inmediatamente
@@ -3643,28 +3580,62 @@ app.put('/api/messages', async (req, res) => {
   }
 });
 
-// GET /api/bot-status - Obtener estado del bot (activo/inactivo)
+// GET /api/bot-mode - Obtener estado del bot (unificado: inactive, test, active)
+app.get('/api/bot-mode', (req, res) => {
+  try {
+    const mode = getBotMode();
+    res.json({ mode });
+  } catch (error) {
+    console.error('Error en /api/bot-mode:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PUT /api/bot-mode - Actualizar estado del bot (unificado)
+app.put('/api/bot-mode', (req, res) => {
+  try {
+    const { mode } = req.body;
+    
+    if (!['inactive', 'test', 'active'].includes(mode)) {
+      return res.status(400).json({ error: 'El campo "mode" debe ser "inactive", "test", o "active"' });
+    }
+    
+    const success = setBotMode(mode);
+    
+    if (success) {
+      const messages = {
+        'inactive': 'Bot desactivado - No responderá a ningún mensaje',
+        'test': 'Modo de pruebas activado - Solo responderá a +525521920710',
+        'active': 'Bot activado - Responderá a todos los números'
+      };
+      res.json({ success: true, mode, message: messages[mode] });
+    } else {
+      res.status(500).json({ error: 'Error al guardar el estado del bot' });
+    }
+  } catch (error) {
+    console.error('Error en PUT /api/bot-mode:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Endpoints de compatibilidad (deprecados, usar /api/bot-mode)
 app.get('/api/bot-status', (req, res) => {
   try {
-    const isActive = getBotStatus();
-    res.json({ active: isActive });
+    const mode = getBotMode();
+    res.json({ active: mode !== 'inactive' });
   } catch (error) {
     console.error('Error en /api/bot-status:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// PUT /api/bot-status - Actualizar estado del bot
 app.put('/api/bot-status', (req, res) => {
   try {
     const { active } = req.body;
-    
     if (typeof active !== 'boolean') {
       return res.status(400).json({ error: 'Se requiere el campo "active" (boolean)' });
     }
-    
-    const success = setBotStatus(active);
-    
+    const success = setBotMode(active ? 'active' : 'inactive');
     if (success) {
       res.json({ success: true, active, message: `AI Agent ${active ? 'activado' : 'desactivado'} correctamente` });
     } else {
@@ -3676,52 +3647,33 @@ app.put('/api/bot-status', (req, res) => {
   }
 });
 
-// GET /api/test-mode-status - Obtener estado del modo de pruebas
 app.get('/api/test-mode-status', (req, res) => {
   try {
-    const isActive = getTestModeStatus();
-    res.json({ active: isActive });
+    const mode = getBotMode();
+    res.json({ active: mode === 'test' });
   } catch (error) {
     console.error('Error en /api/test-mode-status:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// PUT /api/test-mode-status - Actualizar estado del modo de pruebas
 app.put('/api/test-mode-status', (req, res) => {
   try {
-    console.log(`\n🔧 ============================================`);
-    console.log(`🔧 PUT /api/test-mode-status - ACTUALIZANDO ESTADO`);
-    console.log(`🔧 ============================================`);
-    console.log(`🔧 Body recibido:`, JSON.stringify(req.body, null, 2));
-    
     const { active } = req.body;
-    console.log(`🔧 active recibido: ${active}, tipo: ${typeof active}`);
-    
     if (typeof active !== 'boolean') {
-      console.error(`❌ Error: active no es boolean, es ${typeof active}`);
       return res.status(400).json({ error: 'Se requiere el campo "active" (boolean)' });
     }
-    
-    console.log(`🔧 Llamando a setTestModeStatus(${active})...`);
-    const success = setTestModeStatus(active);
-    console.log(`🔧 setTestModeStatus retornó: ${success}`);
-    
+    const success = setBotMode(active ? 'test' : 'active');
     if (success) {
       const message = active 
         ? 'Modo de pruebas activado - El bot solo responderá a +525521920710'
         : 'Modo de pruebas desactivado - El bot responderá a todos';
-      console.log(`✅ Estado actualizado exitosamente: ${active}`);
-      console.log(`🔧 ============================================\n`);
       res.json({ success: true, active, message });
     } else {
-      console.error(`❌ Error: setTestModeStatus retornó false`);
-      console.log(`🔧 ============================================\n`);
       res.status(500).json({ error: 'Error al guardar el estado del modo de pruebas' });
     }
   } catch (error) {
-    console.error('❌ Error en PUT /api/test-mode-status:', error);
-    console.error('   Stack:', error.stack);
+    console.error('Error en PUT /api/test-mode-status:', error);
     res.status(500).json({ error: error.message });
   }
 });
