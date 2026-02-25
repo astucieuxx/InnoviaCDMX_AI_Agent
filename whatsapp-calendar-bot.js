@@ -1598,8 +1598,21 @@ function getBotMode() {
         return 'inactive'; // Por defecto INACTIVE por seguridad
       }
     }
-    console.log(`⚠️  [GET BOT MODE] Archivo no existe, usando por defecto: 'inactive' (SEGURIDAD)`);
-    return 'inactive'; // Por defecto INACTIVE por seguridad
+    // Si el archivo no existe, crearlo con valor por defecto 'inactive'
+    console.log(`⚠️  [GET BOT MODE] Archivo no existe, creando con valor por defecto: 'inactive' (SEGURIDAD)`);
+    try {
+      const defaultStatus = { 
+        mode: 'inactive', 
+        updatedAt: new Date().toISOString() 
+      };
+      fs.writeFileSync(statusPath, JSON.stringify(defaultStatus, null, 2), 'utf8');
+      console.log(`✅ [GET BOT MODE] Archivo creado con valor por defecto: 'inactive'`);
+      return 'inactive';
+    } catch (createError) {
+      console.error('❌ [GET BOT MODE] Error creando archivo por defecto:', createError);
+      console.warn(`⚠️  [GET BOT MODE] Usando valor por defecto en memoria: 'inactive' (SEGURIDAD)`);
+      return 'inactive'; // Por defecto INACTIVE por seguridad
+    }
   } catch (error) {
     console.error('❌ [GET BOT MODE] Error leyendo estado del bot:', error);
     console.error('   Stack:', error.stack);
