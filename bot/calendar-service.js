@@ -357,10 +357,39 @@ async function getAvailableSlots(date, calendarClient, authClient, innoviaCDMXCa
         hour12: true 
       });
       
+      // CRITICAL: Crear string ISO con offset de CDMX en lugar de toISOString() que convierte a UTC
+      // Esto evita que la fecha se desplace un día cuando el servidor está en UTC
+      const formatISOWithCDMXOffset = (date) => {
+        // Obtener componentes de la fecha en CDMX usando toLocaleString
+        const year = date.toLocaleString('en-US', { timeZone: 'America/Mexico_City', year: 'numeric' });
+        const month = date.toLocaleString('en-US', { timeZone: 'America/Mexico_City', month: '2-digit' });
+        const day = date.toLocaleString('en-US', { timeZone: 'America/Mexico_City', day: '2-digit' });
+        const hours = date.toLocaleString('en-US', { timeZone: 'America/Mexico_City', hour: '2-digit', hour12: false });
+        const minutes = date.toLocaleString('en-US', { timeZone: 'America/Mexico_City', minute: '2-digit' });
+        const seconds = date.toLocaleString('en-US', { timeZone: 'America/Mexico_City', second: '2-digit' });
+        
+        // Calcular offset de CDMX para esta fecha
+        const testDateUTC = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day), 12, 0, 0));
+        const cdmxHour = parseInt(testDateUTC.toLocaleString('en-US', { 
+          timeZone: 'America/Mexico_City',
+          hour: '2-digit',
+          hour12: false
+        }));
+        const offsetHours = 12 - cdmxHour;
+        const offsetStr = offsetHours >= 0 
+          ? `+${String(Math.abs(offsetHours)).padStart(2, '0')}:00` 
+          : `-${String(Math.abs(offsetHours)).padStart(2, '0')}:00`;
+        
+        return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${offsetStr}`;
+      };
+      
+      const startISO = formatISOWithCDMXOffset(spot.start);
+      const endISO = formatISOWithCDMXOffset(spot.end);
+      
       const slot = {
         time: startTimeCDMX,
-        start: spot.start.toISOString(),
-        end: spot.end.toISOString(),
+        start: startISO, // Usar ISO con offset de CDMX, no UTC
+        end: endISO, // Usar ISO con offset de CDMX, no UTC
         availableSpots: 1, // Cada evento azul es 1 spot disponible
         totalSpots: 1,
         eventId: spot.id, // Guardar el ID del evento azul para poder eliminarlo después
@@ -370,6 +399,7 @@ async function getAvailableSlots(date, calendarClient, authClient, innoviaCDMXCa
       // Log para diagnóstico
       const time24h = spot.start.toLocaleTimeString('en-US', {timeZone: 'America/Mexico_City', hour12: false});
       console.log(`      📌 Slot creado: ${startTimeCDMX} (${time24h}) - timestamp: ${startTimestamp} - eventId: ${spot.id}`);
+      console.log(`      📌 Slot ISO: ${startISO} (NO usando toISOString() que convierte a UTC)`);
       
       return slot;
     });
