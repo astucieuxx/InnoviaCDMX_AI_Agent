@@ -1276,23 +1276,33 @@ app.post('/api/webhook-test', (req, res) => {
 // Endpoint de diagnóstico del webhook
 app.get('/api/webhook-status', (req, res) => {
   const botMode = getBotMode();
+  // CRITICAL: Railway siempre usa HTTPS, forzar HTTPS en la URL
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+  const host = req.get('host') || req.headers.host;
+  const webhookUrl = `https://${host}/webhook`;
+  const testUrl = `https://${host}/api/webhook-test`;
+  
   res.json({
     status: 'ok',
     webhookEndpoint: '/webhook',
     currentBotMode: botMode,
     webhookAccessible: true,
+    webhookUrl: webhookUrl,
     instructions: {
-      step1: 'Verifica que Chakra tiene configurado el webhook con esta URL:',
-      webhookUrl: `${req.protocol}://${req.get('host')}/webhook`,
-      step2: 'Prueba el webhook manualmente con:',
-      testCommand: `curl -X POST ${req.protocol}://${req.get('host')}/api/webhook-test -H "Content-Type: application/json" -d '{"test": "data"}'`,
-      step3: 'Si no ves logs cuando envías mensajes, Chakra no está enviando al webhook',
-      step4: 'Verifica en el panel de Chakra si hay errores del webhook'
+      step1: '⚠️ IMPORTANTE: El bot está en modo "' + botMode + '"',
+      step1a: botMode === 'inactive' ? 'Cambia el modo a "active" o "test" en el dashboard para que responda' : 'El bot debería responder si recibe mensajes',
+      step2: 'Configura el webhook en Chakra con esta URL (HTTPS):',
+      webhookUrl: webhookUrl,
+      step3: 'Prueba el webhook manualmente con:',
+      testCommand: `curl -X POST ${testUrl} -H "Content-Type: application/json" -d '{"test": "data"}'`,
+      step4: 'Si no ves logs cuando envías mensajes, Chakra no está enviando al webhook',
+      step5: 'Verifica en el panel de Chakra si hay errores del webhook'
     },
     troubleshooting: {
       noLogs: 'Si no ves logs "🌐 WEBHOOK POST RECIBIDO", Chakra no está enviando mensajes',
       solution: 'Reconfigura el webhook en Chakra o verifica que esté activo',
-      checkChakra: 'Revisa el panel de Chakra para ver si hay errores del webhook'
+      checkChakra: 'Revisa el panel de Chakra para ver si hay errores del webhook',
+      botInactive: botMode === 'inactive' ? 'El bot está inactivo. Cámbialo a "active" o "test" en el dashboard.' : null
     },
     timestamp: new Date().toISOString()
   });
