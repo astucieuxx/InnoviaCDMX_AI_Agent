@@ -1371,6 +1371,11 @@ app.post('/webhook', async (req, res) => {
           
           // Procesar el mensaje (no esperar para responder rápido al webhook)
           processIncomingMessage(senderPhone, incomingMessage, {}).catch(error => {
+            // Si el error es porque el bot está inactivo, no es un error real
+            if (error.message === 'BOT_INACTIVE_BLOCKED') {
+              console.log(`⏸️  Mensaje bloqueado correctamente - Bot inactivo`);
+              return; // No loguear como error
+            }
             console.error('❌ Error procesando mensaje:', error);
             console.error('   Stack:', error.stack);
           });
@@ -1392,6 +1397,11 @@ app.post('/webhook', async (req, res) => {
           // El botón puede tener un ID como "slot_0", "slot_1", etc.
           if (senderPhone && buttonId) {
             processIncomingMessage(senderPhone, buttonId, { isButtonClick: true, buttonTitle }).catch(error => {
+              // Si el error es porque el bot está inactivo, no es un error real
+              if (error.message === 'BOT_INACTIVE_BLOCKED') {
+                console.log(`⏸️  Botón bloqueado correctamente - Bot inactivo`);
+                return; // No loguear como error
+              }
               console.error('Error procesando respuesta de botón:', error);
             });
           }
@@ -1573,7 +1583,17 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
     return; // Bloquear si el modo es inválido
   }
   
-  if (botMode === 'inactive') {
+  // CRITICAL: Verificación estricta con comparación de strings
+  const isInactive = String(botMode).trim().toLowerCase() === 'inactive';
+  const isTest = String(botMode).trim().toLowerCase() === 'test';
+  const isActive = String(botMode).trim().toLowerCase() === 'active';
+  
+  console.log(`🔍 [BOT MODE CHECK] Comparaciones estrictas:`);
+  console.log(`🔍   - isInactive: ${isInactive}`);
+  console.log(`🔍   - isTest: ${isTest}`);
+  console.log(`🔍   - isActive: ${isActive}`);
+  
+  if (isInactive) {
     console.log(`⏸️  ============================================`);
     console.log(`⏸️  🚫 BOT INACTIVO - BLOQUEO TOTAL`);
     console.log(`⏸️  ============================================`);
@@ -1585,8 +1605,9 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
     console.log(`⏸️  ⚠️  RETURN INMEDIATO - FUNCIÓN TERMINA AQUÍ`);
     console.log(`⏸️  ============================================\n`);
     // CRITICAL: Return inmediato - NO hacer NADA más
-    return; // Esto debe terminar la función completamente
-  } else if (botMode === 'test') {
+    // Agregar throw para asegurar que la función termine
+    throw new Error('BOT_INACTIVE_BLOCKED'); // Esto asegura que la función termine
+  } else if (isTest) {
     console.log(`🧪 ============================================`);
     console.log(`🧪 MODO DE PRUEBAS ACTIVO - VERIFICANDO NÚMERO`);
     console.log(`🧪 ============================================`);
@@ -1616,7 +1637,7 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
       console.log(`🧪 ⚠️  RETURN INMEDIATO - FUNCIÓN TERMINA AQUÍ`);
       console.log(`🧪 ============================================\n`);
       // CRITICAL: Return inmediato - NO hacer NADA más
-      return; // Esto debe terminar la función completamente
+      throw new Error('BOT_TEST_MODE_BLOCKED'); // Esto asegura que la función termine
     } else {
       console.log(`🧪 ✅ MODO DE PRUEBAS: Número permitido (${cleanPhone})`);
       console.log(`🧪 ✅ Continuando procesamiento...`);
