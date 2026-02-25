@@ -1296,6 +1296,21 @@ app.get('/webhook', (req, res) => {
 
 // Webhook para recibir mensajes de WhatsApp (POST) - Formato Chakra/WhatsApp Cloud API
 app.post('/webhook', async (req, res) => {
+  // CRITICAL: Asegurar que siempre respondemos, incluso si hay errores
+  // Esto es importante para que Chakra no deje de enviar mensajes
+  let responseSent = false;
+  
+  const sendResponse = (status, data) => {
+    if (!responseSent) {
+      responseSent = true;
+      if (data) {
+        res.status(status).json(data);
+      } else {
+        res.sendStatus(status);
+      }
+    }
+  };
+  
   // CRITICAL: Logging inmediato para verificar que el webhook está recibiendo requests
   console.log('\n🌐 ============================================');
   console.log('🌐 WEBHOOK POST RECIBIDO - PRIMERA LÍNEA');
@@ -1326,7 +1341,8 @@ app.post('/webhook', async (req, res) => {
       console.log('⏸️  NO se procesará ningún mensaje');
       console.log('⏸️  ============================================\n');
       // Responder inmediatamente y terminar
-      return res.status(200).json({ status: 'ok', message: 'Bot inactive, message ignored' });
+      sendResponse(200, { status: 'ok', message: 'Bot inactive, message ignored' });
+      return;
     }
     
     // Si está en modo test, verificar el número ANTES de procesar
@@ -1383,7 +1399,8 @@ app.post('/webhook', async (req, res) => {
           console.log('🧪 🚫 BLOQUEADO - No es el número de pruebas');
           console.log('🧪 Respondiendo 200 OK sin procesar mensaje');
           console.log('🧪 ============================================\n');
-          return res.status(200).json({ status: 'ok', message: 'Test mode active, number not allowed' });
+          sendResponse(200, { status: 'ok', message: 'Test mode active, number not allowed' });
+          return;
         } else {
           console.log('🧪 ✅ PERMITIDO - Es el número de pruebas');
           console.log('🧪 Continuando con el procesamiento...');
@@ -1403,7 +1420,8 @@ app.post('/webhook', async (req, res) => {
     console.error('   Stack:', error.stack);
     console.error('   Por seguridad, NO procesando mensaje');
     // IMPORTANTE: Responder 200 OK para que Chakra no reintente, pero loguear el error
-    return res.status(200).json({ status: 'ok', message: 'Error reading bot status, message ignored' });
+    sendResponse(200, { status: 'ok', message: 'Error reading bot status, message ignored' });
+    return;
   }
   
   // CRITICAL: Asegurar que siempre respondemos 200 OK al final, incluso si hay errores
