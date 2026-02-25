@@ -835,17 +835,38 @@ async function createCalendarEvent(name, phone, email, dateStart, fechaBoda, cal
     // Formatear fecha/hora en formato RFC3339 para CDMX
     // CRITICAL: Usar toLocaleString para obtener componentes en CDMX, no métodos locales del servidor
     const formatDateTimeForCDMX = (date) => {
-      // Obtener componentes de la fecha en CDMX usando toLocaleString
-      // Esto asegura que la fecha/hora sea correcta independientemente de la zona horaria del servidor
-      const year = date.toLocaleString('en-US', { timeZone: 'America/Mexico_City', year: 'numeric' });
-      const month = date.toLocaleString('en-US', { timeZone: 'America/Mexico_City', month: '2-digit' });
-      const day = date.toLocaleString('en-US', { timeZone: 'America/Mexico_City', day: '2-digit' });
-      const hours = date.toLocaleString('en-US', { timeZone: 'America/Mexico_City', hour: '2-digit', hour12: false });
-      const minutes = date.toLocaleString('en-US', { timeZone: 'America/Mexico_City', minute: '2-digit' });
-      const seconds = date.toLocaleString('en-US', { timeZone: 'America/Mexico_City', second: '2-digit' });
-      
-      // Formato: YYYY-MM-DDTHH:MM:SS (sin Z, para que Google Calendar lo interprete con timeZone)
-      return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+      try {
+        // Verificar que la fecha es válida
+        if (isNaN(date.getTime())) {
+          throw new Error(`Fecha inválida en formatDateTimeForCDMX: ${date}`);
+        }
+        
+        // Obtener componentes de la fecha en CDMX usando toLocaleString
+        // Esto asegura que la fecha/hora sea correcta independientemente de la zona horaria del servidor
+        const year = date.toLocaleString('en-US', { timeZone: 'America/Mexico_City', year: 'numeric' });
+        const month = date.toLocaleString('en-US', { timeZone: 'America/Mexico_City', month: '2-digit' });
+        const day = date.toLocaleString('en-US', { timeZone: 'America/Mexico_City', day: '2-digit' });
+        const hours = date.toLocaleString('en-US', { timeZone: 'America/Mexico_City', hour: '2-digit', hour12: false });
+        const minutes = date.toLocaleString('en-US', { timeZone: 'America/Mexico_City', minute: '2-digit' });
+        const seconds = date.toLocaleString('en-US', { timeZone: 'America/Mexico_City', second: '2-digit' });
+        
+        // Asegurar que todos los componentes tengan 2 dígitos
+        const monthPadded = String(month).padStart(2, '0');
+        const dayPadded = String(day).padStart(2, '0');
+        const hoursPadded = String(hours).padStart(2, '0');
+        const minutesPadded = String(minutes).padStart(2, '0');
+        const secondsPadded = String(seconds).padStart(2, '0');
+        
+        // Formato: YYYY-MM-DDTHH:MM:SS (sin Z, para que Google Calendar lo interprete con timeZone)
+        const result = `${year}-${monthPadded}-${dayPadded}T${hoursPadded}:${minutesPadded}:${secondsPadded}`;
+        
+        console.log(`   📅 [formatDateTimeForCDMX] Formateando fecha: ${date.toISOString()} -> ${result}`);
+        
+        return result;
+      } catch (error) {
+        console.error(`   ❌ ERROR en formatDateTimeForCDMX:`, error.message);
+        throw error;
+      }
     };
     
     const startDateTime = formatDateTimeForCDMX(startDate);
