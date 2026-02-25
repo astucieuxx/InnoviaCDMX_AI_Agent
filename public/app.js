@@ -1156,10 +1156,10 @@ async function loadBotMode() {
     try {
         const response = await fetch('/api/bot-mode');
         const data = await response.json();
-        updateBotModeUI(data.mode || 'active');
+        updateBotModeUI(data.mode || 'inactive');
     } catch (error) {
         console.error('Error cargando estado del bot:', error);
-        updateBotModeUI('active'); // Por defecto activo si hay error
+        updateBotModeUI('inactive'); // Por defecto inactivo si hay error (seguridad)
     }
 }
 
