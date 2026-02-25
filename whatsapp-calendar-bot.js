@@ -1259,6 +1259,30 @@ app.get('/webhook', (req, res) => {
 
 // Webhook para recibir mensajes de WhatsApp (POST) - Formato Chakra/WhatsApp Cloud API
 app.post('/webhook', async (req, res) => {
+  // CRITICAL: Verificar estado del bot INMEDIATAMENTE, antes de cualquier procesamiento
+  // Si está inactive, responder 200 OK y terminar SIN procesar nada
+  try {
+    const botMode = getBotMode();
+    const isInactive = String(botMode).trim().toLowerCase() === 'inactive';
+    
+    if (isInactive) {
+      console.log('\n⏸️  ============================================');
+      console.log('⏸️  BOT INACTIVO - WEBHOOK BLOQUEADO INMEDIATAMENTE');
+      console.log('⏸️  ============================================');
+      console.log('⏸️  Modo detectado:', botMode);
+      console.log('⏸️  Respondiendo 200 OK sin procesar mensaje');
+      console.log('⏸️  NO se procesará ningún mensaje');
+      console.log('⏸️  ============================================\n');
+      // Responder inmediatamente y terminar
+      return res.status(200).json({ status: 'ok', message: 'Bot inactive, message ignored' });
+    }
+  } catch (error) {
+    // Si hay error leyendo el estado, por seguridad NO procesar
+    console.error('❌ Error leyendo estado del bot en webhook:', error);
+    console.error('   Por seguridad, NO procesando mensaje');
+    return res.status(200).json({ status: 'ok', message: 'Error reading bot status, message ignored' });
+  }
+  
   try {
     const body = req.body;
     
