@@ -1259,6 +1259,19 @@ app.get('/webhook', (req, res) => {
 
 // Webhook para recibir mensajes de WhatsApp (POST) - Formato Chakra/WhatsApp Cloud API
 app.post('/webhook', async (req, res) => {
+  // CRITICAL: Logging inmediato para verificar que el webhook está recibiendo requests
+  console.log('\n🌐 ============================================');
+  console.log('🌐 WEBHOOK POST RECIBIDO - PRIMERA LÍNEA');
+  console.log('🌐 ============================================');
+  console.log('🌐 Timestamp:', new Date().toISOString());
+  console.log('🌐 Method:', req.method);
+  console.log('🌐 URL:', req.url);
+  console.log('🌐 Headers:', JSON.stringify(req.headers, null, 2));
+  console.log('🌐 Body type:', typeof req.body);
+  console.log('🌐 Body keys:', req.body ? Object.keys(req.body) : 'null');
+  console.log('🌐 Body (primeros 500 chars):', req.body ? JSON.stringify(req.body).substring(0, 500) : 'null');
+  console.log('🌐 ============================================\n');
+  
   // CRITICAL: Verificar estado del bot INMEDIATAMENTE, antes de cualquier procesamiento
   // Si está inactive, responder 200 OK y terminar SIN procesar nada
   // Si está en modo test, verificar el número antes de procesar
