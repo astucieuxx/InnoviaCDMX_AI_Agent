@@ -933,10 +933,19 @@ async function createCalendarEvent(name, phone, email, dateStart, fechaBoda, cal
     }
 
     console.error(`   ❌ ERROR: createdEvent.data es null o undefined`);
+    console.error(`   📅 createdEvent completo:`, JSON.stringify(createdEvent, null, 2));
     return null;
   } catch (error) {
     console.error('❌ Error creando evento en Google Calendar:', error.message);
     console.error('   Stack:', error.stack);
+    console.error('   Error completo:', error);
+    
+    // Si es un error de la API de Google, mostrar más detalles
+    if (error.response) {
+      console.error('   Response status:', error.response.status);
+      console.error('   Response data:', JSON.stringify(error.response.data, null, 2));
+    }
+    
     return null;
   }
 }
