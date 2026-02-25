@@ -1400,10 +1400,14 @@ app.post('/webhook', async (req, res) => {
   } catch (error) {
     // Si hay error leyendo el estado, por seguridad NO procesar
     console.error('❌ Error leyendo estado del bot en webhook:', error);
+    console.error('   Stack:', error.stack);
     console.error('   Por seguridad, NO procesando mensaje');
+    // IMPORTANTE: Responder 200 OK para que Chakra no reintente, pero loguear el error
     return res.status(200).json({ status: 'ok', message: 'Error reading bot status, message ignored' });
   }
   
+  // CRITICAL: Asegurar que siempre respondemos 200 OK al final, incluso si hay errores
+  // Pero primero procesamos el mensaje si pasó las verificaciones
   try {
     const body = req.body;
     
