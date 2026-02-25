@@ -1262,9 +1262,13 @@ app.post('/webhook', async (req, res) => {
   try {
     const body = req.body;
     
+    console.log('\n🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨');
+    console.log('🚨 WEBHOOK RECIBIDO - INICIO');
+    console.log('🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨');
     console.log('📥 ============================================');
     console.log('📥 WEBHOOK RECIBIDO DE CHAKRA');
     console.log('📥 ============================================');
+    console.log('📥 Timestamp:', new Date().toISOString());
     console.log('📥 Body completo:', JSON.stringify(body, null, 2));
     console.log('📥 Headers:', JSON.stringify(req.headers, null, 2));
     console.log('📥 ============================================');
