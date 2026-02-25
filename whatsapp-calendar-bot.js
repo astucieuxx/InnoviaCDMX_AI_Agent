@@ -967,18 +967,26 @@ async function sendTypingIndicator(phoneNumber, action = 'typing_on') {
   const cleanPhone = phoneNumber.replace(/\D/g, '');
   
   // CAPA DE SEGURIDAD: Verificar modo de pruebas ANTES de enviar cualquier indicador
+  console.log(`🔍 [TYPING CHECK] Verificando modo de pruebas antes de enviar typing indicator a ${phoneNumber} (${cleanPhone})`);
   const testModeActive = getTestModeStatus();
+  console.log(`🔍 [TYPING CHECK] testModeActive = ${testModeActive}`);
+  
   if (testModeActive) {
     const TEST_PHONE_FULL = '525521920710';
     const TEST_PHONE_SHORT = '5521920710';
-    const phoneMatches = cleanPhone === TEST_PHONE_FULL || 
-                         cleanPhone === TEST_PHONE_SHORT ||
-                         (cleanPhone.length >= 10 && cleanPhone.length <= 12 && cleanPhone.endsWith(TEST_PHONE_SHORT));
+    const exactMatchFull = cleanPhone === TEST_PHONE_FULL;
+    const exactMatchShort = cleanPhone === TEST_PHONE_SHORT;
+    const endsWithMatch = cleanPhone.length >= 10 && cleanPhone.length <= 12 && cleanPhone.endsWith(TEST_PHONE_SHORT);
+    const phoneMatches = exactMatchFull || exactMatchShort || endsWithMatch;
+    
+    console.log(`🔍 [TYPING CHECK] Comparaciones: full=${exactMatchFull}, short=${exactMatchShort}, endsWith=${endsWithMatch}, matches=${phoneMatches}`);
     
     if (!phoneMatches) {
-      console.log(`🧪 BLOQUEO EN sendTypingIndicator - MODO DE PRUEBAS ACTIVO: ${phoneNumber} (${cleanPhone})`);
+      console.log(`🧪 🚫 [TYPING CHECK] BLOQUEO - MODO DE PRUEBAS ACTIVO: ${phoneNumber} (${cleanPhone})`);
       // NO enviar el indicador, retornar silenciosamente
       return;
+    } else {
+      console.log(`🧪 ✅ [TYPING CHECK] Número permitido, enviando typing indicator`);
     }
   }
   
@@ -1036,23 +1044,32 @@ async function sendWhatsAppMessage(phoneNumber, message, options = {}) {
   const cleanPhone = phoneNumber ? phoneNumber.replace(/\D/g, '') : 'unknown';
   
   // CAPA DE SEGURIDAD: Verificar modo de pruebas ANTES de enviar cualquier mensaje
+  console.log(`🔍 [SEND MSG CHECK] Verificando modo de pruebas antes de enviar mensaje a ${phoneNumber} (${cleanPhone})`);
   const testModeActive = getTestModeStatus();
+  console.log(`🔍 [SEND MSG CHECK] testModeActive = ${testModeActive}`);
+  
   if (testModeActive) {
     const TEST_PHONE_FULL = '525521920710';
     const TEST_PHONE_SHORT = '5521920710';
-    const phoneMatches = cleanPhone === TEST_PHONE_FULL || 
-                         cleanPhone === TEST_PHONE_SHORT ||
-                         (cleanPhone.length >= 10 && cleanPhone.length <= 12 && cleanPhone.endsWith(TEST_PHONE_SHORT));
+    const exactMatchFull = cleanPhone === TEST_PHONE_FULL;
+    const exactMatchShort = cleanPhone === TEST_PHONE_SHORT;
+    const endsWithMatch = cleanPhone.length >= 10 && cleanPhone.length <= 12 && cleanPhone.endsWith(TEST_PHONE_SHORT);
+    const phoneMatches = exactMatchFull || exactMatchShort || endsWithMatch;
+    
+    console.log(`🔍 [SEND MSG CHECK] Comparaciones: full=${exactMatchFull}, short=${exactMatchShort}, endsWith=${endsWithMatch}, matches=${phoneMatches}`);
     
     if (!phoneMatches) {
       console.log(`🧪 ============================================`);
-      console.log(`🧪 BLOQUEO EN sendWhatsAppMessage - MODO DE PRUEBAS ACTIVO`);
+      console.log(`🧪 🚫 BLOQUEO EN sendWhatsAppMessage`);
       console.log(`🧪 ============================================`);
+      console.log(`🧪 MODO DE PRUEBAS ACTIVO - Mensaje BLOQUEADO`);
       console.log(`🧪 Intento de enviar mensaje a ${phoneNumber} (limpio: ${cleanPhone})`);
-      console.log(`🧪 Mensaje bloqueado. Solo se permiten mensajes a +525521920710`);
+      console.log(`🧪 Solo se permiten mensajes a +525521920710`);
       console.log(`🧪 ============================================`);
       // NO enviar el mensaje, retornar sin error para evitar que se propague
       return { success: false, blocked: true, reason: 'test_mode_active' };
+    } else {
+      console.log(`🧪 ✅ [SEND MSG CHECK] Número permitido, enviando mensaje`);
     }
   }
   
@@ -1399,23 +1416,35 @@ function setBotStatus(active) {
 }
 
 // Función para obtener el estado del modo de pruebas
+// IMPORTANTE: Lee el archivo cada vez (sin caché) para asegurar estado actualizado
 function getTestModeStatus() {
   try {
     const statusPath = path.join(__dirname, 'test_mode_status.json');
+    console.log(`🔍 [TEST MODE] Leyendo archivo: ${statusPath}`);
+    console.log(`🔍 [TEST MODE] ¿Existe?: ${fs.existsSync(statusPath)}`);
     
     if (fs.existsSync(statusPath)) {
       const statusData = fs.readFileSync(statusPath, 'utf8');
+      console.log(`🔍 [TEST MODE] Contenido del archivo: ${statusData}`);
       const status = JSON.parse(statusData);
       const isActive = status.active === true;
+      console.log(`🔍 [TEST MODE] status.active = ${status.active}, isActive = ${isActive}`);
+      
       if (isActive) {
-        console.log(`🧪 Modo de pruebas ACTIVO (leído desde ${statusPath})`);
+        console.log(`🧪 ============================================`);
+        console.log(`🧪 MODO DE PRUEBAS ESTÁ ACTIVO`);
+        console.log(`🧪 ============================================`);
+      } else {
+        console.log(`✅ [TEST MODE] Modo de pruebas DESACTIVADO`);
       }
       return isActive;
     } else {
+      console.log(`⚠️  [TEST MODE] Archivo no existe, modo de pruebas DESACTIVADO por defecto`);
       return false; // Por defecto desactivado
     }
   } catch (error) {
-    console.error('❌ Error leyendo estado del modo de pruebas:', error);
+    console.error('❌ [TEST MODE] Error leyendo estado del modo de pruebas:', error);
+    console.error('   Stack:', error.stack);
     return false; // Por defecto desactivado si hay error
   }
 }
@@ -1439,41 +1468,64 @@ function setTestModeStatus(active) {
 
 // Función para procesar mensajes entrantes (NUEVA ARQUITECTURA BASADA EN INTENTS)
 async function processIncomingMessage(senderPhone, incomingMessage, options = {}) {
+  console.log(`\n🚨 ============================================`);
+  console.log(`🚨 INICIO processIncomingMessage`);
+  console.log(`🚨 ============================================`);
+  console.log(`🚨 Número recibido: ${senderPhone}`);
+  console.log(`🚨 Mensaje: ${incomingMessage}`);
+  console.log(`🚨 ============================================\n`);
+  
   // CRITICAL: Verificar modo de pruebas PRIMERO, antes de cualquier otra cosa
   // Esto debe ser lo primero para evitar cualquier procesamiento o envío de mensajes
+  console.log(`🔍 [TEST MODE CHECK] Iniciando verificación del modo de pruebas...`);
   const testModeActive = getTestModeStatus();
+  console.log(`🔍 [TEST MODE CHECK] testModeActive = ${testModeActive}`);
+  
   const cleanPhone = senderPhone.replace(/\D/g, '');
+  console.log(`🔍 [TEST MODE CHECK] Número limpio: ${cleanPhone}`);
+  
   const TEST_PHONE_FULL = '525521920710'; // Con código de país
   const TEST_PHONE_SHORT = '5521920710'; // Sin código de país (últimos 10 dígitos)
   
+  console.log(`🔍 [TEST MODE CHECK] TEST_PHONE_FULL: ${TEST_PHONE_FULL}`);
+  console.log(`🔍 [TEST MODE CHECK] TEST_PHONE_SHORT: ${TEST_PHONE_SHORT}`);
+  
   if (testModeActive) {
-    // Si el modo de pruebas está activo, solo procesar mensajes del número de pruebas
-    // Comparar números limpios: puede venir con o sin código de país
-    // Número de prueba: +525521920710
-    // Puede llegar como: 525521920710 (con código) o 5521920710 (sin código)
+    console.log(`🧪 [TEST MODE CHECK] Modo de pruebas ACTIVO - Verificando número...`);
     
-    // Comparación estricta: solo aceptar números exactos o que terminen con el número corto
-    // pero con validación de longitud para evitar coincidencias accidentales
-    const phoneMatches = cleanPhone === TEST_PHONE_FULL ||  // Exacto: 525521920710
-                         cleanPhone === TEST_PHONE_SHORT ||  // Exacto: 5521920710
-                         (cleanPhone.length >= 10 && cleanPhone.length <= 12 && cleanPhone.endsWith(TEST_PHONE_SHORT)); // Termina con 5521920710
+    // Comparación estricta: solo aceptar números exactos
+    const exactMatchFull = cleanPhone === TEST_PHONE_FULL;
+    const exactMatchShort = cleanPhone === TEST_PHONE_SHORT;
+    const endsWithMatch = cleanPhone.length >= 10 && cleanPhone.length <= 12 && cleanPhone.endsWith(TEST_PHONE_SHORT);
+    
+    console.log(`🔍 [TEST MODE CHECK] exactMatchFull (${cleanPhone} === ${TEST_PHONE_FULL}): ${exactMatchFull}`);
+    console.log(`🔍 [TEST MODE CHECK] exactMatchShort (${cleanPhone} === ${TEST_PHONE_SHORT}): ${exactMatchShort}`);
+    console.log(`🔍 [TEST MODE CHECK] endsWithMatch: ${endsWithMatch}`);
+    
+    const phoneMatches = exactMatchFull || exactMatchShort || endsWithMatch;
+    console.log(`🔍 [TEST MODE CHECK] phoneMatches: ${phoneMatches}`);
     
     if (!phoneMatches) {
       console.log(`🧪 ============================================`);
-      console.log(`🧪 MODO DE PRUEBAS ACTIVO - MENSAJE BLOQUEADO COMPLETAMENTE`);
+      console.log(`🧪 🚫 BLOQUEO TOTAL - MODO DE PRUEBAS ACTIVO`);
       console.log(`🧪 ============================================`);
       console.log(`🧪 Número recibido: ${senderPhone}`);
       console.log(`🧪 Número limpio: ${cleanPhone}`);
-      console.log(`🧪 Número permitido: +525521920710 (${TEST_PHONE_FULL} o ${TEST_PHONE_SHORT})`);
-      console.log(`🧪 ⚠️  NO se procesará, NO se enviará respuesta, NO se guardará en historial`);
-      console.log(`🧪 Solo se procesan mensajes de +525521920710`);
+      console.log(`🧪 Número permitido: +525521920710`);
+      console.log(`🧪 Comparaciones:`);
+      console.log(`🧪   - ${cleanPhone} === ${TEST_PHONE_FULL}? ${exactMatchFull}`);
+      console.log(`🧪   - ${cleanPhone} === ${TEST_PHONE_SHORT}? ${exactMatchShort}`);
+      console.log(`🧪   - endsWith(${TEST_PHONE_SHORT})? ${endsWithMatch}`);
+      console.log(`🧪 ⚠️  BLOQUEADO: NO se procesará, NO se enviará respuesta`);
       console.log(`🧪 ============================================`);
       // NO guardar en historial, NO enviar mensaje, NO hacer nada
       // Return inmediato sin procesar nada
       return;
     } else {
-      console.log(`🧪 MODO DE PRUEBAS ACTIVO: Procesando mensaje de número de pruebas (${cleanPhone})`);
+      console.log(`🧪 ✅ MODO DE PRUEBAS: Número permitido (${cleanPhone}) - Continuando procesamiento`);
     }
+  } else {
+    console.log(`✅ [TEST MODE CHECK] Modo de pruebas DESACTIVADO - Continuando procesamiento normal`);
   }
   
   // Verificar si el bot está activo (solo si pasó la verificación de modo de pruebas)
