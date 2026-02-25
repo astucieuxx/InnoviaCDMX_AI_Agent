@@ -1149,6 +1149,8 @@ async function loadConfig() {
     
     // Cargar estado del bot
     loadBotStatus();
+    // Cargar estado del modo de pruebas
+    loadTestModeStatus();
 }
 
 // Cargar estado del bot
@@ -1233,11 +1235,100 @@ async function toggleBotStatus() {
     }
 }
 
+// Cargar estado del modo de pruebas
+async function loadTestModeStatus() {
+    try {
+        const response = await fetch('/api/test-mode-status');
+        const data = await response.json();
+        updateTestModeStatusUI(data.active);
+    } catch (error) {
+        console.error('Error cargando estado del modo de pruebas:', error);
+        updateTestModeStatusUI(false); // Por defecto desactivado si hay error
+    }
+}
+
+// Actualizar UI del estado del modo de pruebas
+function updateTestModeStatusUI(isActive) {
+    const statusText = document.getElementById('test-mode-status-text');
+    const statusIndicator = document.getElementById('test-mode-status-indicator');
+    const toggleButton = document.getElementById('toggle-test-mode');
+    const toggleText = document.getElementById('toggle-test-mode-text');
+    
+    if (statusText) {
+        statusText.textContent = isActive 
+            ? 'Modo de pruebas activo - Solo responderá a +525521920710' 
+            : 'Modo de pruebas desactivado - El bot responderá a todos';
+    }
+    
+    if (statusIndicator) {
+        statusIndicator.style.background = isActive ? '#ffb800' : '#00ff88';
+        statusIndicator.style.boxShadow = isActive 
+            ? '0 0 10px rgba(255, 184, 0, 0.5)' 
+            : '0 0 10px rgba(0, 255, 136, 0.5)';
+    }
+    
+    if (toggleButton) {
+        toggleText.textContent = isActive ? '🔒 Desactivar Modo de Pruebas' : '🧪 Activar Modo de Pruebas';
+        toggleButton.style.background = isActive 
+            ? 'linear-gradient(135deg, #ffb800 0%, #f59e0b 100%)'
+            : 'linear-gradient(135deg, #00ff88 0%, #059669 100%)';
+    }
+}
+
+// Toggle del modo de pruebas
+async function toggleTestMode() {
+    try {
+        const response = await fetch('/api/test-mode-status');
+        const currentData = await response.json();
+        const newStatus = !currentData.active;
+        
+        const updateResponse = await fetch('/api/test-mode-status', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ active: newStatus })
+        });
+        
+        if (!updateResponse.ok) {
+            throw new Error('Error al actualizar el estado del modo de pruebas');
+        }
+        
+        const result = await updateResponse.json();
+        updateTestModeStatusUI(newStatus);
+        
+        // Mostrar mensaje de confirmación
+        const statusMessage = document.getElementById('test-mode-status-message');
+        if (statusMessage) {
+            statusMessage.style.display = 'block';
+            statusMessage.className = 'status-message success';
+            statusMessage.textContent = result.message || `Modo de pruebas ${newStatus ? 'activado' : 'desactivado'} correctamente`;
+            
+            setTimeout(() => {
+                statusMessage.style.display = 'none';
+            }, 3000);
+        }
+    } catch (error) {
+        console.error('Error cambiando estado del modo de pruebas:', error);
+        const statusMessage = document.getElementById('test-mode-status-message');
+        if (statusMessage) {
+            statusMessage.style.display = 'block';
+            statusMessage.className = 'status-message error';
+            statusMessage.textContent = 'Error al cambiar el estado del modo de pruebas';
+        }
+    }
+}
+
 // Event listener para el botón de toggle
 document.addEventListener('DOMContentLoaded', () => {
     const toggleButton = document.getElementById('toggle-bot-status');
     if (toggleButton) {
         toggleButton.addEventListener('click', toggleBotStatus);
+    }
+    
+    const toggleTestModeButton = document.getElementById('toggle-test-mode');
+    if (toggleTestModeButton) {
+        toggleTestModeButton.addEventListener('click', toggleTestMode);
     }
     
     // Event listeners para logs

@@ -1361,6 +1361,39 @@ function setBotStatus(active) {
   }
 }
 
+// Función para obtener el estado del modo de pruebas
+function getTestModeStatus() {
+  try {
+    const statusPath = path.join(__dirname, 'test_mode_status.json');
+    if (fs.existsSync(statusPath)) {
+      const statusData = fs.readFileSync(statusPath, 'utf8');
+      const status = JSON.parse(statusData);
+      return status.active === true; // Por defecto desactivado si no existe el archivo
+    }
+    return false; // Por defecto desactivado
+  } catch (error) {
+    console.error('Error leyendo estado del modo de pruebas:', error);
+    return false; // Por defecto desactivado si hay error
+  }
+}
+
+// Función para guardar el estado del modo de pruebas
+function setTestModeStatus(active) {
+  try {
+    const statusPath = path.join(__dirname, 'test_mode_status.json');
+    const statusData = { active, updatedAt: new Date().toISOString() };
+    fs.writeFileSync(statusPath, JSON.stringify(statusData, null, 2));
+    console.log(`✅ Estado del modo de pruebas actualizado: ${active ? 'ACTIVO' : 'DESACTIVADO'}`);
+    if (active) {
+      console.log(`   ⚠️  MODO DE PRUEBAS ACTIVO: El bot solo responderá a +525521920710`);
+    }
+    return true;
+  } catch (error) {
+    console.error('Error guardando estado del modo de pruebas:', error);
+    return false;
+  }
+}
+
 // Función para procesar mensajes entrantes (NUEVA ARQUITECTURA BASADA EN INTENTS)
 async function processIncomingMessage(senderPhone, incomingMessage, options = {}) {
   // Verificar si el bot está activo
@@ -1372,6 +1405,23 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
     // Opcional: enviar un mensaje informando que el bot está inactivo
     // await sendWhatsAppMessage(cleanPhone, 'Lo siento, el bot está temporalmente inactivo. Por favor, intenta más tarde o contacta directamente al negocio.');
     return;
+  }
+  
+  // Verificar modo de pruebas
+  const testModeActive = getTestModeStatus();
+  const cleanPhone = senderPhone.replace(/\D/g, '');
+  const TEST_PHONE = '525521920710'; // Número de pruebas sin formato
+  
+  if (testModeActive) {
+    // Si el modo de pruebas está activo, solo procesar mensajes del número de pruebas
+    if (cleanPhone !== TEST_PHONE) {
+      console.log(`🧪 MODO DE PRUEBAS ACTIVO: Mensaje de ${senderPhone} (${cleanPhone}) ignorado. Solo se procesan mensajes de +525521920710`);
+      // Guardar mensaje en historial pero no responder
+      sessions.addToHistory(cleanPhone, 'user', options.buttonTitle || incomingMessage);
+      return;
+    } else {
+      console.log(`🧪 MODO DE PRUEBAS ACTIVO: Procesando mensaje de número de pruebas (+525521920710)`);
+    }
   }
   
   // Enviar indicador de "escribiendo..." inmediatamente
@@ -3484,6 +3534,42 @@ app.put('/api/bot-status', (req, res) => {
     }
   } catch (error) {
     console.error('Error en PUT /api/bot-status:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/test-mode-status - Obtener estado del modo de pruebas
+app.get('/api/test-mode-status', (req, res) => {
+  try {
+    const isActive = getTestModeStatus();
+    res.json({ active: isActive });
+  } catch (error) {
+    console.error('Error en /api/test-mode-status:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PUT /api/test-mode-status - Actualizar estado del modo de pruebas
+app.put('/api/test-mode-status', (req, res) => {
+  try {
+    const { active } = req.body;
+    
+    if (typeof active !== 'boolean') {
+      return res.status(400).json({ error: 'Se requiere el campo "active" (boolean)' });
+    }
+    
+    const success = setTestModeStatus(active);
+    
+    if (success) {
+      const message = active 
+        ? 'Modo de pruebas activado - El bot solo responderá a +525521920710'
+        : 'Modo de pruebas desactivado - El bot responderá a todos';
+      res.json({ success: true, active, message });
+    } else {
+      res.status(500).json({ error: 'Error al guardar el estado del modo de pruebas' });
+    }
+  } catch (error) {
+    console.error('Error en PUT /api/test-mode-status:', error);
     res.status(500).json({ error: error.message });
   }
 });
