@@ -1230,8 +1230,45 @@ app.get('/', (req, res) => {
       checkAppointments: '/api/check-appointments/:date',
       logs: '/api/logs',
       stats: '/api/stats',
-      analytics: '/api/analytics'
+      analytics: '/api/analytics',
+      webhook: '/webhook (POST para recibir mensajes, GET para verificación)',
+      webhookTest: '/api/webhook-test (para probar el webhook)'
     },
+    timestamp: new Date().toISOString(),
+    botMode: getBotMode()
+  });
+});
+
+// Endpoint de prueba para verificar que el webhook está accesible
+app.get('/api/webhook-test', (req, res) => {
+  res.json({
+    status: 'ok',
+    message: 'Webhook endpoint está accesible',
+    instructions: {
+      step1: 'Configura el webhook en Chakra con esta URL:',
+      webhookUrl: `${req.protocol}://${req.get('host')}/webhook`,
+      step2: 'El webhook debe aceptar POST requests',
+      step3: 'Suscríbete a los eventos de mensajes',
+      step4: 'Verifica que Chakra pueda acceder a esta URL'
+    },
+    currentBotMode: getBotMode(),
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Endpoint para recibir pruebas del webhook
+app.post('/api/webhook-test', (req, res) => {
+  console.log('\n🧪 ============================================');
+  console.log('🧪 WEBHOOK TEST - POST RECIBIDO');
+  console.log('🧪 ============================================');
+  console.log('🧪 Body recibido:', JSON.stringify(req.body, null, 2));
+  console.log('🧪 Headers:', JSON.stringify(req.headers, null, 2));
+  console.log('🧪 ============================================\n');
+  
+  res.json({
+    status: 'ok',
+    message: 'Webhook test recibido correctamente',
+    receivedData: req.body,
     timestamp: new Date().toISOString()
   });
 });
