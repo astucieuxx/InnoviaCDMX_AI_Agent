@@ -1895,9 +1895,10 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
           });
           
           await sendWhatsAppMessage(cleanPhone, confirmationMessage);
-        
-        // Add confirmation to history
-        sessions.addToHistory(cleanPhone, 'assistant', confirmationMessage);
+          
+          // Add confirmation to history
+          sessions.addToHistory(cleanPhone, 'assistant', confirmationMessage);
+        }
         
         // If we have pending_delete_old_event, delete it now (moving appointment)
         // IMPORTANT: Only delete if we successfully created the new event AND it's different from the old one
