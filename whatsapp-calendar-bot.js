@@ -1533,12 +1533,16 @@ function setBotMode(mode) {
     }
     
     const statusPath = path.join(__dirname, 'bot_status.json');
+    
+    // CRITICAL: Limpiar el archivo - solo guardar 'mode', eliminar 'active' si existe
     const statusData = { 
       mode, 
       updatedAt: new Date().toISOString() 
     };
+    // NO incluir 'active' para evitar confusión
+    
     const jsonData = JSON.stringify(statusData, null, 2);
-    console.log(`💾 Datos a escribir: ${jsonData}`);
+    console.log(`💾 Datos a escribir (SOLO 'mode', sin 'active'): ${jsonData}`);
     
     fs.writeFileSync(statusPath, jsonData, 'utf8');
     console.log(`💾 Archivo escrito en: ${statusPath}`);
@@ -1550,6 +1554,15 @@ function setBotMode(mode) {
       console.log(`💾 Verificación: archivo existe`);
       console.log(`💾 Contenido verificado: ${verifyData}`);
       console.log(`💾 Modo verificado: ${verifyStatus.mode}`);
+      console.log(`💾 ¿Tiene campo 'active'?: ${verifyStatus.active !== undefined ? 'SÍ (PROBLEMA)' : 'NO (correcto)'}`);
+      
+      // CRITICAL: Si el archivo tiene 'active', eliminarlo
+      if (verifyStatus.active !== undefined) {
+        console.warn(`⚠️  Archivo tiene campo 'active' residual, limpiando...`);
+        const cleanedStatus = { mode: verifyStatus.mode || mode, updatedAt: verifyStatus.updatedAt || new Date().toISOString() };
+        fs.writeFileSync(statusPath, JSON.stringify(cleanedStatus, null, 2), 'utf8');
+        console.log(`✅ Archivo limpiado - solo tiene 'mode' ahora`);
+      }
       
       if (verifyStatus.mode === mode) {
         const modeNames = {
