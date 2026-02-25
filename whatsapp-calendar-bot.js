@@ -1365,14 +1365,20 @@ function setBotStatus(active) {
 function getTestModeStatus() {
   try {
     const statusPath = path.join(__dirname, 'test_mode_status.json');
+    
     if (fs.existsSync(statusPath)) {
       const statusData = fs.readFileSync(statusPath, 'utf8');
       const status = JSON.parse(statusData);
-      return status.active === true; // Por defecto desactivado si no existe el archivo
+      const isActive = status.active === true;
+      if (isActive) {
+        console.log(`🧪 Modo de pruebas ACTIVO (leído desde ${statusPath})`);
+      }
+      return isActive;
+    } else {
+      return false; // Por defecto desactivado
     }
-    return false; // Por defecto desactivado
   } catch (error) {
-    console.error('Error leyendo estado del modo de pruebas:', error);
+    console.error('❌ Error leyendo estado del modo de pruebas:', error);
     return false; // Por defecto desactivado si hay error
   }
 }
@@ -1409,18 +1415,33 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
   
   // Verificar modo de pruebas
   const testModeActive = getTestModeStatus();
+  // Limpiar número: remover todos los caracteres no numéricos
   const cleanPhone = senderPhone.replace(/\D/g, '');
-  const TEST_PHONE = '525521920710'; // Número de pruebas sin formato
+  // Número de pruebas completo: +525521920710 (México: código 52 + 5521920710)
+  const TEST_PHONE_FULL = '525521920710'; // Con código de país
+  const TEST_PHONE_SHORT = '5521920710'; // Sin código de país (últimos 10 dígitos)
   
   if (testModeActive) {
     // Si el modo de pruebas está activo, solo procesar mensajes del número de pruebas
-    if (cleanPhone !== TEST_PHONE) {
-      console.log(`🧪 MODO DE PRUEBAS ACTIVO: Mensaje de ${senderPhone} (${cleanPhone}) ignorado. Solo se procesan mensajes de +525521920710`);
+    // Comparar números limpios: puede venir con o sin código de país
+    const phoneMatches = cleanPhone === TEST_PHONE_FULL || 
+                         cleanPhone === TEST_PHONE_SHORT ||
+                         cleanPhone.endsWith(TEST_PHONE_SHORT);
+    
+    if (!phoneMatches) {
+      console.log(`🧪 ============================================`);
+      console.log(`🧪 MODO DE PRUEBAS ACTIVO - MENSAJE BLOQUEADO`);
+      console.log(`🧪 ============================================`);
+      console.log(`🧪 Número recibido: ${senderPhone}`);
+      console.log(`🧪 Número limpio: ${cleanPhone}`);
+      console.log(`🧪 Número permitido: +525521920710 (${TEST_PHONE_FULL} o ${TEST_PHONE_SHORT})`);
+      console.log(`🧪 Mensaje ignorado. Solo se procesan mensajes de +525521920710`);
+      console.log(`🧪 ============================================`);
       // Guardar mensaje en historial pero no responder
       sessions.addToHistory(cleanPhone, 'user', options.buttonTitle || incomingMessage);
       return;
     } else {
-      console.log(`🧪 MODO DE PRUEBAS ACTIVO: Procesando mensaje de número de pruebas (+525521920710)`);
+      console.log(`🧪 MODO DE PRUEBAS ACTIVO: Procesando mensaje de número de pruebas (${cleanPhone})`);
     }
   }
   
