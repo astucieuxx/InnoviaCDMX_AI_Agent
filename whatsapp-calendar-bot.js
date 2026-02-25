@@ -1617,16 +1617,12 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
   console.log(`🔍 [BOT MODE CHECK] ¿Es 'inactive'?: ${botMode === 'inactive'}`);
   console.log(`🔍 [BOT MODE CHECK] ¿Es 'active'?: ${botMode === 'active'}`);
   
-  const cleanPhone = senderPhone.replace(/\D/g, '');
-  const TEST_PHONE_FULL = '525521920710'; // Con código de país
-  const TEST_PHONE_SHORT = '5521920710'; // Sin código de país
-  
-  const cleanPhone2 = senderPhone.replace(/\D/g, '');
+  // cleanPhone ya está declarado arriba, solo declarar las constantes de prueba
   const TEST_PHONE_FULL = '525521920710'; // Con código de país
   const TEST_PHONE_SHORT = '5521920710'; // Sin código de país
   
   console.log(`🔍 [BOT MODE CHECK] Número recibido: ${senderPhone}`);
-  console.log(`🔍 [BOT MODE CHECK] Número limpio: ${cleanPhone2}`);
+  console.log(`🔍 [BOT MODE CHECK] Número limpio: ${cleanPhone}`);
   console.log(`🔍 [BOT MODE CHECK] TEST_PHONE_FULL: ${TEST_PHONE_FULL}`);
   console.log(`🔍 [BOT MODE CHECK] TEST_PHONE_SHORT: ${TEST_PHONE_SHORT}`);
   console.log(`🔍 ============================================\n`);
@@ -1655,7 +1651,7 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
     console.log(`⏸️  ============================================`);
     console.log(`⏸️  🚫 BOT INACTIVO - BLOQUEO TOTAL (SEGUNDA VERIFICACIÓN)`);
     console.log(`⏸️  ============================================`);
-    console.log(`⏸️  Número recibido: ${senderPhone} (limpio: ${cleanPhone2})`);
+    console.log(`⏸️  Número recibido: ${senderPhone} (limpio: ${cleanPhone})`);
     console.log(`⏸️  ⚠️  NO se procesará`);
     console.log(`⏸️  ⚠️  NO se enviará respuesta`);
     console.log(`⏸️  ⚠️  NO se guardará en historial`);
