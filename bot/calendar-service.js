@@ -800,15 +800,16 @@ async function createCalendarEvent(name, phone, email, dateStart, fechaBoda, cal
     description += '\n*Cita creada por Calendar bot*';
     
     // Formatear fecha/hora en formato RFC3339 para CDMX
-    // Necesitamos crear la fecha en formato ISO pero interpretada como hora local de CDMX
+    // CRITICAL: Usar toLocaleString para obtener componentes en CDMX, no métodos locales del servidor
     const formatDateTimeForCDMX = (date) => {
-      // Obtener componentes de la fecha en hora local
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      const hours = String(date.getHours()).padStart(2, '0');
-      const minutes = String(date.getMinutes()).padStart(2, '0');
-      const seconds = String(date.getSeconds()).padStart(2, '0');
+      // Obtener componentes de la fecha en CDMX usando toLocaleString
+      // Esto asegura que la fecha/hora sea correcta independientemente de la zona horaria del servidor
+      const year = date.toLocaleString('en-US', { timeZone: 'America/Mexico_City', year: 'numeric' });
+      const month = date.toLocaleString('en-US', { timeZone: 'America/Mexico_City', month: '2-digit' });
+      const day = date.toLocaleString('en-US', { timeZone: 'America/Mexico_City', day: '2-digit' });
+      const hours = date.toLocaleString('en-US', { timeZone: 'America/Mexico_City', hour: '2-digit', hour12: false });
+      const minutes = date.toLocaleString('en-US', { timeZone: 'America/Mexico_City', minute: '2-digit' });
+      const seconds = date.toLocaleString('en-US', { timeZone: 'America/Mexico_City', second: '2-digit' });
       
       // Formato: YYYY-MM-DDTHH:MM:SS (sin Z, para que Google Calendar lo interprete con timeZone)
       return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
