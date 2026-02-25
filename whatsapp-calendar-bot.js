@@ -1544,6 +1544,19 @@ function setTestModeStatus(active) {
 
 // Función para procesar mensajes entrantes (NUEVA ARQUITECTURA BASADA EN INTENTS)
 async function processIncomingMessage(senderPhone, incomingMessage, options = {}) {
+  // CRITICAL: Verificar estado del bot ANTES de cualquier logging o procesamiento
+  // Esto debe ser lo ABSOLUTAMENTE PRIMERO
+  const botMode = getBotMode();
+  const cleanPhone = senderPhone ? senderPhone.replace(/\D/g, '') : '';
+  
+  // Verificación inmediata y estricta
+  const isInactive = String(botMode).trim().toLowerCase() === 'inactive';
+  if (isInactive) {
+    // NO hacer NADA más - terminar inmediatamente
+    console.log(`⏸️  BOT INACTIVO - Mensaje de ${senderPhone} BLOQUEADO inmediatamente`);
+    throw new Error('BOT_INACTIVE_BLOCKED');
+  }
+  
   console.log(`\n🚨 ============================================`);
   console.log(`🚨 INICIO processIncomingMessage`);
   console.log(`🚨 ============================================`);
@@ -1556,7 +1569,6 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
   console.log(`\n🔍 ============================================`);
   console.log(`🔍 VERIFICACIÓN DE MODO DEL BOT`);
   console.log(`🔍 ============================================`);
-  const botMode = getBotMode();
   console.log(`🔍 [BOT MODE CHECK] Modo actual del bot: "${botMode}"`);
   console.log(`🔍 [BOT MODE CHECK] Tipo: ${typeof botMode}`);
   console.log(`🔍 [BOT MODE CHECK] ¿Es 'test'?: ${botMode === 'test'}`);
@@ -1567,8 +1579,12 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
   const TEST_PHONE_FULL = '525521920710'; // Con código de país
   const TEST_PHONE_SHORT = '5521920710'; // Sin código de país
   
+  const cleanPhone2 = senderPhone.replace(/\D/g, '');
+  const TEST_PHONE_FULL = '525521920710'; // Con código de país
+  const TEST_PHONE_SHORT = '5521920710'; // Sin código de país
+  
   console.log(`🔍 [BOT MODE CHECK] Número recibido: ${senderPhone}`);
-  console.log(`🔍 [BOT MODE CHECK] Número limpio: ${cleanPhone}`);
+  console.log(`🔍 [BOT MODE CHECK] Número limpio: ${cleanPhone2}`);
   console.log(`🔍 [BOT MODE CHECK] TEST_PHONE_FULL: ${TEST_PHONE_FULL}`);
   console.log(`🔍 [BOT MODE CHECK] TEST_PHONE_SHORT: ${TEST_PHONE_SHORT}`);
   console.log(`🔍 ============================================\n`);
@@ -1580,32 +1596,31 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
     console.error(`❌ [BOT MODE CHECK] Modo inválido detectado: "${botMode}"`);
     console.error(`❌ [BOT MODE CHECK] Por seguridad, bloqueando mensaje`);
     console.log(`⏸️  ============================================\n`);
-    return; // Bloquear si el modo es inválido
+    throw new Error('BOT_INVALID_MODE_BLOCKED');
   }
   
   // CRITICAL: Verificación estricta con comparación de strings
-  const isInactive = String(botMode).trim().toLowerCase() === 'inactive';
+  const isInactive2 = String(botMode).trim().toLowerCase() === 'inactive';
   const isTest = String(botMode).trim().toLowerCase() === 'test';
   const isActive = String(botMode).trim().toLowerCase() === 'active';
   
   console.log(`🔍 [BOT MODE CHECK] Comparaciones estrictas:`);
-  console.log(`🔍   - isInactive: ${isInactive}`);
+  console.log(`🔍   - isInactive: ${isInactive2}`);
   console.log(`🔍   - isTest: ${isTest}`);
   console.log(`🔍   - isActive: ${isActive}`);
   
-  if (isInactive) {
+  if (isInactive2) {
     console.log(`⏸️  ============================================`);
-    console.log(`⏸️  🚫 BOT INACTIVO - BLOQUEO TOTAL`);
+    console.log(`⏸️  🚫 BOT INACTIVO - BLOQUEO TOTAL (SEGUNDA VERIFICACIÓN)`);
     console.log(`⏸️  ============================================`);
-    console.log(`⏸️  Número recibido: ${senderPhone} (limpio: ${cleanPhone})`);
+    console.log(`⏸️  Número recibido: ${senderPhone} (limpio: ${cleanPhone2})`);
     console.log(`⏸️  ⚠️  NO se procesará`);
     console.log(`⏸️  ⚠️  NO se enviará respuesta`);
     console.log(`⏸️  ⚠️  NO se guardará en historial`);
     console.log(`⏸️  ⚠️  NO se enviará typing indicator`);
-    console.log(`⏸️  ⚠️  RETURN INMEDIATO - FUNCIÓN TERMINA AQUÍ`);
+    console.log(`⏸️  ⚠️  THROW INMEDIATO - FUNCIÓN TERMINA AQUÍ`);
     console.log(`⏸️  ============================================\n`);
-    // CRITICAL: Return inmediato - NO hacer NADA más
-    // Agregar throw para asegurar que la función termine
+    // CRITICAL: Throw inmediato - NO hacer NADA más
     throw new Error('BOT_INACTIVE_BLOCKED'); // Esto asegura que la función termine
   } else if (isTest) {
     console.log(`🧪 ============================================`);
