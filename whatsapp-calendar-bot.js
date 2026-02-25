@@ -1049,8 +1049,18 @@ async function sendWhatsAppMessage(phoneNumber, message, options = {}) {
   console.log(`\n🔍 ============================================`);
   console.log(`🔍 [SEND MSG CHECK] VERIFICACIÓN ANTES DE ENVIAR`);
   console.log(`🔍 ============================================`);
-  console.log(`🔍 Modo del bot: ${botMode}`);
+  console.log(`🔍 Modo del bot: "${botMode}"`);
+  console.log(`🔍 Tipo: ${typeof botMode}`);
   console.log(`🔍 Enviando a: ${phoneNumber} (limpio: ${cleanPhone})`);
+  
+  // Validación estricta del modo
+  const validModes = ['inactive', 'test', 'active'];
+  if (!validModes.includes(botMode)) {
+    console.error(`❌ [SEND MSG CHECK] Modo inválido: "${botMode}"`);
+    console.error(`❌ [SEND MSG CHECK] Por seguridad, bloqueando mensaje`);
+    console.log(`🔍 ============================================\n`);
+    return { success: false, blocked: true, reason: 'invalid_mode' };
+  }
   
   if (botMode === 'inactive') {
     console.log(`⏸️  ============================================`);
@@ -1412,21 +1422,31 @@ function getBotMode() {
       console.log(`🔍 [GET BOT MODE] status.mode: ${status.mode}, status.active: ${status.active}`);
       
       // Compatibilidad con formato antiguo
-      if (status.mode) {
-        console.log(`✅ [GET BOT MODE] Modo encontrado: ${status.mode}`);
-        return status.mode; // 'inactive', 'test', o 'active'
+      let mode = null;
+      if (status.mode && typeof status.mode === 'string') {
+        mode = status.mode.trim().toLowerCase();
+        console.log(`✅ [GET BOT MODE] Modo encontrado: "${mode}"`);
       } else if (status.active !== undefined) {
         // Migrar formato antiguo: active=true -> 'active', active=false -> 'inactive'
-        const migratedMode = status.active ? 'active' : 'inactive';
-        console.log(`⚠️  [GET BOT MODE] Formato antiguo detectado, migrando: active=${status.active} -> mode=${migratedMode}`);
-        return migratedMode;
+        mode = status.active ? 'active' : 'inactive';
+        console.log(`⚠️  [GET BOT MODE] Formato antiguo detectado, migrando: active=${status.active} -> mode="${mode}"`);
+      }
+      
+      // Validar que el modo sea uno de los valores permitidos
+      if (mode && ['inactive', 'test', 'active'].includes(mode)) {
+        console.log(`✅ [GET BOT MODE] Modo válido retornado: "${mode}"`);
+        return mode;
+      } else {
+        console.warn(`⚠️  [GET BOT MODE] Modo inválido o no encontrado: "${mode}", usando por defecto: 'active'`);
+        return 'active';
       }
     }
-    console.log(`⚠️  [GET BOT MODE] Archivo no existe o no tiene modo, usando por defecto: 'active'`);
+    console.log(`⚠️  [GET BOT MODE] Archivo no existe, usando por defecto: 'active'`);
     return 'active'; // Por defecto activo
   } catch (error) {
     console.error('❌ [GET BOT MODE] Error leyendo estado del bot:', error);
     console.error('   Stack:', error.stack);
+    console.warn(`⚠️  [GET BOT MODE] Error en lectura, usando por defecto: 'active'`);
     return 'active'; // Por defecto activo si hay error
   }
 }
@@ -1544,6 +1564,15 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
   console.log(`🔍 ============================================\n`);
   
   // Verificar según el modo - CRITICAL: Esto debe ser lo PRIMERO
+  // Validación estricta del modo
+  const validModes = ['inactive', 'test', 'active'];
+  if (!validModes.includes(botMode)) {
+    console.error(`❌ [BOT MODE CHECK] Modo inválido detectado: "${botMode}"`);
+    console.error(`❌ [BOT MODE CHECK] Por seguridad, bloqueando mensaje`);
+    console.log(`⏸️  ============================================\n`);
+    return; // Bloquear si el modo es inválido
+  }
+  
   if (botMode === 'inactive') {
     console.log(`⏸️  ============================================`);
     console.log(`⏸️  🚫 BOT INACTIVO - BLOQUEO TOTAL`);
