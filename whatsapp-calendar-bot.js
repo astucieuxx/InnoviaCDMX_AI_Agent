@@ -1111,11 +1111,21 @@ async function sendWhatsAppMessage(phoneNumber, message, options = {}) {
   
   try {
     // Verificar que tenemos los datos necesarios
+    console.log(`🔍 [SEND MSG] Verificando credenciales de Chakra...`);
+    console.log(`🔍 [SEND MSG] CHAKRA_API_KEY existe?: ${!!CHAKRA_API_KEY}`);
+    console.log(`🔍 [SEND MSG] CHAKRA_API_KEY length: ${CHAKRA_API_KEY ? CHAKRA_API_KEY.trim().length : 0}`);
+    console.log(`🔍 [SEND MSG] CHAKRA_PLUGIN_ID existe?: ${!!CHAKRA_PLUGIN_ID}`);
+    console.log(`🔍 [SEND MSG] CHAKRA_PLUGIN_ID value: ${CHAKRA_PLUGIN_ID ? CHAKRA_PLUGIN_ID.trim() : 'null'}`);
+    console.log(`🔍 [SEND MSG] CHAKRA_PLUGIN_ID length: ${CHAKRA_PLUGIN_ID ? CHAKRA_PLUGIN_ID.trim().length : 0}`);
+    
     if (!CHAKRA_API_KEY || CHAKRA_API_KEY.trim().length === 0) {
       throw new Error('CHAKRA_API_KEY no está configurado. Configúralo en Railway → Variables.');
     }
     
     if (!CHAKRA_PLUGIN_ID || CHAKRA_PLUGIN_ID.trim().length === 0) {
+      console.error(`❌ [SEND MSG] CHAKRA_PLUGIN_ID no está configurado o está vacío`);
+      console.error(`❌ [SEND MSG] Valor actual: "${CHAKRA_PLUGIN_ID}"`);
+      console.error(`❌ [SEND MSG] Verifica en Railway → Variables que CHAKRA_PLUGIN_ID esté configurado`);
       throw new Error('CHAKRA_PLUGIN_ID no está configurado. Obtén el Plugin ID del panel de Chakra.');
     }
     
