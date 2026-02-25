@@ -1363,26 +1363,40 @@ app.post('/webhook', async (req, res) => {
         const incomingMessage = message.text?.body || message.text || message.body;
         
         if (senderPhone && incomingMessage) {
+          console.log(`\n📨 ============================================`);
+          console.log(`📨 MENSAJE DE TEXTO RECIBIDO EN WEBHOOK`);
           console.log(`📨 ============================================`);
-          console.log(`📨 MENSAJE DE TEXTO RECIBIDO`);
           console.log(`📨 De: ${senderPhone}`);
           console.log(`📨 Mensaje: ${incomingMessage}`);
-          console.log(`📨 ============================================`);
+          console.log(`📨 Timestamp: ${new Date().toISOString()}`);
+          console.log(`📨 ============================================\n`);
           
           // CRITICAL: Verificar estado del bot ANTES de procesar
+          console.log(`🔍 [WEBHOOK CHECK] Iniciando verificación del modo del bot...`);
           const botMode = getBotMode();
           const cleanPhone = senderPhone.replace(/\D/g, '');
           const isInactive = String(botMode).trim().toLowerCase() === 'inactive';
           
+          console.log(`🔍 [WEBHOOK CHECK] ============================================`);
           console.log(`🔍 [WEBHOOK CHECK] Verificación antes de processIncomingMessage`);
-          console.log(`🔍 [WEBHOOK CHECK] Modo del bot: "${botMode}"`);
-          console.log(`🔍 [WEBHOOK CHECK] ¿Es inactive?: ${isInactive}`);
+          console.log(`🔍 [WEBHOOK CHECK] Modo del bot leído: "${botMode}"`);
+          console.log(`🔍 [WEBHOOK CHECK] Tipo: ${typeof botMode}`);
+          console.log(`🔍 [WEBHOOK CHECK] Comparación: String("${botMode}").trim().toLowerCase() === 'inactive'`);
+          console.log(`🔍 [WEBHOOK CHECK] Resultado: ${isInactive}`);
+          console.log(`🔍 [WEBHOOK CHECK] ============================================\n`);
           
           if (isInactive) {
-            console.log(`⏸️  [WEBHOOK CHECK] Bot INACTIVO - NO se llamará a processIncomingMessage`);
-            console.log(`⏸️  [WEBHOOK CHECK] Mensaje bloqueado en el webhook`);
-            return; // No procesar el mensaje
+            console.log(`⏸️  ============================================`);
+            console.log(`⏸️  [WEBHOOK CHECK] BOT INACTIVO - BLOQUEO EN WEBHOOK`);
+            console.log(`⏸️  ============================================`);
+            console.log(`⏸️  NO se llamará a processIncomingMessage`);
+            console.log(`⏸️  NO se procesará el mensaje`);
+            console.log(`⏸️  Mensaje bloqueado completamente`);
+            console.log(`⏸️  ============================================\n`);
+            continue; // Saltar este mensaje y continuar con el siguiente (si hay)
           }
+          
+          console.log(`✅ [WEBHOOK CHECK] Bot no está inactive, continuando con processIncomingMessage...\n`);
           
           // Procesar el mensaje (no esperar para responder rápido al webhook)
           processIncomingMessage(senderPhone, incomingMessage, {}).catch(error => {
