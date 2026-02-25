@@ -1623,10 +1623,13 @@ app.post('/webhook', async (req, res) => {
     }
 
     // Responder 200 inmediatamente para confirmar recepción
-    res.sendStatus(200);
+    sendResponse(200);
   } catch (error) {
     console.error('❌ Error en webhook:', error);
-    res.sendStatus(500);
+    console.error('   Stack:', error.stack);
+    // CRITICAL: Siempre responder 200 OK para que Chakra no deje de enviar
+    // Si respondemos 500, Chakra puede dejar de enviar mensajes
+    sendResponse(200, { status: 'ok', message: 'Error processing webhook, but acknowledged' });
   }
 });
 
