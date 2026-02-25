@@ -1273,6 +1273,31 @@ app.post('/api/webhook-test', (req, res) => {
   });
 });
 
+// Endpoint de diagnóstico del webhook
+app.get('/api/webhook-status', (req, res) => {
+  const botMode = getBotMode();
+  res.json({
+    status: 'ok',
+    webhookEndpoint: '/webhook',
+    currentBotMode: botMode,
+    webhookAccessible: true,
+    instructions: {
+      step1: 'Verifica que Chakra tiene configurado el webhook con esta URL:',
+      webhookUrl: `${req.protocol}://${req.get('host')}/webhook`,
+      step2: 'Prueba el webhook manualmente con:',
+      testCommand: `curl -X POST ${req.protocol}://${req.get('host')}/api/webhook-test -H "Content-Type: application/json" -d '{"test": "data"}'`,
+      step3: 'Si no ves logs cuando envías mensajes, Chakra no está enviando al webhook',
+      step4: 'Verifica en el panel de Chakra si hay errores del webhook'
+    },
+    troubleshooting: {
+      noLogs: 'Si no ves logs "🌐 WEBHOOK POST RECIBIDO", Chakra no está enviando mensajes',
+      solution: 'Reconfigura el webhook en Chakra o verifica que esté activo',
+      checkChakra: 'Revisa el panel de Chakra para ver si hay errores del webhook'
+    },
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Serve index.html at /dashboard (para no interferir con el endpoint raíz)
 app.get('/dashboard', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
