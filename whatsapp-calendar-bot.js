@@ -1261,9 +1261,11 @@ app.get('/webhook', (req, res) => {
 app.post('/webhook', async (req, res) => {
   // CRITICAL: Verificar estado del bot INMEDIATAMENTE, antes de cualquier procesamiento
   // Si está inactive, responder 200 OK y terminar SIN procesar nada
+  // Si está en modo test, verificar el número antes de procesar
   try {
     const botMode = getBotMode();
     const isInactive = String(botMode).trim().toLowerCase() === 'inactive';
+    const isTestMode = String(botMode).trim().toLowerCase() === 'test';
     
     if (isInactive) {
       console.log('\n⏸️  ============================================');
@@ -1275,6 +1277,68 @@ app.post('/webhook', async (req, res) => {
       console.log('⏸️  ============================================\n');
       // Responder inmediatamente y terminar
       return res.status(200).json({ status: 'ok', message: 'Bot inactive, message ignored' });
+    }
+    
+    // Si está en modo test, verificar el número ANTES de procesar
+    if (isTestMode) {
+      // Extraer el número del remitente del body
+      let senderPhone = null;
+      const body = req.body;
+      
+      // Intentar extraer el número de diferentes formatos
+      if (body.object === 'whatsapp_business_account' && body.entry) {
+        for (const entry of body.entry) {
+          const changes = entry.changes || [];
+          for (const change of changes) {
+            const value = change.value || {};
+            const messages = value.messages || [];
+            if (messages.length > 0) {
+              senderPhone = messages[0].from || messages[0].wa_id;
+              break;
+            }
+          }
+          if (senderPhone) break;
+        }
+      } else if (body.messages && Array.isArray(body.messages) && body.messages.length > 0) {
+        senderPhone = body.messages[0].from || body.messages[0].wa_id;
+      } else if (body.from) {
+        senderPhone = body.from;
+      }
+      
+      if (senderPhone) {
+        const cleanPhone = senderPhone.replace(/\D/g, '');
+        const TEST_PHONE_FULL = '525521920710';
+        const TEST_PHONE_SHORT = '5521920710';
+        const exactMatchFull = cleanPhone === TEST_PHONE_FULL;
+        const exactMatchShort = cleanPhone === TEST_PHONE_SHORT;
+        const endsWithMatch = cleanPhone.length >= 10 && cleanPhone.length <= 12 && cleanPhone.endsWith(TEST_PHONE_SHORT);
+        const phoneMatches = exactMatchFull || exactMatchShort || endsWithMatch;
+        
+        console.log('\n🧪 ============================================');
+        console.log('🧪 MODO DE PRUEBAS - VERIFICACIÓN EN WEBHOOK');
+        console.log('🧪 ============================================');
+        console.log('🧪 Número recibido:', senderPhone);
+        console.log('🧪 Número limpio:', cleanPhone);
+        console.log('🧪 Número permitido: +525521920710');
+        console.log('🧪 Comparaciones:');
+        console.log(`🧪   - ${cleanPhone} === ${TEST_PHONE_FULL}? ${exactMatchFull}`);
+        console.log(`🧪   - ${cleanPhone} === ${TEST_PHONE_SHORT}? ${exactMatchShort}`);
+        console.log(`🧪   - endsWith(${TEST_PHONE_SHORT})? ${endsWithMatch}`);
+        console.log(`🧪   - phoneMatches: ${phoneMatches}`);
+        
+        if (!phoneMatches) {
+          console.log('🧪 🚫 BLOQUEADO - No es el número de pruebas');
+          console.log('🧪 Respondiendo 200 OK sin procesar mensaje');
+          console.log('🧪 ============================================\n');
+          return res.status(200).json({ status: 'ok', message: 'Test mode active, number not allowed' });
+        } else {
+          console.log('🧪 ✅ PERMITIDO - Es el número de pruebas');
+          console.log('🧪 Continuando con el procesamiento...');
+          console.log('🧪 ============================================\n');
+        }
+      } else {
+        console.log('🧪 ⚠️  No se pudo extraer el número del remitente, continuando...');
+      }
     }
   } catch (error) {
     // Si hay error leyendo el estado, por seguridad NO procesar
