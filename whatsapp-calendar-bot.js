@@ -1369,11 +1369,26 @@ app.post('/webhook', async (req, res) => {
           console.log(`📨 Mensaje: ${incomingMessage}`);
           console.log(`📨 ============================================`);
           
+          // CRITICAL: Verificar estado del bot ANTES de procesar
+          const botMode = getBotMode();
+          const cleanPhone = senderPhone.replace(/\D/g, '');
+          const isInactive = String(botMode).trim().toLowerCase() === 'inactive';
+          
+          console.log(`🔍 [WEBHOOK CHECK] Verificación antes de processIncomingMessage`);
+          console.log(`🔍 [WEBHOOK CHECK] Modo del bot: "${botMode}"`);
+          console.log(`🔍 [WEBHOOK CHECK] ¿Es inactive?: ${isInactive}`);
+          
+          if (isInactive) {
+            console.log(`⏸️  [WEBHOOK CHECK] Bot INACTIVO - NO se llamará a processIncomingMessage`);
+            console.log(`⏸️  [WEBHOOK CHECK] Mensaje bloqueado en el webhook`);
+            return; // No procesar el mensaje
+          }
+          
           // Procesar el mensaje (no esperar para responder rápido al webhook)
           processIncomingMessage(senderPhone, incomingMessage, {}).catch(error => {
             // Si el error es porque el bot está inactivo, no es un error real
-            if (error.message === 'BOT_INACTIVE_BLOCKED') {
-              console.log(`⏸️  Mensaje bloqueado correctamente - Bot inactivo`);
+            if (error.message === 'BOT_INACTIVE_BLOCKED' || error.message === 'BOT_TEST_MODE_BLOCKED' || error.message === 'BOT_INVALID_MODE_BLOCKED') {
+              console.log(`⏸️  Mensaje bloqueado correctamente - ${error.message}`);
               return; // No loguear como error
             }
             console.error('❌ Error procesando mensaje:', error);
@@ -1393,13 +1408,26 @@ app.post('/webhook', async (req, res) => {
           
           console.log(`🔘 Botón presionado por ${senderPhone}: ${buttonId} - "${buttonTitle}"`);
           
+          // CRITICAL: Verificar estado del bot ANTES de procesar botón
+          const botMode = getBotMode();
+          const isInactive = String(botMode).trim().toLowerCase() === 'inactive';
+          
+          console.log(`🔍 [WEBHOOK CHECK] Verificación antes de processIncomingMessage (botón)`);
+          console.log(`🔍 [WEBHOOK CHECK] Modo del bot: "${botMode}"`);
+          console.log(`🔍 [WEBHOOK CHECK] ¿Es inactive?: ${isInactive}`);
+          
+          if (isInactive) {
+            console.log(`⏸️  [WEBHOOK CHECK] Bot INACTIVO - NO se procesará el botón`);
+            return; // No procesar el botón
+          }
+          
           // Procesar la respuesta del botón como si fuera un mensaje de texto
           // El botón puede tener un ID como "slot_0", "slot_1", etc.
           if (senderPhone && buttonId) {
             processIncomingMessage(senderPhone, buttonId, { isButtonClick: true, buttonTitle }).catch(error => {
               // Si el error es porque el bot está inactivo, no es un error real
-              if (error.message === 'BOT_INACTIVE_BLOCKED') {
-                console.log(`⏸️  Botón bloqueado correctamente - Bot inactivo`);
+              if (error.message === 'BOT_INACTIVE_BLOCKED' || error.message === 'BOT_TEST_MODE_BLOCKED' || error.message === 'BOT_INVALID_MODE_BLOCKED') {
+                console.log(`⏸️  Botón bloqueado correctamente - ${error.message}`);
                 return; // No loguear como error
               }
               console.error('Error procesando respuesta de botón:', error);
