@@ -1588,16 +1588,29 @@ function setTestModeStatus(active) {
 async function processIncomingMessage(senderPhone, incomingMessage, options = {}) {
   // CRITICAL: Verificar estado del bot ANTES de cualquier logging o procesamiento
   // Esto debe ser lo ABSOLUTAMENTE PRIMERO
+  console.log(`\n🔒 ============================================`);
+  console.log(`🔒 VERIFICACIÓN INMEDIATA - ANTES DE TODO`);
+  console.log(`🔒 ============================================`);
   const botMode = getBotMode();
+  console.log(`🔒 Modo leído: "${botMode}"`);
   const cleanPhone = senderPhone ? senderPhone.replace(/\D/g, '') : '';
   
   // Verificación inmediata y estricta
   const isInactive = String(botMode).trim().toLowerCase() === 'inactive';
+  console.log(`🔒 Comparación: String("${botMode}").trim().toLowerCase() === 'inactive'`);
+  console.log(`🔒 Resultado: ${isInactive}`);
+  
   if (isInactive) {
     // NO hacer NADA más - terminar inmediatamente
-    console.log(`⏸️  BOT INACTIVO - Mensaje de ${senderPhone} BLOQUEADO inmediatamente`);
+    console.log(`⏸️  ============================================`);
+    console.log(`⏸️  BOT INACTIVO - BLOQUEO INMEDIATO`);
+    console.log(`⏸️  ============================================`);
+    console.log(`⏸️  Mensaje de ${senderPhone} BLOQUEADO`);
+    console.log(`⏸️  THROW INMEDIATO - FUNCIÓN TERMINA AQUÍ`);
+    console.log(`⏸️  ============================================\n`);
     throw new Error('BOT_INACTIVE_BLOCKED');
   }
+  console.log(`✅ Bot no está inactive, continuando...\n`);
   
   console.log(`\n🚨 ============================================`);
   console.log(`🚨 INICIO processIncomingMessage`);
