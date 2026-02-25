@@ -968,8 +968,10 @@ async function sendTypingIndicator(phoneNumber, action = 'typing_on') {
   
   // CAPA DE SEGURIDAD: Verificar estado del bot ANTES de enviar cualquier indicador
   const botMode = getBotMode();
+  console.log(`🔍 [TYPING CHECK] Modo del bot: ${botMode}, número: ${phoneNumber} (${cleanPhone})`);
   
   if (botMode === 'inactive') {
+    console.log(`⏸️  [TYPING CHECK] Bot INACTIVO - Typing indicator BLOQUEADO`);
     return; // No enviar typing indicator si el bot está inactivo
   } else if (botMode === 'test') {
     const TEST_PHONE_FULL = '525521920710';
@@ -980,8 +982,13 @@ async function sendTypingIndicator(phoneNumber, action = 'typing_on') {
     const phoneMatches = exactMatchFull || exactMatchShort || endsWithMatch;
     
     if (!phoneMatches) {
+      console.log(`🧪 [TYPING CHECK] MODO DE PRUEBAS - Typing indicator BLOQUEADO para ${phoneNumber} (${cleanPhone})`);
       return; // No enviar typing indicator si no es el número de pruebas
+    } else {
+      console.log(`🧪 [TYPING CHECK] MODO DE PRUEBAS - Número permitido, enviando typing indicator`);
     }
+  } else {
+    console.log(`✅ [TYPING CHECK] Bot ACTIVO - Enviando typing indicator`);
   }
   
   try {
@@ -1037,12 +1044,21 @@ async function sendWhatsAppMessage(phoneNumber, message, options = {}) {
   // Definir fuera del try para que esté disponible en el catch
   const cleanPhone = phoneNumber ? phoneNumber.replace(/\D/g, '') : 'unknown';
   
-  // CAPA DE SEGURIDAD: Verificar estado del bot ANTES de enviar cualquier mensaje
+  // CAPA DE SEGURIDAD CRÍTICA: Verificar estado del bot ANTES de enviar cualquier mensaje
   const botMode = getBotMode();
-  console.log(`🔍 [SEND MSG CHECK] Modo del bot: ${botMode}, enviando a ${phoneNumber} (${cleanPhone})`);
+  console.log(`\n🔍 ============================================`);
+  console.log(`🔍 [SEND MSG CHECK] VERIFICACIÓN ANTES DE ENVIAR`);
+  console.log(`🔍 ============================================`);
+  console.log(`🔍 Modo del bot: ${botMode}`);
+  console.log(`🔍 Enviando a: ${phoneNumber} (limpio: ${cleanPhone})`);
   
   if (botMode === 'inactive') {
-    console.log(`⏸️  [SEND MSG CHECK] Bot INACTIVO - Mensaje BLOQUEADO`);
+    console.log(`⏸️  ============================================`);
+    console.log(`⏸️  [SEND MSG CHECK] Bot INACTIVO - MENSAJE BLOQUEADO`);
+    console.log(`⏸️  ============================================`);
+    console.log(`⏸️  NO se enviará el mensaje`);
+    console.log(`⏸️  Return inmediato con blocked=true`);
+    console.log(`⏸️  ============================================\n`);
     return { success: false, blocked: true, reason: 'bot_inactive' };
   } else if (botMode === 'test') {
     const TEST_PHONE_FULL = '525521920710';
@@ -1053,10 +1069,21 @@ async function sendWhatsAppMessage(phoneNumber, message, options = {}) {
     const phoneMatches = exactMatchFull || exactMatchShort || endsWithMatch;
     
     if (!phoneMatches) {
-      console.log(`🧪 [SEND MSG CHECK] MODO DE PRUEBAS - Mensaje BLOQUEADO a ${phoneNumber} (${cleanPhone})`);
+      console.log(`🧪 ============================================`);
+      console.log(`🧪 [SEND MSG CHECK] MODO DE PRUEBAS - MENSAJE BLOQUEADO`);
+      console.log(`🧪 ============================================`);
+      console.log(`🧪 Número: ${phoneNumber} (limpio: ${cleanPhone})`);
+      console.log(`🧪 NO se enviará el mensaje`);
+      console.log(`🧪 Return inmediato con blocked=true`);
+      console.log(`🧪 ============================================\n`);
       return { success: false, blocked: true, reason: 'test_mode_active' };
+    } else {
+      console.log(`🧪 [SEND MSG CHECK] MODO DE PRUEBAS - Número permitido, enviando mensaje`);
     }
+  } else {
+    console.log(`✅ [SEND MSG CHECK] Bot ACTIVO - Enviando mensaje`);
   }
+  console.log(`🔍 ============================================\n`);
   
   try {
     // Verificar que tenemos los datos necesarios
@@ -1516,16 +1543,20 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
   console.log(`🔍 [BOT MODE CHECK] TEST_PHONE_SHORT: ${TEST_PHONE_SHORT}`);
   console.log(`🔍 ============================================\n`);
   
-  // Verificar según el modo
+  // Verificar según el modo - CRITICAL: Esto debe ser lo PRIMERO
   if (botMode === 'inactive') {
     console.log(`⏸️  ============================================`);
-    console.log(`⏸️  BOT INACTIVO - MENSAJE BLOQUEADO`);
+    console.log(`⏸️  🚫 BOT INACTIVO - BLOQUEO TOTAL`);
     console.log(`⏸️  ============================================`);
-    console.log(`⏸️  Número recibido: ${senderPhone}`);
-    console.log(`⏸️  ⚠️  NO se procesará, NO se enviará respuesta`);
-    console.log(`⏸️  ============================================`);
-    // NO guardar en historial, NO enviar mensaje, NO hacer nada
-    return;
+    console.log(`⏸️  Número recibido: ${senderPhone} (limpio: ${cleanPhone})`);
+    console.log(`⏸️  ⚠️  NO se procesará`);
+    console.log(`⏸️  ⚠️  NO se enviará respuesta`);
+    console.log(`⏸️  ⚠️  NO se guardará en historial`);
+    console.log(`⏸️  ⚠️  NO se enviará typing indicator`);
+    console.log(`⏸️  ⚠️  RETURN INMEDIATO - FUNCIÓN TERMINA AQUÍ`);
+    console.log(`⏸️  ============================================\n`);
+    // CRITICAL: Return inmediato - NO hacer NADA más
+    return; // Esto debe terminar la función completamente
   } else if (botMode === 'test') {
     console.log(`🧪 ============================================`);
     console.log(`🧪 MODO DE PRUEBAS ACTIVO - VERIFICANDO NÚMERO`);
@@ -1549,11 +1580,14 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
       console.log(`🧪 ============================================`);
       console.log(`🧪 Número recibido: ${senderPhone} (limpio: ${cleanPhone})`);
       console.log(`🧪 Número permitido: +525521920710 (${TEST_PHONE_FULL} o ${TEST_PHONE_SHORT})`);
-      console.log(`🧪 ⚠️  BLOQUEADO: NO se procesará, NO se enviará respuesta`);
-      console.log(`🧪 ⚠️  RETURN INMEDIATO - NO CONTINUAR`);
+      console.log(`🧪 ⚠️  NO se procesará`);
+      console.log(`🧪 ⚠️  NO se enviará respuesta`);
+      console.log(`🧪 ⚠️  NO se guardará en historial`);
+      console.log(`🧪 ⚠️  NO se enviará typing indicator`);
+      console.log(`🧪 ⚠️  RETURN INMEDIATO - FUNCIÓN TERMINA AQUÍ`);
       console.log(`🧪 ============================================\n`);
-      // NO guardar en historial, NO enviar mensaje, NO hacer nada
-      return;
+      // CRITICAL: Return inmediato - NO hacer NADA más
+      return; // Esto debe terminar la función completamente
     } else {
       console.log(`🧪 ✅ MODO DE PRUEBAS: Número permitido (${cleanPhone})`);
       console.log(`🧪 ✅ Continuando procesamiento...`);
