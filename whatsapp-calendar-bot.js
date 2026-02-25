@@ -1467,13 +1467,15 @@ app.post('/webhook', async (req, res) => {
 // Modos: 'inactive' (inactivo), 'test' (solo +525521920710), 'active' (todos)
 function getBotMode() {
   try {
+    // CRITICAL: Usar path absoluto para Railway
     const statusPath = path.join(__dirname, 'bot_status.json');
     console.log(`🔍 [GET BOT MODE] Leyendo archivo: ${statusPath}`);
+    console.log(`🔍 [GET BOT MODE] __dirname: ${__dirname}`);
     console.log(`🔍 [GET BOT MODE] ¿Existe?: ${fs.existsSync(statusPath)}`);
     
     if (fs.existsSync(statusPath)) {
       const statusData = fs.readFileSync(statusPath, 'utf8');
-      console.log(`🔍 [GET BOT MODE] Contenido del archivo: ${statusData}`);
+      console.log(`🔍 [GET BOT MODE] Contenido del archivo (raw): ${statusData}`);
       const status = JSON.parse(statusData);
       console.log(`🔍 [GET BOT MODE] status.mode: ${status.mode}, status.active: ${status.active}`);
       
@@ -1504,17 +1506,17 @@ function getBotMode() {
         console.log(`✅ [GET BOT MODE] Modo válido retornado: "${mode}"`);
         return mode;
       } else {
-        console.warn(`⚠️  [GET BOT MODE] Modo inválido o no encontrado: "${mode}", usando por defecto: 'active'`);
-        return 'active';
+        console.warn(`⚠️  [GET BOT MODE] Modo inválido o no encontrado: "${mode}", usando por defecto: 'inactive' (SEGURIDAD)`);
+        return 'inactive'; // Por defecto INACTIVE por seguridad
       }
     }
-    console.log(`⚠️  [GET BOT MODE] Archivo no existe, usando por defecto: 'active'`);
-    return 'active'; // Por defecto activo
+    console.log(`⚠️  [GET BOT MODE] Archivo no existe, usando por defecto: 'inactive' (SEGURIDAD)`);
+    return 'inactive'; // Por defecto INACTIVE por seguridad
   } catch (error) {
     console.error('❌ [GET BOT MODE] Error leyendo estado del bot:', error);
     console.error('   Stack:', error.stack);
-    console.warn(`⚠️  [GET BOT MODE] Error en lectura, usando por defecto: 'active'`);
-    return 'active'; // Por defecto activo si hay error
+    console.warn(`⚠️  [GET BOT MODE] Error en lectura, usando por defecto: 'inactive' (SEGURIDAD)`);
+    return 'inactive'; // Por defecto INACTIVE por seguridad si hay error
   }
 }
 
