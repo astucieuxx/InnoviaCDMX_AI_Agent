@@ -4152,9 +4152,16 @@ initGoogleAuth().then(() => {
     console.log(`✅ Bot de WhatsApp escuchando en puerto ${PORT}`);
     console.log(`📱 Proveedor: Chakra (BSP de WhatsApp)`);
     if (CHAKRA_API_KEY) {
-      console.log(`🔑 Chakra API Key: Configurado`);
+      console.log(`🔑 Chakra API Key: Configurado (length: ${CHAKRA_API_KEY.trim().length})`);
     } else {
       console.log(`⚠️  Chakra API Key: No configurado`);
+    }
+    if (CHAKRA_PLUGIN_ID) {
+      console.log(`🔌 Chakra Plugin ID: Configurado (${CHAKRA_PLUGIN_ID.trim()})`);
+    } else {
+      console.log(`⚠️  Chakra Plugin ID: No configurado`);
+      console.log(`⚠️  ⚠️  ⚠️  IMPORTANTE: Configura CHAKRA_PLUGIN_ID en Railway → Variables`);
+      console.log(`⚠️  ⚠️  ⚠️  Valor esperado: 32b42eb8-d886-429d-a0c2-12964b08bf21`);
     }
     if (authClient) {
       console.log(`📅 Google Calendar: Conectado`);
