@@ -963,10 +963,26 @@ let whatsappPhoneNumberId = null;
 // Función para enviar mensajes por WhatsApp usando API de Chakra
 // Función para enviar indicador de "escribiendo..."
 async function sendTypingIndicator(phoneNumber, action = 'typing_on') {
-  try {
-    // Limpiar número de teléfono
-    const cleanPhone = phoneNumber.replace(/\D/g, '');
+  // Limpiar número de teléfono
+  const cleanPhone = phoneNumber.replace(/\D/g, '');
+  
+  // CAPA DE SEGURIDAD: Verificar modo de pruebas ANTES de enviar cualquier indicador
+  const testModeActive = getTestModeStatus();
+  if (testModeActive) {
+    const TEST_PHONE_FULL = '525521920710';
+    const TEST_PHONE_SHORT = '5521920710';
+    const phoneMatches = cleanPhone === TEST_PHONE_FULL || 
+                         cleanPhone === TEST_PHONE_SHORT ||
+                         (cleanPhone.length >= 10 && cleanPhone.length <= 12 && cleanPhone.endsWith(TEST_PHONE_SHORT));
     
+    if (!phoneMatches) {
+      console.log(`🧪 BLOQUEO EN sendTypingIndicator - MODO DE PRUEBAS ACTIVO: ${phoneNumber} (${cleanPhone})`);
+      // NO enviar el indicador, retornar silenciosamente
+      return;
+    }
+  }
+  
+  try {
     // Verificar que tenemos los datos necesarios
     if (!CHAKRA_PLUGIN_ID || !whatsappPhoneNumberId) {
       // Si no tenemos los datos, simplemente retornar sin error (no crítico)
@@ -1018,6 +1034,27 @@ async function sendWhatsAppMessage(phoneNumber, message, options = {}) {
   // Limpiar número de teléfono (remover espacios, guiones, etc.)
   // Definir fuera del try para que esté disponible en el catch
   const cleanPhone = phoneNumber ? phoneNumber.replace(/\D/g, '') : 'unknown';
+  
+  // CAPA DE SEGURIDAD: Verificar modo de pruebas ANTES de enviar cualquier mensaje
+  const testModeActive = getTestModeStatus();
+  if (testModeActive) {
+    const TEST_PHONE_FULL = '525521920710';
+    const TEST_PHONE_SHORT = '5521920710';
+    const phoneMatches = cleanPhone === TEST_PHONE_FULL || 
+                         cleanPhone === TEST_PHONE_SHORT ||
+                         (cleanPhone.length >= 10 && cleanPhone.length <= 12 && cleanPhone.endsWith(TEST_PHONE_SHORT));
+    
+    if (!phoneMatches) {
+      console.log(`🧪 ============================================`);
+      console.log(`🧪 BLOQUEO EN sendWhatsAppMessage - MODO DE PRUEBAS ACTIVO`);
+      console.log(`🧪 ============================================`);
+      console.log(`🧪 Intento de enviar mensaje a ${phoneNumber} (limpio: ${cleanPhone})`);
+      console.log(`🧪 Mensaje bloqueado. Solo se permiten mensajes a +525521920710`);
+      console.log(`🧪 ============================================`);
+      // NO enviar el mensaje, retornar sin error para evitar que se propague
+      return { success: false, blocked: true, reason: 'test_mode_active' };
+    }
+  }
   
   try {
     // Verificar que tenemos los datos necesarios
@@ -1402,47 +1439,49 @@ function setTestModeStatus(active) {
 
 // Función para procesar mensajes entrantes (NUEVA ARQUITECTURA BASADA EN INTENTS)
 async function processIncomingMessage(senderPhone, incomingMessage, options = {}) {
-  // Verificar si el bot está activo
-  if (!getBotStatus()) {
-    console.log(`⏸️  Bot está INACTIVO. Mensaje de ${senderPhone} no será procesado.`);
-    const cleanPhone = senderPhone.replace(/\D/g, '');
-    // Guardar mensaje en historial pero no responder
-    sessions.addToHistory(cleanPhone, 'user', options.buttonTitle || incomingMessage);
-    // Opcional: enviar un mensaje informando que el bot está inactivo
-    // await sendWhatsAppMessage(cleanPhone, 'Lo siento, el bot está temporalmente inactivo. Por favor, intenta más tarde o contacta directamente al negocio.');
-    return;
-  }
-  
-  // Verificar modo de pruebas
+  // CRITICAL: Verificar modo de pruebas PRIMERO, antes de cualquier otra cosa
+  // Esto debe ser lo primero para evitar cualquier procesamiento o envío de mensajes
   const testModeActive = getTestModeStatus();
-  // Limpiar número: remover todos los caracteres no numéricos
   const cleanPhone = senderPhone.replace(/\D/g, '');
-  // Número de pruebas completo: +525521920710 (México: código 52 + 5521920710)
   const TEST_PHONE_FULL = '525521920710'; // Con código de país
   const TEST_PHONE_SHORT = '5521920710'; // Sin código de país (últimos 10 dígitos)
   
   if (testModeActive) {
     // Si el modo de pruebas está activo, solo procesar mensajes del número de pruebas
     // Comparar números limpios: puede venir con o sin código de país
-    const phoneMatches = cleanPhone === TEST_PHONE_FULL || 
-                         cleanPhone === TEST_PHONE_SHORT ||
-                         cleanPhone.endsWith(TEST_PHONE_SHORT);
+    // Número de prueba: +525521920710
+    // Puede llegar como: 525521920710 (con código) o 5521920710 (sin código)
+    
+    // Comparación estricta: solo aceptar números exactos o que terminen con el número corto
+    // pero con validación de longitud para evitar coincidencias accidentales
+    const phoneMatches = cleanPhone === TEST_PHONE_FULL ||  // Exacto: 525521920710
+                         cleanPhone === TEST_PHONE_SHORT ||  // Exacto: 5521920710
+                         (cleanPhone.length >= 10 && cleanPhone.length <= 12 && cleanPhone.endsWith(TEST_PHONE_SHORT)); // Termina con 5521920710
     
     if (!phoneMatches) {
       console.log(`🧪 ============================================`);
-      console.log(`🧪 MODO DE PRUEBAS ACTIVO - MENSAJE BLOQUEADO`);
+      console.log(`🧪 MODO DE PRUEBAS ACTIVO - MENSAJE BLOQUEADO COMPLETAMENTE`);
       console.log(`🧪 ============================================`);
       console.log(`🧪 Número recibido: ${senderPhone}`);
       console.log(`🧪 Número limpio: ${cleanPhone}`);
       console.log(`🧪 Número permitido: +525521920710 (${TEST_PHONE_FULL} o ${TEST_PHONE_SHORT})`);
-      console.log(`🧪 Mensaje ignorado. Solo se procesan mensajes de +525521920710`);
+      console.log(`🧪 ⚠️  NO se procesará, NO se enviará respuesta, NO se guardará en historial`);
+      console.log(`🧪 Solo se procesan mensajes de +525521920710`);
       console.log(`🧪 ============================================`);
-      // Guardar mensaje en historial pero no responder
-      sessions.addToHistory(cleanPhone, 'user', options.buttonTitle || incomingMessage);
+      // NO guardar en historial, NO enviar mensaje, NO hacer nada
+      // Return inmediato sin procesar nada
       return;
     } else {
       console.log(`🧪 MODO DE PRUEBAS ACTIVO: Procesando mensaje de número de pruebas (${cleanPhone})`);
     }
+  }
+  
+  // Verificar si el bot está activo (solo si pasó la verificación de modo de pruebas)
+  if (!getBotStatus()) {
+    console.log(`⏸️  Bot está INACTIVO. Mensaje de ${senderPhone} no será procesado.`);
+    // Guardar mensaje en historial pero no responder
+    sessions.addToHistory(cleanPhone, 'user', options.buttonTitle || incomingMessage);
+    return;
   }
   
   // Enviar indicador de "escribiendo..." inmediatamente
