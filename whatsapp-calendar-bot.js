@@ -1825,18 +1825,26 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
             console.error(`📅 ============================================`);
             console.error(`📅 El evento retornó null. Revisa los logs anteriores para ver el error.`);
             console.error(`📅 ============================================`);
+            
+            // Enviar mensaje de error al usuario
+            const nombrePrimero = getClientFirstName(sessionData) || getClientName(sessionData) || 'Cliente';
+            await sendWhatsAppMessage(cleanPhone, `❌ Lo siento ${nombrePrimero}, hubo un error al crear tu cita en el calendario. Por favor, intenta de nuevo o contacta directamente con nosotros. 💫`);
+            sessions.addToHistory(cleanPhone, 'assistant', 'Error al crear evento en calendario.');
+            return; // Salir temprano si no se pudo crear el evento
           }
         }
         
         // Send confirmation (use first name for message, but full name is already saved in calendar)
-        const confirmationMessage = getAppointmentConfirmationMessage({
-          name: getClientFirstName(sessionData) || getClientName(sessionData) || 'Cliente',
-          date: appointmentDateForEvent || 'la fecha seleccionada',
-          time: selectedSlot.time,
-          calendarLink: calendarEvent?.htmlLink
-        });
-        
-        await sendWhatsAppMessage(cleanPhone, confirmationMessage);
+        // Solo enviar si el evento se creó exitosamente
+        if (calendarEvent && calendarEvent.id) {
+          const confirmationMessage = getAppointmentConfirmationMessage({
+            name: getClientFirstName(sessionData) || getClientName(sessionData) || 'Cliente',
+            date: appointmentDateForEvent || 'la fecha seleccionada',
+            time: selectedSlot.time,
+            calendarLink: calendarEvent?.htmlLink
+          });
+          
+          await sendWhatsAppMessage(cleanPhone, confirmationMessage);
         
         // Add confirmation to history
         sessions.addToHistory(cleanPhone, 'assistant', confirmationMessage);
