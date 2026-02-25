@@ -20,6 +20,7 @@ token.json
 
 # Estado del bot (se crea automáticamente)
 bot_status.json
+test_mode_status.json
 
 # Dependencias
 node_modules/
