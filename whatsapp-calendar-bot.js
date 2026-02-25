@@ -979,7 +979,14 @@ async function sendTypingIndicator(phoneNumber, action = 'typing_on') {
     const exactMatchFull = cleanPhone === TEST_PHONE_FULL;
     const exactMatchShort = cleanPhone === TEST_PHONE_SHORT;
     const endsWithMatch = cleanPhone.length >= 10 && cleanPhone.length <= 12 && cleanPhone.endsWith(TEST_PHONE_SHORT);
-    const phoneMatches = exactMatchFull || exactMatchShort || endsWithMatch;
+    
+    // Comparación por últimos dígitos (para manejar códigos de país diferentes)
+    // El número puede venir como 5215521920710 (52 + 1 + 5521920710)
+    // Necesitamos comparar los últimos 10 dígitos
+    const last10Digits = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
+    const last10Match = last10Digits === TEST_PHONE_SHORT;
+    
+    const phoneMatches = exactMatchFull || exactMatchShort || endsWithMatch || last10Match;
     
     if (!phoneMatches) {
       console.log(`🧪 [TYPING CHECK] MODO DE PRUEBAS - Typing indicator BLOQUEADO para ${phoneNumber} (${cleanPhone})`);
@@ -1076,7 +1083,14 @@ async function sendWhatsAppMessage(phoneNumber, message, options = {}) {
     const exactMatchFull = cleanPhone === TEST_PHONE_FULL;
     const exactMatchShort = cleanPhone === TEST_PHONE_SHORT;
     const endsWithMatch = cleanPhone.length >= 10 && cleanPhone.length <= 12 && cleanPhone.endsWith(TEST_PHONE_SHORT);
-    const phoneMatches = exactMatchFull || exactMatchShort || endsWithMatch;
+    
+    // Comparación por últimos dígitos (para manejar códigos de país diferentes)
+    // El número puede venir como 5215521920710 (52 + 1 + 5521920710)
+    // Necesitamos comparar los últimos 10 dígitos
+    const last10Digits = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
+    const last10Match = last10Digits === TEST_PHONE_SHORT;
+    
+    const phoneMatches = exactMatchFull || exactMatchShort || endsWithMatch || last10Match;
     
     if (!phoneMatches) {
       console.log(`🧪 ============================================`);
@@ -1941,7 +1955,14 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
     const exactMatchFull = cleanPhone === TEST_PHONE_FULL;
     const exactMatchShort = cleanPhone === TEST_PHONE_SHORT;
     const endsWithMatch = cleanPhone.length >= 10 && cleanPhone.length <= 12 && cleanPhone.endsWith(TEST_PHONE_SHORT);
-    const phoneMatches = exactMatchFull || exactMatchShort || endsWithMatch;
+    
+    // Comparación por últimos dígitos (para manejar códigos de país diferentes)
+    // El número puede venir como 5215521920710 (52 + 1 + 5521920710)
+    // Necesitamos comparar los últimos 10 dígitos
+    const last10Digits = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
+    const last10Match = last10Digits === TEST_PHONE_SHORT;
+    
+    const phoneMatches = exactMatchFull || exactMatchShort || endsWithMatch || last10Match;
     
     console.log(`🧪 Comparaciones detalladas:`);
     console.log(`🧪   - ${cleanPhone} === ${TEST_PHONE_FULL}? ${exactMatchFull}`);
