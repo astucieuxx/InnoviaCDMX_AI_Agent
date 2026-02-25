@@ -1317,14 +1317,17 @@ app.post('/webhook', async (req, res) => {
         console.log('\n🧪 ============================================');
         console.log('🧪 MODO DE PRUEBAS - VERIFICACIÓN EN WEBHOOK');
         console.log('🧪 ============================================');
-        console.log('🧪 Número recibido:', senderPhone);
+        console.log('🧪 Número recibido (raw):', senderPhone);
         console.log('🧪 Número limpio:', cleanPhone);
-        console.log('🧪 Número permitido: +525521920710');
-        console.log('🧪 Comparaciones:');
-        console.log(`🧪   - ${cleanPhone} === ${TEST_PHONE_FULL}? ${exactMatchFull}`);
-        console.log(`🧪   - ${cleanPhone} === ${TEST_PHONE_SHORT}? ${exactMatchShort}`);
-        console.log(`🧪   - endsWith(${TEST_PHONE_SHORT})? ${endsWithMatch}`);
-        console.log(`🧪   - phoneMatches: ${phoneMatches}`);
+        console.log('🧪 Longitud del número limpio:', cleanPhone.length);
+        console.log('🧪 Número permitido FULL:', TEST_PHONE_FULL);
+        console.log('🧪 Número permitido SHORT:', TEST_PHONE_SHORT);
+        console.log('🧪 Comparaciones detalladas:');
+        console.log(`🧪   - exactMatchFull (${cleanPhone} === ${TEST_PHONE_FULL}): ${exactMatchFull}`);
+        console.log(`🧪   - exactMatchShort (${cleanPhone} === ${TEST_PHONE_SHORT}): ${exactMatchShort}`);
+        console.log(`🧪   - endsWithMatch (endsWith ${TEST_PHONE_SHORT}): ${endsWithMatch} (length: ${cleanPhone.length}, range: 10-12)`);
+        console.log(`🧪   - phoneMatches (resultado final): ${phoneMatches}`);
+        console.log('🧪 ============================================');
         
         if (!phoneMatches) {
           console.log('🧪 🚫 BLOQUEADO - No es el número de pruebas');
@@ -1337,7 +1340,11 @@ app.post('/webhook', async (req, res) => {
           console.log('🧪 ============================================\n');
         }
       } else {
-        console.log('🧪 ⚠️  No se pudo extraer el número del remitente, continuando...');
+        console.log('🧪 ⚠️  ============================================');
+        console.log('🧪 ⚠️  No se pudo extraer el número del remitente');
+        console.log('🧪 ⚠️  Body recibido:', JSON.stringify(req.body, null, 2));
+        console.log('🧪 ⚠️  Continuando con procesamiento (puede fallar)...');
+        console.log('🧪 ⚠️  ============================================\n');
       }
     }
   } catch (error) {
