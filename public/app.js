@@ -1167,33 +1167,29 @@ async function loadBotMode() {
 function updateBotModeUI(mode) {
     const statusText = document.getElementById('bot-mode-status-text');
     const statusIndicator = document.getElementById('bot-mode-status-indicator');
-    const toggleButton = document.getElementById('toggle-bot-mode');
-    const toggleText = document.getElementById('toggle-bot-mode-text');
+    const statusBadge = document.getElementById('bot-mode-status-badge');
     
     const modeConfig = {
         'inactive': {
             text: 'Bot inactivo - No responderá a ningún mensaje',
             color: '#ff4444',
             shadow: 'rgba(255, 68, 68, 0.5)',
-            buttonText: '▶️ Activar Bot',
-            buttonBg: 'linear-gradient(135deg, #00ff88 0%, #059669 100%)',
-            nextMode: 'test'
+            badge: 'INACTIVO',
+            badgeColor: '#ff4444'
         },
         'test': {
             text: 'Modo de pruebas - Solo responderá a +525521920710',
             color: '#ffb800',
             shadow: 'rgba(255, 184, 0, 0.5)',
-            buttonText: '🌐 Activar para Todos',
-            buttonBg: 'linear-gradient(135deg, #00ff88 0%, #059669 100%)',
-            nextMode: 'active'
+            badge: 'PRUEBAS',
+            badgeColor: '#ffb800'
         },
         'active': {
             text: 'Bot activo - Responderá a todos los números',
             color: '#00ff88',
             shadow: 'rgba(0, 255, 136, 0.5)',
-            buttonText: '⏸️ Desactivar Bot',
-            buttonBg: 'linear-gradient(135deg, #ff4444 0%, #dc2626 100%)',
-            nextMode: 'inactive'
+            badge: 'ACTIVO',
+            badgeColor: '#00ff88'
         }
     };
     
@@ -1208,33 +1204,40 @@ function updateBotModeUI(mode) {
         statusIndicator.style.boxShadow = `0 0 10px ${config.shadow}`;
     }
     
-    if (toggleButton && toggleText) {
-        toggleText.textContent = config.buttonText;
-        toggleButton.style.background = config.buttonBg;
-        toggleButton.dataset.nextMode = config.nextMode;
+    if (statusBadge) {
+        statusBadge.textContent = config.badge;
+        statusBadge.style.color = config.badgeColor;
     }
+    
+    // Actualizar botones - marcar el activo
+    const modeButtons = document.querySelectorAll('.bot-mode-btn');
+    modeButtons.forEach(btn => {
+        const btnMode = btn.dataset.mode;
+        if (btnMode === mode) {
+            // Botón activo
+            btn.style.border = `2px solid ${config.color}`;
+            btn.style.background = `${config.color}15`;
+            btn.style.transform = 'scale(1.05)';
+            btn.style.boxShadow = `0 0 15px ${config.shadow}`;
+        } else {
+            // Botones inactivos
+            btn.style.border = '2px solid var(--border-color)';
+            btn.style.background = 'var(--bg-secondary)';
+            btn.style.transform = 'scale(1)';
+            btn.style.boxShadow = 'none';
+        }
+    });
 }
 
-// Toggle estado del bot (cicla entre los 3 estados)
-async function toggleBotMode() {
+// Cambiar estado del bot a un modo específico
+async function setBotMode(mode) {
     try {
-        const response = await fetch('/api/bot-mode');
-        const currentData = await response.json();
-        const currentMode = currentData.mode || 'active';
-        
-        // Ciclar: inactive -> test -> active -> inactive
-        const nextMode = {
-            'inactive': 'test',
-            'test': 'active',
-            'active': 'inactive'
-        }[currentMode] || 'inactive';
-        
         const updateResponse = await fetch('/api/bot-mode', {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ mode: nextMode })
+            body: JSON.stringify({ mode })
         });
         
         if (!updateResponse.ok) {
@@ -1242,14 +1245,14 @@ async function toggleBotMode() {
         }
         
         const result = await updateResponse.json();
-        updateBotModeUI(nextMode);
+        updateBotModeUI(mode);
         
         // Mostrar mensaje de confirmación
         const statusMessage = document.getElementById('bot-mode-status-message');
         if (statusMessage) {
             statusMessage.style.display = 'block';
             statusMessage.className = 'status-message success';
-            statusMessage.textContent = result.message || `Estado actualizado a: ${nextMode}`;
+            statusMessage.textContent = result.message || `Estado actualizado a: ${mode}`;
             
             setTimeout(() => {
                 statusMessage.style.display = 'none';
@@ -1266,12 +1269,17 @@ async function toggleBotMode() {
     }
 }
 
-// Event listener para el botón de toggle
+// Event listeners para los botones de modo
 document.addEventListener('DOMContentLoaded', () => {
-    const toggleButton = document.getElementById('toggle-bot-mode');
-    if (toggleButton) {
-        toggleButton.addEventListener('click', toggleBotMode);
-    }
+    const modeButtons = document.querySelectorAll('.bot-mode-btn');
+    modeButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const mode = btn.dataset.mode;
+            if (mode) {
+                setBotMode(mode);
+            }
+        });
+    });
     
     // Event listeners para logs
     const logLevelFilter = document.getElementById('log-level-filter');
