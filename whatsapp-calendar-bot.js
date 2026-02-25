@@ -1477,15 +1477,26 @@ function getBotMode() {
       const status = JSON.parse(statusData);
       console.log(`🔍 [GET BOT MODE] status.mode: ${status.mode}, status.active: ${status.active}`);
       
-      // Compatibilidad con formato antiguo
+      // CRITICAL: Priorizar el campo 'mode' sobre 'active'
+      // Si existe 'mode', usarlo. Si no, migrar desde 'active'
       let mode = null;
+      
       if (status.mode && typeof status.mode === 'string') {
+        // Formato nuevo: usar 'mode'
         mode = status.mode.trim().toLowerCase();
-        console.log(`✅ [GET BOT MODE] Modo encontrado: "${mode}"`);
+        console.log(`✅ [GET BOT MODE] Modo encontrado en campo 'mode': "${mode}"`);
       } else if (status.active !== undefined) {
-        // Migrar formato antiguo: active=true -> 'active', active=false -> 'inactive'
+        // Formato antiguo: migrar desde 'active'
         mode = status.active ? 'active' : 'inactive';
-        console.log(`⚠️  [GET BOT MODE] Formato antiguo detectado, migrando: active=${status.active} -> mode="${mode}"`);
+        console.log(`⚠️  [GET BOT MODE] Formato antiguo detectado (solo 'active'), migrando: active=${status.active} -> mode="${mode}"`);
+        // CRITICAL: Actualizar el archivo al nuevo formato para evitar confusión
+        try {
+          const updatedStatus = { mode, updatedAt: new Date().toISOString() };
+          fs.writeFileSync(statusPath, JSON.stringify(updatedStatus, null, 2), 'utf8');
+          console.log(`✅ [GET BOT MODE] Archivo migrado al nuevo formato`);
+        } catch (migrateError) {
+          console.warn(`⚠️  [GET BOT MODE] No se pudo migrar el archivo: ${migrateError.message}`);
+        }
       }
       
       // Validar que el modo sea uno de los valores permitidos
