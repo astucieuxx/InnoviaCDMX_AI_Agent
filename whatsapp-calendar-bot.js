@@ -3953,6 +3953,58 @@ app.put('/api/bot-mode', (req, res) => {
   }
 });
 
+// Endpoint de diagnóstico para verificar el modo test
+app.get('/api/test-mode-diagnostic', (req, res) => {
+  try {
+    const mode = getBotMode();
+    const TEST_PHONE_FULL = '525521920710';
+    const TEST_PHONE_SHORT = '5521920710';
+    
+    // Probar diferentes formatos del número de prueba
+    const testNumbers = [
+      '+525521920710',
+      '525521920710',
+      '5521920710',
+      '5255219207100',
+      '15521920710',
+      '+15521920710'
+    ];
+    
+    const results = testNumbers.map(testNum => {
+      const cleanPhone = testNum.replace(/\D/g, '');
+      const exactMatchFull = cleanPhone === TEST_PHONE_FULL;
+      const exactMatchShort = cleanPhone === TEST_PHONE_SHORT;
+      const endsWithMatch = cleanPhone.length >= 10 && cleanPhone.length <= 12 && cleanPhone.endsWith(TEST_PHONE_SHORT);
+      const phoneMatches = exactMatchFull || exactMatchShort || endsWithMatch;
+      
+      return {
+        original: testNum,
+        cleaned: cleanPhone,
+        matches: phoneMatches,
+        details: {
+          exactMatchFull,
+          exactMatchShort,
+          endsWithMatch
+        }
+      };
+    });
+    
+    res.json({
+      success: true,
+      currentMode: mode,
+      testPhoneFull: TEST_PHONE_FULL,
+      testPhoneShort: TEST_PHONE_SHORT,
+      testResults: results,
+      message: mode === 'test' 
+        ? 'Modo test activo - Solo +525521920710 puede enviar mensajes'
+        : `Modo actual: ${mode} - Verifica los resultados arriba`
+    });
+  } catch (error) {
+    console.error('Error en diagnóstico de modo test:', error);
+    res.status(500).json({ error: 'Error al diagnosticar el modo test' });
+  }
+});
+
 // Endpoints de compatibilidad (deprecados, usar /api/bot-mode)
 app.get('/api/bot-status', (req, res) => {
   try {
