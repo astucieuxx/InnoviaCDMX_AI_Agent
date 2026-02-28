@@ -41,7 +41,12 @@ function getSession(phone) {
       historial: [],
       ultima_actividad: new Date().toISOString(),
       slots_disponibles: null,
-      fecha_cita_solicitada: null
+      fecha_cita_solicitada: null,
+      // Explicit appointment flow state machine
+      // Values: null | 'NAME' | 'WEDDING_DATE' | 'APPT_DATE' | 'CONFIRMING'
+      appt_step: null,
+      // Slot saved during CONFIRMING step, cleared after booking
+      appt_confirming_slot: null,
     };
     sessions.set(cleanPhone, newSession);
     console.log(`📝 Nueva sesión creada para: ${cleanPhone}`);

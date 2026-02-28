@@ -2101,7 +2101,8 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
     }
     
     // STEP 2: Check if user is selecting a slot (if slots are available in session)
-    if (session.slots_disponibles && session.slots_disponibles.length > 0) {
+    // Guard: skip slot detection while waiting for the user to tap Confirmar/Cambiar buttons
+    if (session.slots_disponibles && session.slots_disponibles.length > 0 && session.appt_step !== 'CONFIRMING') {
       let slotIndex = -1;
       
       // If it's a button click
@@ -2215,17 +2216,51 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
         }
       }
       
-      // If user selected a valid slot, create calendar event
+      // If user selected a valid slot, show a confirmation card before booking
       if (slotIndex >= 0 && slotIndex < session.slots_disponibles.length) {
         const selectedSlot = session.slots_disponibles[slotIndex];
-        const sessionData = sessions.getSession(cleanPhone);
-        
+        const sessionData  = sessions.getSession(cleanPhone);
+
+        // ── Pre-booking confirmation step ────────────────────────────────────
+        // Best practice: always ask the user to review date/time before writing
+        // to the calendar. Actual booking happens in confirmar_nueva_cita handler.
+        {
+          const { parseCalendarDate, formatDateSpanishCDMX, formatTimeCDMX } = require('./bot/utils/date-formatter');
+          const slotStart       = parseCalendarDate(selectedSlot.start);
+          const capitalizedDate = (formatDateSpanishCDMX(slotStart) || '').replace(/^./, c => c.toUpperCase());
+          const slotTimeStr     = formatTimeCDMX(slotStart);
+          const firstName       = getClientFirstName(sessionData) || getClientName(sessionData) || '';
+          const greeting        = firstName ? `${firstName}, ` : '';
+
+          const confirmMsg =
+            `¡${greeting}perfecto! 💐 Confirmemos los datos de tu cita:\n\n` +
+            `📅 Fecha: ${capitalizedDate}\n` +
+            `🕐 Hora: ${slotTimeStr}\n` +
+            `📍 Lugar: ${getBusinessAddress()}\n\n` +
+            `¿Todo correcto?`;
+
+          sessions.updateSession(cleanPhone, {
+            appt_confirming_slot: selectedSlot,
+            appt_step: 'CONFIRMING',
+          });
+
+          await sendWhatsAppMessage(cleanPhone, confirmMsg, {
+            buttons: [
+              { id: 'confirmar_nueva_cita', title: 'Confirmar Cita'  },
+              { id: 'cambiar_horario',      title: 'Cambiar Horario' },
+            ],
+          });
+          sessions.addToHistory(cleanPhone, 'assistant', confirmMsg);
+          return;
+        }
+        // ── Code below is unreachable — booking logic moved to confirmar_nueva_cita ──
+
         console.log(`✅ Horario seleccionado: ${selectedSlot.time} (${selectedSlot.start})`);
         console.log(`   Nombre: ${getClientName(sessionData) || 'No disponible'}`);
         console.log(`   Fecha de boda: ${sessionData.fecha_boda || 'No disponible'}`);
-        
+
         const appointmentDateForEvent = sessionData.fecha_cita_solicitada || sessionData.fecha_cita;
-        
+
         // Create or update event in Google Calendar using calendar-service
         const targetCalendarId = citasNuevasCalendarId || process.env.CALENDAR_ID || 'primary';
         
@@ -2592,9 +2627,228 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
     }
     
     
+    // STEP 2.1: Handle text responses while awaiting slot confirmation
+    // (user might type "sí/no" instead of tapping the buttons)
+    if (session.appt_step === 'CONFIRMING' && !options.isButtonClick) {
+      const msgLower = incomingMessage.toLowerCase();
+      const isYes = ['sí','si','confirmo','confirmar','ok','perfecto','listo','dale','va','correcto','bueno'].some(kw => msgLower.includes(kw));
+      const isNo  = ['cambiar','otro horario','otro','diferente','no','mejor no','distinto'].some(kw => msgLower.includes(kw));
+      if (isYes) {
+        incomingMessage       = 'confirmar_nueva_cita';
+        options.isButtonClick = true;
+      } else if (isNo) {
+        incomingMessage       = 'cambiar_horario';
+        options.isButtonClick = true;
+      } else {
+        const reminderMsg = `¿Confirmamos tu cita o prefieres elegir otro horario? Usa los botones de arriba 💐`;
+        await sendWhatsAppMessage(cleanPhone, reminderMsg);
+        sessions.addToHistory(cleanPhone, 'assistant', reminderMsg);
+        return;
+      }
+    }
+
     // STEP 2.6: Check if user is selecting from main menu
     if (options.isButtonClick) {
-      if (incomingMessage === 'menu_agendar') {
+      if (incomingMessage === 'confirmar_nueva_cita') {
+        // ── User confirmed their slot — create the calendar event ─────────────
+        const confirmedSlot = session.appt_confirming_slot;
+        if (!confirmedSlot) {
+          await sendWhatsAppMessage(cleanPhone, `Hubo un problema al recuperar el horario. Por favor selecciona el horario de nuevo.`);
+          sessions.updateSession(cleanPhone, { appt_step: null, appt_confirming_slot: null });
+          return;
+        }
+
+        const sessionData      = sessions.getSession(cleanPhone);
+        const appointmentDate  = sessionData.fecha_cita_solicitada || sessionData.fecha_cita;
+        const targetCalendarId = citasNuevasCalendarId || process.env.CALENDAR_ID || 'primary';
+
+        // Clear confirming state immediately so we don't re-enter this path
+        sessions.updateSession(cleanPhone, { appt_step: null, appt_confirming_slot: null });
+
+        console.log(`✅ Cita confirmada por usuario: ${confirmedSlot.time} (${confirmedSlot.start})`);
+
+        // Validate slot still has an eventId to verify availability
+        if (!confirmedSlot.eventId) {
+          console.error(`❌ Slot confirmado ${confirmedSlot.time} sin eventId`);
+          await sendWhatsAppMessage(cleanPhone, `❌ Lo siento, hubo un error al verificar el horario. Por favor selecciona un horario de nuevo.`);
+          sessions.addToHistory(cleanPhone, 'assistant', `Error verificando horario.`);
+          return;
+        }
+
+        // Verify blue availability slot still exists
+        if (innoviaCDMXCalendarId) {
+          try {
+            let auth;
+            if (authClient && typeof authClient.getClient === 'function') {
+              auth = await authClient.getClient();
+            } else {
+              auth = authClient;
+            }
+            await calendar.events.get({ auth, calendarId: innoviaCDMXCalendarId, eventId: confirmedSlot.eventId });
+            console.log(`✅ Spot verificado: ${confirmedSlot.time} sigue disponible`);
+          } catch (error) {
+            if (error.code === 404) {
+              console.error(`❌ Spot ${confirmedSlot.eventId} ya no existe — fue tomado por otro cliente`);
+              // Try to fetch fresh slots for the same date
+              if (appointmentDate) {
+                try {
+                  const freshSlots = await getAvailableSlotsService(appointmentDate, calendar, authClient, innoviaCDMXCalendarId, null);
+                  const available  = freshSlots.filter(s => s.availableSpots > 0);
+                  if (available.length > 0) {
+                    sessions.updateSession(cleanPhone, { slots_disponibles: available });
+                    let msg = `❌ Lo siento, ese horario ya fue tomado. Horarios disponibles ahora:\n\n`;
+                    available.forEach((s, i) => { msg += `${i + 1}. ${s.time}\n`; });
+                    msg += `\nEscribe el número del horario que prefieras.`;
+                    await sendWhatsAppMessage(cleanPhone, msg);
+                    sessions.addToHistory(cleanPhone, 'assistant', msg);
+                    return;
+                  }
+                } catch (fetchErr) { /* ignore, fall through to generic message */ }
+              }
+              await sendWhatsAppMessage(cleanPhone, `❌ Lo siento, ese horario ya no está disponible. Por favor elige otra fecha.`);
+              sessions.addToHistory(cleanPhone, 'assistant', `Horario ya no disponible.`);
+              return;
+            }
+            console.error(`❌ Error verificando spot:`, error.message);
+            // Continue — better to try than fail
+          }
+        }
+
+        // Create or update the calendar event
+        let calendarEvent;
+        if (sessionData.calendar_event_id) {
+          console.log(`📅 Reagendando evento existente: ${sessionData.calendar_event_id}`);
+          calendarEvent = await updateCalendarEventService(
+            sessionData.calendar_event_id,
+            getClientName(sessionData) || 'Cliente',
+            cleanPhone,
+            null,
+            confirmedSlot.start,
+            sessionData.fecha_boda,
+            calendar, authClient, targetCalendarId
+          );
+          if (calendarEvent) console.log(`✅ Evento reagendado: ID ${calendarEvent.id}`);
+          else console.error(`❌ No se pudo reagendar`);
+        } else {
+          console.log(`📅 Creando nuevo evento en: ${targetCalendarId}`);
+          calendarEvent = await createCalendarEventService(
+            getClientName(sessionData) || 'Cliente',
+            cleanPhone,
+            null,
+            confirmedSlot.start,
+            sessionData.fecha_boda,
+            calendar, authClient, targetCalendarId
+          );
+
+          if (calendarEvent) {
+            console.log(`✅ Evento creado: ID ${calendarEvent.id}`);
+            // Remove the blue availability slot (unnamed event) from Innovia CDMX calendar
+            if (confirmedSlot.eventId && innoviaCDMXCalendarId) {
+              try {
+                let auth;
+                if (authClient && typeof authClient.getClient === 'function') auth = await authClient.getClient();
+                else auth = authClient;
+
+                try {
+                  const evtCheck = await calendar.events.get({ auth, calendarId: innoviaCDMXCalendarId, eventId: confirmedSlot.eventId });
+                  if (!evtCheck.data.summary || evtCheck.data.summary.trim() === '') {
+                    await calendar.events.delete({ auth, calendarId: innoviaCDMXCalendarId, eventId: confirmedSlot.eventId });
+                    console.log(`✅ Spot azul eliminado: ${confirmedSlot.eventId}`);
+                  } else {
+                    console.warn(`⚠️  El evento ${confirmedSlot.eventId} tiene nombre "${evtCheck.data.summary}" — no se elimina`);
+                  }
+                } catch (getErr) {
+                  if (getErr.code !== 404) throw getErr;
+                  console.warn(`⚠️  Spot ${confirmedSlot.eventId} ya no existe (quizás ya fue eliminado)`);
+                }
+              } catch (err) {
+                console.error(`❌ Error eliminando spot azul:`, err.message);
+              }
+            }
+          } else {
+            const nombreErr = getClientFirstName(sessionData) || 'Cliente';
+            await sendWhatsAppMessage(cleanPhone, `❌ Lo siento ${nombreErr}, hubo un error al crear tu cita. Por favor intenta de nuevo 💫`);
+            sessions.addToHistory(cleanPhone, 'assistant', 'Error al crear evento en calendario.');
+            return;
+          }
+        }
+
+        // Send booking confirmation message
+        if (calendarEvent && calendarEvent.id) {
+          const confirmationMessage = getAppointmentConfirmationMessage({
+            name:         getClientFirstName(sessionData) || getClientName(sessionData) || 'Cliente',
+            date:         appointmentDate || 'la fecha seleccionada',
+            time:         confirmedSlot.time,
+            calendarLink: calendarEvent?.htmlLink,
+          });
+          await sendWhatsAppMessage(cleanPhone, confirmationMessage);
+          sessions.addToHistory(cleanPhone, 'assistant', confirmationMessage);
+        }
+
+        // Delete old appointment if rescheduling (moved to new date)
+        if (sessionData.pending_delete_old_event && calendarEvent?.id &&
+            calendarEvent.id !== sessionData.pending_delete_old_event) {
+          try {
+            console.log(`🗑️  Eliminando cita anterior: ${sessionData.pending_delete_old_event}`);
+            await deleteCalendarEventService(sessionData.pending_delete_old_event, calendar, authClient, targetCalendarId);
+            console.log(`✅ Cita anterior eliminada`);
+          } catch (err) {
+            console.error('❌ Error eliminando cita anterior:', err.message);
+          }
+        }
+
+        // Extract date string for session (avoid timezone shifts)
+        let fechaCitaFormatted = null;
+        if (confirmedSlot.start) {
+          const m = confirmedSlot.start.match(/^(\d{4})-(\d{2})-(\d{2})T/);
+          if (m) {
+            fechaCitaFormatted = `${m[1]}-${m[2]}-${m[3]}`;
+          } else {
+            const d = new Date(confirmedSlot.start);
+            fechaCitaFormatted = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+          }
+        }
+        if (!fechaCitaFormatted) fechaCitaFormatted = appointmentDate;
+
+        const apptActions = { ...(sessions.getSession(cleanPhone).appointmentActions || {}) };
+        if (sessionData.calendar_event_id && calendarEvent?.id) apptActions.edited = true;
+        else apptActions.created = true;
+
+        sessions.updateSession(cleanPhone, {
+          etapa:                   'cita_agendada',
+          slots_disponibles:       null,
+          fecha_cita_solicitada:   null,
+          fecha_cita:              fechaCitaFormatted,
+          calendar_event_id:       calendarEvent?.id || null,
+          pending_delete_old_event: null,
+          fecha_cita_existente:    null,
+          appt_step:               null,
+          appt_confirming_slot:    null,
+          appointmentActions:      apptActions,
+        });
+        return;
+
+      } else if (incomingMessage === 'cambiar_horario') {
+        // ── User wants a different time slot ─────────────────────────────────
+        const currentSlots = session.slots_disponibles;
+        const savedDate    = session.fecha_cita_solicitada;
+
+        sessions.updateSession(cleanPhone, { appt_confirming_slot: null, appt_step: null });
+
+        if (currentSlots && currentSlots.length > 0) {
+          let replyText = `¡Claro! 💐 Elige otro horario${savedDate ? ` para ${savedDate}` : ''}:\n\n`;
+          currentSlots.forEach((slot, i) => { replyText += `${i + 1}. ${slot.time}\n`; });
+          replyText += `\nEscribe el número del horario que prefieras.`;
+          await sendWhatsAppMessage(cleanPhone, replyText);
+          sessions.addToHistory(cleanPhone, 'assistant', replyText);
+        } else {
+          sessions.updateSession(cleanPhone, { appt_step: 'APPT_DATE', pending_agendar_fecha: true, slots_disponibles: null });
+          await sendWhatsAppMessage(cleanPhone, `¿Qué otro día te gustaría visitarnos? 💐`);
+          sessions.addToHistory(cleanPhone, 'assistant', '¿Qué otro día te gustaría visitarnos?');
+        }
+        return;
+
+      } else if (incomingMessage === 'menu_agendar') {
         // User clicked on "Agendar/Editar Cita" - collect info first, then show submenu
         const targetCalendarId = citasNuevasCalendarId || process.env.CALENDAR_ID || 'primary';
         const calendarDeps = {
