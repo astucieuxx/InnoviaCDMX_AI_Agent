@@ -2640,128 +2640,28 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
         return;
       } else if (incomingMessage === 'cita_editar') {
         // User wants to edit/reschedule existing appointment
-        const nombreCliente = getClientName(session) || 'Cliente';
-        const nombrePrimero = getClientFirstName(session) || nombreCliente;
-        
-        // First, send a message saying we're searching
-        await sendWhatsAppMessage(cleanPhone, `🔍 Buscando cita existente con el nombre de ${nombrePrimero}...`);
-        sessions.addToHistory(cleanPhone, 'assistant', `🔍 Buscando cita existente con el nombre de ${nombrePrimero}...`);
-        
-        // Search for existing appointments by name
+        // Delegate entirely to cambiar-cita handler to avoid duplicated logic
+        const nombrePrimero = getClientFirstName(session) || 'Cliente';
+
+        await sendWhatsAppMessage(cleanPhone, `🔍 Buscando tu cita...`);
+        sessions.addToHistory(cleanPhone, 'assistant', `🔍 Buscando tu cita...`);
+
         const targetCalendarId = citasNuevasCalendarId || process.env.CALENDAR_ID || 'primary';
-        let existingEvent = null;
-        
-        if (session.calendar_event_id) {
-          // We already have the event ID in session, fetch full event details
-          try {
-            let auth;
-            if (authClient && typeof authClient.getClient === 'function') {
-              auth = await authClient.getClient();
-            } else {
-              auth = authClient;
-            }
-            
-            const eventDetails = await calendar.events.get({
-              auth: auth,
-              calendarId: targetCalendarId,
-              eventId: session.calendar_event_id
-            });
-            
-            if (eventDetails.data) {
-              const event = eventDetails.data;
-              // Use centralized date formatter
-              const { parseCalendarDate, formatDateCDMX, formatTimeCDMX } = require('./bot/utils/date-formatter');
-              
-              const startDateStr = event.start.dateTime || event.start.date;
-              const startDate = parseCalendarDate(startDateStr);
-              
-              existingEvent = {
-                id: event.id,
-                summary: event.summary,
-                start: event.start.dateTime || event.start.date,
-                formattedDate: formatDateCDMX(startDate),
-                formattedTime: formatTimeCDMX(startDate)
-              };
-              console.log(`✅ Cita encontrada en sesión: ${existingEvent.id}`);
-            }
-          } catch (error) {
-            console.error('❌ Error obteniendo detalles del evento:', error.message);
-          }
-        }
-        
-        if (!existingEvent && nombreCliente && nombreCliente !== 'Cliente') {
-          // Search for events by name
-          try {
-            const foundEvents = await findEventsByNameService(
-              nombreCliente,
-              calendar,
-              authClient,
-              targetCalendarId,
-              5 // Max 5 results
-            );
-            
-            if (foundEvents.length > 0) {
-              // Use the most recent/upcoming event
-              existingEvent = foundEvents[0];
-              console.log(`✅ Cita encontrada por búsqueda: ${existingEvent.id} - ${existingEvent.summary}`);
-              
-              // Update session with the found event ID
-              sessions.updateSession(cleanPhone, {
-                calendar_event_id: existingEvent.id,
-                etapa: 'cita_agendada'
-              });
-            }
-          } catch (error) {
-            console.error('❌ Error buscando cita:', error.message);
-          }
-        }
-        
-        if (existingEvent) {
-          // Found an appointment, show details and options
-          const reply = `✅ Encontré tu cita agendada:\n\n📅 Fecha: ${existingEvent.formattedDate}\n🕐 Hora: ${existingEvent.formattedTime}\n\n¿Qué te gustaría hacer con tu cita?`;
-          
-          const buttons = [
-            {
-              id: 'cita_mover',
-              title: 'Mover a Nueva Fecha' // 20 caracteres (máximo)
-            },
-            {
-              id: 'cita_cancelar_desde_editar',
-              title: 'Cancelar Cita' // 15 caracteres
-            }
-          ];
-          
-          await sendWhatsAppMessage(cleanPhone, reply, { buttons: buttons });
-          sessions.addToHistory(cleanPhone, 'assistant', reply);
-          
-          // Extract date from existing event
-          let fechaCitaFromEvent = null;
-          if (existingEvent.start) {
-            try {
-              const eventDate = existingEvent.start.dateTime 
-                ? new Date(existingEvent.start.dateTime)
-                : new Date(existingEvent.start.date);
-              const year = eventDate.getFullYear();
-              const month = String(eventDate.getMonth() + 1).padStart(2, '0');
-              const day = String(eventDate.getDate()).padStart(2, '0');
-              fechaCitaFromEvent = `${year}-${month}-${day}`;
-            } catch (error) {
-              console.error('❌ Error extrayendo fecha del evento existente:', error);
-            }
-          }
-          
-          // Save event info in session for later use
-          sessions.updateSession(cleanPhone, {
-            calendar_event_id: existingEvent.id,
-            etapa: 'cita_agendada',
-            fecha_cita_existente: existingEvent.start,
-            fecha_cita: fechaCitaFromEvent || session.fecha_cita || null
-          });
-        } else {
-          // No appointment found
-          const nombrePrimero = getClientFirstName(session) || nombreCliente;
-          await sendWhatsAppMessage(cleanPhone, `❌ No encontré una cita agendada con el nombre de ${nombrePrimero}.\n\n¿Te gustaría agendar una nueva cita?`);
-          sessions.addToHistory(cleanPhone, 'assistant', `No encontré una cita agendada con el nombre de ${nombrePrimero}.`);
+        const calendarDeps = {
+          calendarClient: calendar,
+          authClient: authClient,
+          calendarId: targetCalendarId,
+          innoviaCDMXCalendarId: innoviaCDMXCalendarId
+        };
+
+        const cambiarCitaHandler = handlers['CAMBIAR_CITA'];
+        const result = await cambiarCitaHandler.execute(session, incomingMessage, calendarDeps);
+
+        await sendWhatsAppMessage(cleanPhone, result.reply, result.buttons ? { buttons: result.buttons } : {});
+        sessions.addToHistory(cleanPhone, 'assistant', result.reply);
+
+        if (result.sessionUpdates && Object.keys(result.sessionUpdates).length > 0) {
+          sessions.updateSession(cleanPhone, result.sessionUpdates);
         }
         return;
       } else if (incomingMessage === 'cita_mover') {
@@ -2790,50 +2690,22 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
         return;
       } else if (incomingMessage === 'cita_cancelar_desde_editar') {
         // User wants to cancel appointment from edit menu
-        if (session.calendar_event_id) {
-          // Delete the calendar event
-          const targetCalendarId = citasNuevasCalendarId || process.env.CALENDAR_ID || 'primary';
-          try {
-            await deleteCalendarEventService(
-              session.calendar_event_id,
-              calendar,
-              authClient,
-              targetCalendarId
-            );
-            console.log(`✅ Evento cancelado eliminado del calendario`);
-          } catch (error) {
-            console.error('❌ Error eliminando evento cancelado:', error.message);
-          }
-          
-          // Send cancellation confirmation message directly
-          const nombrePrimero = getClientFirstName(session);
-          const reply = `Entiendo ${nombrePrimero}, gracias por avisarnos 💫\n\n`;
-          const reply2 = `Tu cita ha sido cancelada. Si cambias de opinión o quieres agendar para otro día, aquí estaremos para ayudarte ✨\n\n`;
-          const reply3 = `¡Esperamos verte pronto! 👰‍♀️`;
-          const result = { reply: reply + reply2 + reply3, sessionUpdates: {} };
-          
-          await sendWhatsAppMessage(cleanPhone, result.reply);
-          sessions.addToHistory(cleanPhone, 'assistant', result.reply);
-          
-          // Track cancellation
-          const currentSession = sessions.getSession(cleanPhone);
-          const appointmentActions = currentSession.appointmentActions || {};
-          appointmentActions.cancelled = true;
-          
-          // Clear appointment data
-          const sessionUpdates = {
-            etapa: 'interesada',
-            slots_disponibles: null,
-            fecha_cita_solicitada: null,
-            fecha_cita: null,
-            calendar_event_id: null,
-            fecha_cita_existente: null,
-            appointmentActions: appointmentActions
-          };
-          sessions.updateSession(cleanPhone, sessionUpdates);
-        } else {
-          await sendWhatsAppMessage(cleanPhone, `No se encontró la cita para cancelar.`);
-          sessions.addToHistory(cleanPhone, 'assistant', 'No se encontró la cita para cancelar.');
+        // Use the same confirmation flow as cita_cancelar to be consistent
+        const targetCalendarId = citasNuevasCalendarId || process.env.CALENDAR_ID || 'primary';
+        const calendarDeps = {
+          calendarClient: calendar,
+          authClient: authClient,
+          calendarId: targetCalendarId,
+          innoviaCDMXCalendarId: innoviaCDMXCalendarId
+        };
+        const cancelarCitaHandler = handlers['CANCELAR_CITA'];
+        const result = await cancelarCitaHandler.execute(session, 'cancelar', calendarDeps);
+
+        await sendWhatsAppMessage(cleanPhone, result.reply, result.buttons ? { buttons: result.buttons } : {});
+        sessions.addToHistory(cleanPhone, 'assistant', result.reply);
+
+        if (result.sessionUpdates && Object.keys(result.sessionUpdates).length > 0) {
+          sessions.updateSession(cleanPhone, result.sessionUpdates);
         }
         return;
       } else if (incomingMessage === 'cita_cancelar') {
