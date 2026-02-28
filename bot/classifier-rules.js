@@ -21,7 +21,10 @@ function classifyIntentWithRules(message, session) {
   // PRIORITY 1 (HIGHEST): If user explicitly wants to cancel/reschedule, handle it immediately
   // This must be checked FIRST, even before info collection, to ensure reschedule/cancel requests
   // are not incorrectly classified as AGENDAR_NUEVA
-  const cancelKeywords = ['cancelar', 'cancel', 'no puedo', 'no podre', 'no podré', 'no asistiré', 'no asistire', 'no voy', 'cancelar mi cita', 'cancelar cita'];
+  // NOTE: 'no puedo', 'no podré', 'no voy' are intentionally excluded — they are too ambiguous
+  // and can be false positives (e.g. "no puedo el martes, ¿tienen el miércoles?").
+  // The LLM handles these cases correctly with full conversation context.
+  const cancelKeywords = ['cancelar', 'cancel', 'no asistiré', 'no asistire', 'cancelar mi cita', 'cancelar cita'];
   const rescheduleKeywords = ['reagendar', 'cambiar', 'otra fecha', 'otro día', 'otro dia', 'mover', 'mover cita', 'cambiar fecha', 'cambiar mi cita', 'quiero cambiar'];
   
   if (cancelKeywords.some(kw => msg.includes(kw))) {

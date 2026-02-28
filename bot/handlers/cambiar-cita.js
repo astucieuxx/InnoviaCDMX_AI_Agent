@@ -101,8 +101,9 @@ async function execute(session, message, calendarDeps = null) {
       { id: 'cita_cancelar', title: 'Cancelar Cita' }
     ];
     
-    // Keep calendar_event_id for updating/deleting
+    // Keep calendar_event_id for updating/deleting, and mark stage
     sessionUpdates.calendar_event_id = existingEvent.id;
+    sessionUpdates.etapa = 'cita_agendada';
     
     return {
       reply,
