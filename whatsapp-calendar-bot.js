@@ -2641,8 +2641,6 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
       } else if (incomingMessage === 'cita_editar') {
         // User wants to edit/reschedule existing appointment
         // Delegate entirely to cambiar-cita handler to avoid duplicated logic
-        const nombrePrimero = getClientFirstName(session) || 'Cliente';
-
         await sendWhatsAppMessage(cleanPhone, `🔍 Buscando tu cita...`);
         sessions.addToHistory(cleanPhone, 'assistant', `🔍 Buscando tu cita...`);
 
@@ -2688,27 +2686,7 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
           sessions.addToHistory(cleanPhone, 'assistant', 'No se encontró la cita para mover.');
         }
         return;
-      } else if (incomingMessage === 'cita_cancelar_desde_editar') {
-        // User wants to cancel appointment from edit menu
-        // Use the same confirmation flow as cita_cancelar to be consistent
-        const targetCalendarId = citasNuevasCalendarId || process.env.CALENDAR_ID || 'primary';
-        const calendarDeps = {
-          calendarClient: calendar,
-          authClient: authClient,
-          calendarId: targetCalendarId,
-          innoviaCDMXCalendarId: innoviaCDMXCalendarId
-        };
-        const cancelarCitaHandler = handlers['CANCELAR_CITA'];
-        const result = await cancelarCitaHandler.execute(session, 'cancelar', calendarDeps);
-
-        await sendWhatsAppMessage(cleanPhone, result.reply, result.buttons ? { buttons: result.buttons } : {});
-        sessions.addToHistory(cleanPhone, 'assistant', result.reply);
-
-        if (result.sessionUpdates && Object.keys(result.sessionUpdates).length > 0) {
-          sessions.updateSession(cleanPhone, result.sessionUpdates);
-        }
-        return;
-      } else if (incomingMessage === 'cita_cancelar') {
+      } else if (incomingMessage === 'cita_cancelar_desde_editar' || incomingMessage === 'cita_cancelar') {
         // User wants to cancel appointment - use CANCELAR_CITA handler
         const targetCalendarId = citasNuevasCalendarId || process.env.CALENDAR_ID || 'primary';
         const calendarDeps = {
