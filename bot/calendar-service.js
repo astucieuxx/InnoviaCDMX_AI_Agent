@@ -174,11 +174,15 @@ async function getAvailableSlots(date, calendarClient, authClient, innoviaCDMXCa
         calendarId: innoviaCDMXCalendarId
       });
       const calendarName = calendarInfo.data.summary || 'Sin nombre';
+      const calendarEmail = calendarInfo.data.id || 'N/A';
       console.log(`   📌 Nombre del calendario: "${calendarName}"`);
+      console.log(`   📌 Email/ID del calendario: ${calendarEmail}`);
+      console.log(`   📌 Calendar ID usado: ${innoviaCDMXCalendarId}`);
       if (calendarName.toUpperCase().includes('INNOVIA CDMX')) {
         console.log(`   ✅ Confirmado: Se está usando el calendario "Innovia CDMX"`);
       } else {
         console.warn(`   ⚠️  ADVERTENCIA: El calendario usado NO es "Innovia CDMX" (es: "${calendarName}")`);
+        console.warn(`   ⚠️  Verifica que estés usando el calendario correcto. Los eventos deben estar en "Innovia CDMX"`);
       }
     } catch (error) {
       console.warn(`   ⚠️  No se pudo obtener nombre del calendario: ${error.message}`);
@@ -196,6 +200,10 @@ async function getAvailableSlots(date, calendarClient, authClient, innoviaCDMXCa
 
     const eventItems = events.data.items || [];
     console.log(`   📋 Total de eventos encontrados en calendario: ${eventItems.length}`);
+    console.log(`   📋 Rango consultado:`);
+    console.log(`      timeMin: ${startOfDay.toISOString()} (${startOfDay.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })})`);
+    console.log(`      timeMax: ${endOfDay.toISOString()} (${endOfDay.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })})`);
+    console.log(`   📋 Fecha solicitada: ${date} (${year}-${month}-${day})`);
     
     // Log detallado de TODOS los eventos encontrados (antes de filtrar)
     if (eventItems.length > 0) {
@@ -224,11 +232,25 @@ async function getAvailableSlots(date, calendarClient, authClient, innoviaCDMXCa
           }
         }
         
+        // Calcular fecha del evento en CDMX para verificar
+        let eventDateCDMX = 'N/A';
+        let eventTimeCDMX = 'N/A';
+        if (e.start.dateTime) {
+          try {
+            const eventStart = new Date(e.start.dateTime);
+            eventDateCDMX = eventStart.toLocaleDateString('en-US', { timeZone: 'America/Mexico_City', year: 'numeric', month: '2-digit', day: '2-digit' });
+            eventTimeCDMX = eventStart.toLocaleTimeString('es-MX', { timeZone: 'America/Mexico_City', hour: '2-digit', minute: '2-digit', hour12: true });
+          } catch (e) {
+            // Ignore
+          }
+        }
+        
         console.log(`      ${idx + 1}. Evento [${e.id}]`);
         console.log(`         Título: "${summary}"`);
         console.log(`         Tiene nombre: ${hasName ? 'SÍ ❌ (será excluido)' : 'NO ✅ (será incluido si dura 90 min)'}`);
-        console.log(`         Inicio: ${startStr}`);
-        console.log(`         Fin: ${endStr}${durationInfo}`);
+        console.log(`         Fecha en CDMX: ${eventDateCDMX} ${eventTimeCDMX}`);
+        console.log(`         Inicio (raw): ${startStr}`);
+        console.log(`         Fin (raw): ${endStr}${durationInfo}`);
       });
       console.log(`   📋 ============================================`);
     }
