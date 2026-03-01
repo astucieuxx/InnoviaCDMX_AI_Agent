@@ -303,6 +303,7 @@ async function execute(session, message, calendarDeps = null) {
     
     // IMPORTANT: Skip all info collection and submenu logic, go directly to slot processing
     // We'll continue to the slot processing code below (after all the info collection blocks)
+    // Note: sessionUpdates will be merged with the final sessionUpdates at the end
   }
   
   // Check if this is a button click for "Agendar Nueva Cita" from submenu
@@ -554,15 +555,24 @@ async function execute(session, message, calendarDeps = null) {
   // Skip any submenu logic and go directly to date extraction and slot display
   // This ensures that when user provides appointment date, we show slots, not submenu
   
-  // Extract fecha_cita_deseada from message (only if not already processed above)
-  // CRITICAL: Siempre intentar extraer fecha del mensaje primero
-  // Solo usar fecha de sesión si no se encuentra una nueva fecha en el mensaje
-  let fechaCitaDeseada = await extractFechaCitaDeseada(message, session.fecha_boda);
-  
-  // Si no se encontró fecha en el mensaje, usar la de la sesión (para casos de rescheduling o continuación)
-  if (!fechaCitaDeseada && session.fecha_cita_solicitada) {
-    console.log(`📅 No se encontró fecha en el mensaje, usando fecha de sesión: ${session.fecha_cita_solicitada}`);
+  // CRITICAL: If fecha_cita_solicitada is already set (from the block above when pending_agendar_fecha was active),
+  // use it directly instead of re-extracting. This prevents the bot from asking for the date again.
+  let fechaCitaDeseada = null;
+  if (session.fecha_cita_solicitada && session.skipInfoCollection) {
+    // Date was already extracted and processed in the block above, use it directly
+    console.log(`📅 Usando fecha ya procesada de sesión: ${session.fecha_cita_solicitada}`);
     fechaCitaDeseada = session.fecha_cita_solicitada;
+  } else {
+    // Extract fecha_cita_deseada from message (only if not already processed above)
+    // CRITICAL: Siempre intentar extraer fecha del mensaje primero
+    // Solo usar fecha de sesión si no se encuentra una nueva fecha en el mensaje
+    fechaCitaDeseada = await extractFechaCitaDeseada(message, session.fecha_boda);
+    
+    // Si no se encontró fecha en el mensaje, usar la de la sesión (para casos de rescheduling o continuación)
+    if (!fechaCitaDeseada && session.fecha_cita_solicitada) {
+      console.log(`📅 No se encontró fecha en el mensaje, usando fecha de sesión: ${session.fecha_cita_solicitada}`);
+      fechaCitaDeseada = session.fecha_cita_solicitada;
+    }
   }
   
   // Log para debugging
@@ -571,9 +581,15 @@ async function execute(session, message, calendarDeps = null) {
   }
   
   // Clear pending_agendar_fecha flag if we got a date
+  // IMPORTANT: Initialize sessionUpdates as empty object, but preserve any updates from the block above
   const sessionUpdates = {};
   if (fechaCitaDeseada && session.pending_agendar_fecha) {
     sessionUpdates.pending_agendar_fecha = false;
+  }
+  
+  // If fecha_cita_solicitada was already set in the block above, preserve it
+  if (session.fecha_cita_solicitada && session.skipInfoCollection) {
+    sessionUpdates.fecha_cita_solicitada = session.fecha_cita_solicitada;
   }
   
   // Clear skipInfoCollection flag if it was set (we already processed the date)
