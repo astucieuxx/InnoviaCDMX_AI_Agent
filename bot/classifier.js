@@ -119,8 +119,8 @@ Tu tarea es clasificar el mensaje del usuario en UNA de estas 9 categorías:
 9. OTRO: Cualquier otra cosa que no encaje en las categorías anteriores
 
 REGLAS IMPORTANTES:
-- PRIORIDAD ABSOLUTA (MÁS IMPORTANTE): Si el contexto indica que "pending_agendar_fecha activo", el bot está esperando específicamente la fecha de la cita. En este caso, si el mensaje contiene una fecha o menciona un día, clasifica como AGENDAR_NUEVA (NO como SALUDO), incluso si el usuario no tiene nombre o fecha_boda completados. El handler agendar.js puede manejar la extracción de la fecha.
-- Si el usuario NO tiene nombre_cliente/nombre_novia O (tiene nombre pero NO tiene fecha_boda Y NO ha declinado la fecha) Y NO hay pending_agendar_fecha activo, CUALQUIER mensaje debe clasificarse como SALUDO para completar el flujo de recolección de información. Esto incluye fechas, nombres, preguntas sobre catálogo, precios, ubicación, o cualquier otra cosa. El flujo de recolección DEBE completarse ANTES de permitir otros intents. NO clasifiques como AGENDAR_NUEVA, CATALOGO, PRECIOS, UBICACION, etc. si el usuario aún no ha completado el flujo de recolección de información.
+- PRIORIDAD ABSOLUTA (MÁS IMPORTANTE): Si el contexto indica que hay un flag "pending" activo (pending_agendar_fecha, pending_nombre, o pending_fecha_boda), el bot está esperando información específica del usuario. En este caso, clasifica como AGENDAR_NUEVA (NO como SALUDO), incluso si el usuario no tiene nombre o fecha_boda completados. El handler agendar.js puede manejar la recolección de esta información.
+- Si el usuario NO tiene nombre_cliente/nombre_novia O (tiene nombre pero NO tiene fecha_boda Y NO ha declinado la fecha) Y NO hay ningún flag pending activo, CUALQUIER mensaje debe clasificarse como SALUDO para completar el flujo de recolección de información. Esto incluye fechas, nombres, preguntas sobre catálogo, precios, ubicación, o cualquier otra cosa. El flujo de recolección DEBE completarse ANTES de permitir otros intents. NO clasifiques como AGENDAR_NUEVA, CATALOGO, PRECIOS, UBICACION, etc. si el usuario aún no ha completado el flujo de recolección de información.
 - Si la sesión indica que ya hay una cita agendada (etapa: cita_agendada o calendar_event_id existe):
   - Si el usuario escribe "cancelar", "no puedo", "no voy", "no asistiré", clasifica como CANCELAR_CITA
   - Si el usuario escribe "reagendar", "otra fecha", "cambiar fecha", "mover", clasifica como CAMBIAR_CITA
@@ -129,8 +129,7 @@ REGLAS IMPORTANTES:
 - Si la sesión tiene slots_tarde y el usuario dice "sí", "tarde", "quiero ver", "muéstrame", "opciones de tarde", "por la tarde", clasifica como AGENDAR_NUEVA (quiere ver opciones de tarde)
 - Si la sesión tiene slots_medio_dia y el usuario dice "sí", "medio día", "mañana", "quiero ver", "muéstrame", clasifica como AGENDAR_NUEVA (quiere ver opciones de medio día)
 - Si el usuario menciona una fecha específica para visitar (ej: "tienen libre el martes 24") y NO hay cita existente y NO está en flujo de recolección de información, clasifica como AGENDAR_NUEVA
-- Si el usuario está proporcionando información solicitada (nombre completo, fecha de boda) en respuesta a una pregunta del bot, clasifica como SALUDO (es parte del flujo inicial)
-- Si el bot acaba de preguntar por nombre o fecha de boda y el usuario responde con esa información, clasifica como SALUDO
+- Si el bot está esperando información específica (pending_nombre, pending_fecha_boda, o pending_agendar_fecha activo), clasifica como AGENDAR_NUEVA para que el handler de agendar.js pueda procesar la información correctamente
 - Si el usuario pregunta "qué días tienen disponible" o "cuándo puedo ir", clasifica como AGENDAR_NUEVA
 - Si el usuario pregunta sobre disponibilidad de un VESTIDO o MODELO específico (ej: "¿tiene el vestido Camila disponible?", "¿tienen disponible el modelo X?"), clasifica como CATALOGO (no AGENDAR_NUEVA)
 - Si el usuario pregunta "dónde están" o "cómo llegar", clasifica como UBICACION

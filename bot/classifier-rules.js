@@ -47,13 +47,21 @@ function classifyIntentWithRules(message, session) {
   // Check if there's an existing appointment
   const hasAppointment = session.etapa === 'cita_agendada' || session.calendar_event_id;
   
-  // AGENDAR_NUEVA: If user is in the process of scheduling (pending_agendar_fecha flag)
+  // AGENDAR_NUEVA: If user is in the process of scheduling (pending flags)
   // This should be checked AFTER cancel/reschedule keywords to avoid conflicts
-  // CRITICAL: ALWAYS force AGENDAR_NUEVA when pending_agendar_fecha is active
-  // This ensures the date message reaches agendar.js handler, which can handle
-  // both simple dates ("4 de marzo") and complex messages (corrections, clarifications)
+  // CRITICAL: ALWAYS force AGENDAR_NUEVA when any pending flag is active
+  // This ensures the message reaches agendar.js handler, which can handle
+  // name collection, wedding date collection, and appointment date collection
   if (session.pending_agendar_fecha) {
     console.log(`📌 pending_agendar_fecha activo - FORZANDO AGENDAR_NUEVA para que el mensaje llegue a agendar.js`);
+    return 'AGENDAR_NUEVA';
+  }
+  if (session.pending_nombre) {
+    console.log(`📌 pending_nombre activo - FORZANDO AGENDAR_NUEVA para que el mensaje llegue a agendar.js`);
+    return 'AGENDAR_NUEVA';
+  }
+  if (session.pending_fecha_boda) {
+    console.log(`📌 pending_fecha_boda activo - FORZANDO AGENDAR_NUEVA para que el mensaje llegue a agendar.js`);
     return 'AGENDAR_NUEVA';
   }
   
