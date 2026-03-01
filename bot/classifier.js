@@ -86,6 +86,16 @@ async function classifyIntent(message, session) {
     if (session.slots_medio_dia && session.slots_medio_dia.length > 0) {
       sessionContext.push('Estado: El bot preguntó si quiere ver opciones de medio día y está esperando respuesta');
     }
+    // CRITICAL: Include pending flags so LLM knows what the bot is waiting for
+    if (session.pending_agendar_fecha) {
+      sessionContext.push('Estado: El bot está esperando que el usuario proporcione la fecha de la cita (pending_agendar_fecha activo)');
+    }
+    if (session.pending_nombre) {
+      sessionContext.push('Estado: El bot está esperando que el usuario proporcione su nombre (pending_nombre activo)');
+    }
+    if (session.pending_fecha_boda) {
+      sessionContext.push('Estado: El bot está esperando que el usuario proporcione la fecha de su boda (pending_fecha_boda activo)');
+    }
 
     const contextString = sessionContext.length > 0 
       ? `\n\nCONTEXTO DE LA SESIÓN:\n${sessionContext.join('\n')}`
@@ -109,7 +119,8 @@ Tu tarea es clasificar el mensaje del usuario en UNA de estas 9 categorías:
 9. OTRO: Cualquier otra cosa que no encaje en las categorías anteriores
 
 REGLAS IMPORTANTES:
-- PRIORIDAD ABSOLUTA (MÁS IMPORTANTE): Si el usuario NO tiene nombre_cliente/nombre_novia O (tiene nombre pero NO tiene fecha_boda Y NO ha declinado la fecha), CUALQUIER mensaje debe clasificarse como SALUDO para completar el flujo de recolección de información. Esto incluye fechas, nombres, preguntas sobre catálogo, precios, ubicación, o cualquier otra cosa. El flujo de recolección DEBE completarse ANTES de permitir otros intents. NO clasifiques como AGENDAR_NUEVA, CATALOGO, PRECIOS, UBICACION, etc. si el usuario aún no ha completado el flujo de recolección de información.
+- PRIORIDAD ABSOLUTA (MÁS IMPORTANTE): Si el contexto indica que "pending_agendar_fecha activo", el bot está esperando específicamente la fecha de la cita. En este caso, si el mensaje contiene una fecha o menciona un día, clasifica como AGENDAR_NUEVA (NO como SALUDO), incluso si el usuario no tiene nombre o fecha_boda completados. El handler agendar.js puede manejar la extracción de la fecha.
+- Si el usuario NO tiene nombre_cliente/nombre_novia O (tiene nombre pero NO tiene fecha_boda Y NO ha declinado la fecha) Y NO hay pending_agendar_fecha activo, CUALQUIER mensaje debe clasificarse como SALUDO para completar el flujo de recolección de información. Esto incluye fechas, nombres, preguntas sobre catálogo, precios, ubicación, o cualquier otra cosa. El flujo de recolección DEBE completarse ANTES de permitir otros intents. NO clasifiques como AGENDAR_NUEVA, CATALOGO, PRECIOS, UBICACION, etc. si el usuario aún no ha completado el flujo de recolección de información.
 - Si la sesión indica que ya hay una cita agendada (etapa: cita_agendada o calendar_event_id existe):
   - Si el usuario escribe "cancelar", "no puedo", "no voy", "no asistiré", clasifica como CANCELAR_CITA
   - Si el usuario escribe "reagendar", "otra fecha", "cambiar fecha", "mover", clasifica como CAMBIAR_CITA

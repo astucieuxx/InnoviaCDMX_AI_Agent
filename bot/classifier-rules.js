@@ -49,21 +49,12 @@ function classifyIntentWithRules(message, session) {
   
   // AGENDAR_NUEVA: If user is in the process of scheduling (pending_agendar_fecha flag)
   // This should be checked AFTER cancel/reschedule keywords to avoid conflicts
-  // BUT: Only for simple date responses. Complex messages should go to LLM
+  // CRITICAL: ALWAYS force AGENDAR_NUEVA when pending_agendar_fecha is active
+  // This ensures the date message reaches agendar.js handler, which can handle
+  // both simple dates ("4 de marzo") and complex messages (corrections, clarifications)
   if (session.pending_agendar_fecha) {
-    // Check if message is a simple date response vs a complex message (correction, clarification, etc.)
-    const isSimpleDateResponse = /\d{1,2}\s*(?:de\s*)?(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)/i.test(msg);
-    const isShortResponse = msg.trim().split(/\s+/).length <= 8; // Allow slightly longer for dates with day of week
-    
-    // Only force AGENDAR_NUEVA for simple date responses
-    // Complex messages (corrections, clarifications, complaints) should go to LLM
-    if (isSimpleDateResponse && isShortResponse) {
-      return 'AGENDAR_NUEVA';
-    } else {
-      // Complex message - let LLM handle it to understand corrections, clarifications, etc.
-      console.log(`📌 Mensaje complejo durante flujo de agendamiento (pending_agendar_fecha), enviando a LLM para análisis`);
-      return null; // Let LLM process it
-    }
+    console.log(`📌 pending_agendar_fecha activo - FORZANDO AGENDAR_NUEVA para que el mensaje llegue a agendar.js`);
+    return 'AGENDAR_NUEVA';
   }
   
   // AGENDAR_NUEVA: User wants to see afternoon slots or medio día slots (very specific context)
