@@ -195,7 +195,8 @@ async function getAvailableSlots(date, calendarClient, authClient, innoviaCDMXCa
       timeMax: endOfDay.toISOString(),
       singleEvents: true,
       orderBy: 'startTime',
-      timeZone: 'America/Mexico_City'
+      timeZone: 'America/Mexico_City',
+      maxResults: 250 // Asegurar que se devuelvan todos los eventos del día
     });
 
     const eventItems = events.data.items || [];
