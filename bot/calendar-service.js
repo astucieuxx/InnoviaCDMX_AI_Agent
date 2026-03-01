@@ -195,7 +195,43 @@ async function getAvailableSlots(date, calendarClient, authClient, innoviaCDMXCa
     });
 
     const eventItems = events.data.items || [];
-    console.log(`   Eventos azules encontrados (spots disponibles): ${eventItems.length}`);
+    console.log(`   📋 Total de eventos encontrados en calendario: ${eventItems.length}`);
+    
+    // Log detallado de TODOS los eventos encontrados (antes de filtrar)
+    if (eventItems.length > 0) {
+      console.log(`   📋 ============================================`);
+      console.log(`   📋 DETALLE DE TODOS LOS EVENTOS ENCONTRADOS:`);
+      console.log(`   📋 ============================================`);
+      eventItems.forEach((e, idx) => {
+        const startStr = e.start.dateTime || e.start.date || 'N/A';
+        const endStr = e.end.dateTime || e.end.date || 'N/A';
+        const summary = e.summary || '(Sin título)';
+        const hasName = e.summary && e.summary.trim() !== '';
+        
+        // Calcular duración si tiene dateTime
+        let durationInfo = '';
+        if (e.start.dateTime && e.end.dateTime) {
+          try {
+            const start = new Date(e.start.dateTime);
+            const end = new Date(e.end.dateTime);
+            if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+              const durationMs = end.getTime() - start.getTime();
+              const durationMinutes = durationMs / (60 * 1000);
+              durationInfo = ` - Duración: ${durationMinutes.toFixed(1)} min`;
+            }
+          } catch (e) {
+            durationInfo = ' - Duración: N/A';
+          }
+        }
+        
+        console.log(`      ${idx + 1}. Evento [${e.id}]`);
+        console.log(`         Título: "${summary}"`);
+        console.log(`         Tiene nombre: ${hasName ? 'SÍ ❌ (será excluido)' : 'NO ✅ (será incluido si dura 90 min)'}`);
+        console.log(`         Inicio: ${startStr}`);
+        console.log(`         Fin: ${endStr}${durationInfo}`);
+      });
+      console.log(`   📋 ============================================`);
+    }
 
     // Procesar eventos azules (spots disponibles)
     // Estos eventos NO tienen nombre (o tienen nombre vacío) y representan horarios disponibles
@@ -304,11 +340,16 @@ async function getAvailableSlots(date, calendarClient, authClient, innoviaCDMXCa
         
         const is90Minutes = Math.abs(durationMinutes - DURACION_ESPERADA_MINUTOS) <= TOLERANCIA_MINUTOS;
         
+        // Log detallado de cada evento que pasa el filtro de nombre
+        const startTimeCDMX = event.start.toLocaleTimeString('es-MX', { timeZone: 'America/Mexico_City', hour: '2-digit', minute: '2-digit', hour12: true });
+        console.log(`   🔍 Verificando evento [${event.id}] - Hora: ${startTimeCDMX}, Duración: ${durationMinutes.toFixed(1)} min`);
+        
         if (!is90Minutes) {
-          console.log(`   ⏭️  Excluyendo evento [${event.id}] - duración: ${durationMinutes.toFixed(1)} minutos (debe ser 90 minutos)`);
+          console.log(`   ⏭️  ❌ EXCLUYENDO evento [${event.id}] - duración: ${durationMinutes.toFixed(1)} minutos (debe ser 90 minutos, tolerancia: ±${TOLERANCIA_MINUTOS} min)`);
           return false;
         }
         
+        console.log(`   ✅ INCLUYENDO evento [${event.id}] - Hora: ${startTimeCDMX}, Duración: ${durationMinutes.toFixed(1)} min (dentro de tolerancia)`);
         return true;
       });
 
