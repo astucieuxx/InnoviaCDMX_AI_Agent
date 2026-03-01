@@ -42,8 +42,8 @@ function getOpenAIClient() {
 async function extractFechaCitaDeseada(message, fechaBoda) {
   try {
     if (!process.env.OPENAI_API_KEY) {
-      console.warn('⚠️  OPENAI_API_KEY no configurado, no se puede extraer fecha de cita');
-      return null;
+      console.error('❌ OPENAI_API_KEY no está configurado. Configúralo en Railway → Variables.');
+      throw new Error('OPENAI_API_KEY no está configurado. Configúralo en Railway → Variables.');
     }
 
     const systemPrompt = `Eres un extractor de fechas para citas de showroom.
