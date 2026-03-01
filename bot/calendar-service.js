@@ -283,16 +283,74 @@ async function getAvailableSlots(date, calendarClient, authClient, innoviaCDMXCa
             console.log(`         ✅ Tiene offset, parseado directo`);
           } else {
             // No tiene offset explícito
-            // Google Calendar devuelve esto cuando timeZone está especificado
-            // El string representa la hora en ese timezone, pero JavaScript lo interpreta como local
-            // Necesitamos agregar el offset de CDMX
-            // Para marzo 2026, CDMX está en horario estándar (UTC-6)
-            const startWithTZ = `${startStr}-06:00`;
-            const endWithTZ = `${endStr}-06:00`;
-            startParsed = new Date(startWithTZ);
-            endParsed = new Date(endWithTZ);
-            console.log(`         ⚠️  Sin offset, agregado -06:00 para CDMX`);
-            console.log(`         dateTime con offset: ${startWithTZ}`);
+            // Google Calendar devuelve esto cuando timeZone está especificado en la request
+            // El string representa la hora en CDMX (America/Mexico_City)
+            // CRITICAL: Necesitamos interpretarlo correctamente como hora de CDMX
+            // Extraer componentes de la fecha/hora
+            const dateTimeMatch = startStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+            if (dateTimeMatch) {
+              const [, year, month, day, hour, minute, second] = dateTimeMatch.map(Number);
+              
+              // Calcular el offset de CDMX para esta fecha específica
+              const getCDMXOffset = (y, m, d) => {
+                const testDate = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+                const cdmxHour = parseInt(testDate.toLocaleString('en-US', { 
+                  timeZone: 'America/Mexico_City',
+                  hour: '2-digit',
+                  hour12: false
+                }));
+                const offsetHours = 12 - cdmxHour;
+                return offsetHours;
+              };
+              
+              const offsetHours = getCDMXOffset(year, month, day);
+              const offsetStr = offsetHours >= 0 
+                ? `+${String(Math.abs(offsetHours)).padStart(2, '0')}:00` 
+                : `-${String(Math.abs(offsetHours)).padStart(2, '0')}:00`;
+              
+              const startWithTZ = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second || 0).padStart(2, '0')}${offsetStr}`;
+              
+              // Hacer lo mismo para endStr
+              const endDateTimeMatch = endStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+              if (endDateTimeMatch) {
+                const [, endYear, endMonth, endDay, endHour, endMinute, endSecond] = endDateTimeMatch.map(Number);
+                const endOffsetHours = getCDMXOffset(endYear, endMonth, endDay);
+                const endOffsetStr = endOffsetHours >= 0 
+                  ? `+${String(Math.abs(endOffsetHours)).padStart(2, '0')}:00` 
+                  : `-${String(Math.abs(endOffsetHours)).padStart(2, '0')}:00`;
+                const endWithTZ = `${endYear}-${String(endMonth).padStart(2, '0')}-${String(endDay).padStart(2, '0')}T${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}:${String(endSecond || 0).padStart(2, '0')}${endOffsetStr}`;
+                
+                startParsed = new Date(startWithTZ);
+                endParsed = new Date(endWithTZ);
+                
+                // Verificar que la fecha se parseó correctamente
+                const parsedDateCDMX = startParsed.toLocaleDateString('en-US', { timeZone: 'America/Mexico_City', year: 'numeric', month: '2-digit', day: '2-digit' });
+                const parsedTimeCDMX = startParsed.toLocaleTimeString('es-MX', { timeZone: 'America/Mexico_City', hour: '2-digit', minute: '2-digit', hour12: true });
+                const expectedDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                
+                console.log(`         ⚠️  Sin offset, calculado offset CDMX: ${offsetStr} para fecha ${year}-${month}-${day}`);
+                console.log(`         dateTime con offset: ${startWithTZ}`);
+                console.log(`         Fecha parseada en CDMX: ${parsedDateCDMX} (esperada: ${expectedDate}), Hora: ${parsedTimeCDMX}`);
+                
+                // Verificar que la fecha parseada corresponde al día esperado
+                const parsedDateParts = parsedDateCDMX.split('/');
+                const parsedDateFormatted = `${parsedDateParts[2]}-${parsedDateParts[0].padStart(2, '0')}-${parsedDateParts[1].padStart(2, '0')}`;
+                if (parsedDateFormatted !== expectedDate) {
+                  console.error(`         ❌ ERROR: Fecha parseada incorrecta! Esperada: ${expectedDate}, Obtenida: ${parsedDateFormatted}`);
+                }
+              } else {
+                // Fallback si no podemos parsear endStr
+                startParsed = new Date(startWithTZ);
+                endParsed = new Date(endStr);
+              }
+            } else {
+              // Fallback si no podemos parsear startStr
+              const startWithTZ = `${startStr}-06:00`;
+              const endWithTZ = `${endStr}-06:00`;
+              startParsed = new Date(startWithTZ);
+              endParsed = new Date(endWithTZ);
+              console.log(`         ⚠️  No se pudo parsear fecha, usando fallback -06:00`);
+            }
           }
           
           start = startParsed;
@@ -328,6 +386,23 @@ async function getAvailableSlots(date, calendarClient, authClient, innoviaCDMXCa
       .filter(event => {
         // Filtrar eventos con fechas inválidas
         if (isNaN(event.start.getTime()) || isNaN(event.end.getTime())) {
+          console.log(`   ⏭️  ❌ EXCLUYENDO evento [${event.id}] - fecha inválida`);
+          return false;
+        }
+        
+        // CRITICAL: Filtrar eventos que NO son del día solicitado
+        // Verificar que el evento esté en el día correcto (en CDMX)
+        const eventDateCDMX = event.start.toLocaleDateString('en-US', { timeZone: 'America/Mexico_City', year: 'numeric', month: '2-digit', day: '2-digit' });
+        const requestedDateCDMX = new Date(year, month - 1, day).toLocaleDateString('en-US', { timeZone: 'America/Mexico_City', year: 'numeric', month: '2-digit', day: '2-digit' });
+        
+        // Comparar fechas en formato YYYY-MM-DD para evitar problemas de formato
+        const eventDateParts = eventDateCDMX.split('/');
+        const eventDateFormatted = `${eventDateParts[2]}-${eventDateParts[0].padStart(2, '0')}-${eventDateParts[1].padStart(2, '0')}`;
+        const requestedDateFormatted = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        
+        if (eventDateFormatted !== requestedDateFormatted) {
+          const startTimeCDMX = event.start.toLocaleTimeString('es-MX', { timeZone: 'America/Mexico_City', hour: '2-digit', minute: '2-digit', hour12: true });
+          console.log(`   ⏭️  ❌ EXCLUYENDO evento [${event.id}] - fecha incorrecta: ${eventDateFormatted} (solicitado: ${requestedDateFormatted}), Hora: ${startTimeCDMX}`);
           return false;
         }
         
@@ -340,16 +415,16 @@ async function getAvailableSlots(date, calendarClient, authClient, innoviaCDMXCa
         
         const is90Minutes = Math.abs(durationMinutes - DURACION_ESPERADA_MINUTOS) <= TOLERANCIA_MINUTOS;
         
-        // Log detallado de cada evento que pasa el filtro de nombre
+        // Log detallado de cada evento que pasa el filtro de nombre y fecha
         const startTimeCDMX = event.start.toLocaleTimeString('es-MX', { timeZone: 'America/Mexico_City', hour: '2-digit', minute: '2-digit', hour12: true });
-        console.log(`   🔍 Verificando evento [${event.id}] - Hora: ${startTimeCDMX}, Duración: ${durationMinutes.toFixed(1)} min`);
+        console.log(`   🔍 Verificando evento [${event.id}] - Fecha: ${eventDateFormatted}, Hora: ${startTimeCDMX}, Duración: ${durationMinutes.toFixed(1)} min`);
         
         if (!is90Minutes) {
           console.log(`   ⏭️  ❌ EXCLUYENDO evento [${event.id}] - duración: ${durationMinutes.toFixed(1)} minutos (debe ser 90 minutos, tolerancia: ±${TOLERANCIA_MINUTOS} min)`);
           return false;
         }
         
-        console.log(`   ✅ INCLUYENDO evento [${event.id}] - Hora: ${startTimeCDMX}, Duración: ${durationMinutes.toFixed(1)} min (dentro de tolerancia)`);
+        console.log(`   ✅ INCLUYENDO evento [${event.id}] - Fecha: ${eventDateFormatted}, Hora: ${startTimeCDMX}, Duración: ${durationMinutes.toFixed(1)} min (dentro de tolerancia)`);
         return true;
       });
 
