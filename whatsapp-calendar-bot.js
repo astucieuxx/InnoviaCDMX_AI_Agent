@@ -3042,11 +3042,11 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
           }
         }
       }
-    } else if (session.pending_nombre === true && !options.isButtonClick) {
-      // User is providing their name - force AGENDAR_NUEVA so the name collection
-      // logic inside agendar.js executes (it lives there, not in SALUDO handler)
+    } else if ((session.pending_nombre === true || session.pending_fecha_boda === true) && !options.isButtonClick) {
+      // User is providing their name or wedding date - force AGENDAR_NUEVA so the
+      // collection logic inside agendar.js executes (it lives there, not in SALUDO/OTRO)
       intent = 'AGENDAR_NUEVA';
-      console.log(`📌 pending_nombre=true, forzando AGENDAR_NUEVA para procesar nombre del usuario`);
+      console.log(`📌 pending_nombre/fecha_boda=true, forzando AGENDAR_NUEVA para procesar respuesta del usuario`);
     } else {
       // Normal flow - classify intent
       intent = await classifyIntent(incomingMessage, session);
