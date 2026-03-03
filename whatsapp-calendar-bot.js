@@ -2389,6 +2389,12 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
             console.log(`   Link: ${calendarEvent.htmlLink || 'N/A'}`);
             
             // CRITICAL: Restore the original blue event in Innovia CDMX calendar
+            console.log(`🔍 Verificando condiciones para restaurar evento azul...`);
+            console.log(`   originalEventStart: ${originalEventStart || 'null'}`);
+            console.log(`   innoviaCDMXCalendarId: ${innoviaCDMXCalendarId || 'null'}`);
+            console.log(`   ¿originalEventStart existe?: ${!!originalEventStart}`);
+            console.log(`   ¿innoviaCDMXCalendarId existe?: ${!!innoviaCDMXCalendarId}`);
+            
             if (originalEventStart && innoviaCDMXCalendarId) {
               try {
                 console.log(`🔄 ============================================`);
