@@ -124,34 +124,95 @@ async function execute(session, message) {
       sessionUpdates.pending_fecha_boda = true;
     }
   } else if (hasNombre && (hasFechaBoda || fechaBodaDeclinada)) {
-    // User has both name and fecha_boda (or declined) - show appointment submenu directly
+    // User has both name and fecha_boda (or declined)
     const nombreCliente = nombrePrimero || getClientName(session);
     const tieneCita = session.etapa === 'cita_agendada' && session.calendar_event_id;
     
-    if (hasFechaBoda) {
-      reply = getBotMessage('saludo', 'con_nombre_y_fecha', {
-        nombre_cliente: nombreCliente,
-        fecha_boda: formatFechaBoda(session.fecha_boda)
-      }) || `¡Muy bien ${nombreCliente}! ✨ Qué emoción, tu boda el ${formatFechaBoda(session.fecha_boda)} está a la vuelta de la esquina 💫\n\n¿Qué te gustaría hacer?`;
-    } else {
-      reply = getBotMessage('saludo', 'con_nombre_sin_fecha', {
-        nombre_cliente: nombreCliente
-      }) || `¡Hola ${nombreCliente}! ✨ Bienvenida a ${nombre} 💫\n\n¿Qué te gustaría hacer?`;
+    // Check if more than 5 minutes have passed since last interaction
+    // Use the timestamp of the last message in history (more accurate than ultima_actividad)
+    // Note: The current "hola" message is already in history, so we need to get the previous one
+    let lastMessageTime = null;
+    if (session.historial && session.historial.length > 1) {
+      // Get all messages except the last one (which is the current "hola")
+      const previousMessages = session.historial.slice(0, -1);
+      // Find the last user message before the current one
+      for (let i = previousMessages.length - 1; i >= 0; i--) {
+        if (previousMessages[i].role === 'user' && previousMessages[i].timestamp) {
+          lastMessageTime = new Date(previousMessages[i].timestamp);
+          break;
+        }
+      }
     }
     
-    // Show appointment submenu buttons directly (not main menu)
-    buttons.push({
-      id: 'cita_nueva',
-      title: 'Agendar Nueva Cita'
-    });
-    buttons.push({
-      id: 'cita_editar',
-      title: 'Editar Cita'
-    });
-    buttons.push({
-      id: 'cita_cancelar',
-      title: 'Cancelar Cita'
-    });
+    // Fallback to ultima_actividad if no history timestamp available
+    if (!lastMessageTime && session.ultima_actividad) {
+      lastMessageTime = new Date(session.ultima_actividad);
+    }
+    
+    const now = new Date();
+    const minutesSinceLastActivity = lastMessageTime 
+      ? Math.floor((now.getTime() - lastMessageTime.getTime()) / (1000 * 60))
+      : Infinity;
+    
+    const moreThan5Minutes = minutesSinceLastActivity > 5;
+    
+    if (moreThan5Minutes) {
+      // More than 5 minutes passed - show main menu (treat as new conversation)
+      console.log(`⏰ Han pasado ${minutesSinceLastActivity} minutos desde la última interacción - mostrando menú principal`);
+      
+      if (hasFechaBoda) {
+        reply = getBotMessage('saludo', 'con_nombre_y_fecha', {
+          nombre_cliente: nombreCliente,
+          fecha_boda: formatFechaBoda(session.fecha_boda)
+        }) || `¡Hola ${nombreCliente}! ✨ Qué emoción, tu boda el ${formatFechaBoda(session.fecha_boda)} está a la vuelta de la esquina 💫\n\n¿En qué puedo ayudarte hoy?`;
+      } else {
+        reply = getBotMessage('saludo', 'con_nombre_sin_fecha', {
+          nombre_cliente: nombreCliente
+        }) || `¡Hola ${nombreCliente}! ✨ Bienvenida a ${nombre} 💫\n\n¿En qué puedo ayudarte hoy?`;
+      }
+      
+      // Show main menu buttons
+      buttons.push({
+        id: 'menu_agendar',
+        title: 'Agendar/Editar Cita'
+      });
+      buttons.push({
+        id: 'menu_info',
+        title: 'Obtener Info'
+      });
+      buttons.push({
+        id: 'menu_asesor',
+        title: 'Contactar Asesor'
+      });
+    } else {
+      // Less than 5 minutes - show appointment submenu directly (continue conversation)
+      console.log(`⏰ Han pasado ${minutesSinceLastActivity} minutos desde la última interacción - mostrando submenú de citas`);
+      
+      if (hasFechaBoda) {
+        reply = getBotMessage('saludo', 'con_nombre_y_fecha', {
+          nombre_cliente: nombreCliente,
+          fecha_boda: formatFechaBoda(session.fecha_boda)
+        }) || `¡Muy bien ${nombreCliente}! ✨ Qué emoción, tu boda el ${formatFechaBoda(session.fecha_boda)} está a la vuelta de la esquina 💫\n\n¿Qué te gustaría hacer?`;
+      } else {
+        reply = getBotMessage('saludo', 'con_nombre_sin_fecha', {
+          nombre_cliente: nombreCliente
+        }) || `¡Hola ${nombreCliente}! ✨ Bienvenida a ${nombre} 💫\n\n¿Qué te gustaría hacer?`;
+      }
+      
+      // Show appointment submenu buttons directly (not main menu)
+      buttons.push({
+        id: 'cita_nueva',
+        title: 'Agendar Nueva Cita'
+      });
+      buttons.push({
+        id: 'cita_editar',
+        title: 'Editar Cita'
+      });
+      buttons.push({
+        id: 'cita_cancelar',
+        title: 'Cancelar Cita'
+      });
+    }
   } else {
     // First contact - just greet and show options
     reply = getBotMessage('saludo', 'primer_contacto', {
