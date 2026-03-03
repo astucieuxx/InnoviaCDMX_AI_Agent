@@ -2378,7 +2378,7 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
           }
           
           // If we have calendar_event_id, update the existing event
-          // If we have pending_delete_old_event, we'll create a new event and delete the old one later
+          // If we have pending_delete_old_event, create a new event (we'll delete the old one later)
           if (sessionData.calendar_event_id) {
             calendarEvent = await updateCalendarEventService(
               sessionData.calendar_event_id,
@@ -2391,11 +2391,24 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
               authClient,
               targetCalendarId
             );
-          } else {
+          } else if (sessionData.pending_delete_old_event) {
             // pending_delete_old_event: create new event first, then delete old one later
-            // This will be handled in the "else" block below
+            console.log(`📅 Creando nuevo evento (moviendo cita existente)...`);
+            calendarEvent = await createCalendarEventService(
+              getClientName(sessionData) || 'Cliente',
+              cleanPhone,
+              null, // Email not available in session yet
+              selectedSlot.start,
+              sessionData.fecha_boda,
+              calendar,
+              authClient,
+              targetCalendarId
+            );
+          } else {
+            // This shouldn't happen, but just in case
             calendarEvent = null;
           }
+          
           if (calendarEvent) {
             console.log(`✅ Evento reagendado exitosamente en Google Calendar`);
             console.log(`   ID: ${calendarEvent.id}`);
