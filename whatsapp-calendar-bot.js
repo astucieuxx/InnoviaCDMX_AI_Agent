@@ -2415,46 +2415,52 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
             console.log(`   Link: ${calendarEvent.htmlLink || 'N/A'}`);
             
             // CRITICAL: Restore the original blue event in Innovia CDMX calendar
-            console.log(`🔍 Verificando condiciones para restaurar evento azul...`);
-            console.log(`   originalEventStart: ${originalEventStart || 'null'}`);
-            console.log(`   innoviaCDMXCalendarId: ${innoviaCDMXCalendarId || 'null'}`);
-            console.log(`   ¿originalEventStart existe?: ${!!originalEventStart}`);
-            console.log(`   ¿innoviaCDMXCalendarId existe?: ${!!innoviaCDMXCalendarId}`);
-            
-            if (originalEventStart && innoviaCDMXCalendarId) {
-              try {
-                console.log(`🔄 ============================================`);
-                console.log(`🔄 RESTAURANDO EVENTO AZUL ORIGINAL`);
-                console.log(`🔄 ============================================`);
-                console.log(`🔄 Fecha/hora original de la cita: ${originalEventStart}`);
-                console.log(`🔄 Calendario Innovia CDMX ID: ${innoviaCDMXCalendarId}`);
-                console.log(`🔄 Restaurando evento azul en calendario "Innovia CDMX"...`);
-                
-                const restoredEvent = await restoreBlueEventService(
-                  originalEventStart,
-                  calendar,
-                  authClient,
-                  innoviaCDMXCalendarId
-                );
-                
-                if (restoredEvent) {
-                  console.log(`✅ Evento azul original restaurado exitosamente (ID: ${restoredEvent.id})`);
-                } else {
-                  console.error(`❌ La función restoreBlueEvent retornó null - revisa los logs anteriores`);
+            // BUT: Only if we're updating an existing event (calendar_event_id), NOT if we're creating a new one (pending_delete_old_event)
+            // When pending_delete_old_event, the restoration will happen later after the new event is created
+            if (sessionData.calendar_event_id && !sessionData.pending_delete_old_event) {
+              console.log(`🔍 Verificando condiciones para restaurar evento azul...`);
+              console.log(`   originalEventStart: ${originalEventStart || 'null'}`);
+              console.log(`   innoviaCDMXCalendarId: ${innoviaCDMXCalendarId || 'null'}`);
+              console.log(`   ¿originalEventStart existe?: ${!!originalEventStart}`);
+              console.log(`   ¿innoviaCDMXCalendarId existe?: ${!!innoviaCDMXCalendarId}`);
+              
+              if (originalEventStart && innoviaCDMXCalendarId) {
+                try {
+                  console.log(`🔄 ============================================`);
+                  console.log(`🔄 RESTAURANDO EVENTO AZUL ORIGINAL`);
+                  console.log(`🔄 ============================================`);
+                  console.log(`🔄 Fecha/hora original de la cita: ${originalEventStart}`);
+                  console.log(`🔄 Calendario Innovia CDMX ID: ${innoviaCDMXCalendarId}`);
+                  console.log(`🔄 Restaurando evento azul en calendario "Innovia CDMX"...`);
+                  
+                  const restoredEvent = await restoreBlueEventService(
+                    originalEventStart,
+                    calendar,
+                    authClient,
+                    innoviaCDMXCalendarId
+                  );
+                  
+                  if (restoredEvent) {
+                    console.log(`✅ Evento azul original restaurado exitosamente (ID: ${restoredEvent.id})`);
+                  } else {
+                    console.error(`❌ La función restoreBlueEvent retornó null - revisa los logs anteriores`);
+                  }
+                  console.log(`🔄 ============================================`);
+                } catch (error) {
+                  console.error(`❌ Error restaurando evento azul original: ${error.message}`);
+                  console.error(`   Stack: ${error.stack}`);
+                  // No fallar el proceso completo si la restauración falla
                 }
-                console.log(`🔄 ============================================`);
-              } catch (error) {
-                console.error(`❌ Error restaurando evento azul original: ${error.message}`);
-                console.error(`   Stack: ${error.stack}`);
-                // No fallar el proceso completo si la restauración falla
+              } else {
+                if (!originalEventStart) {
+                  console.warn(`⚠️  No se pudo obtener originalEventStart - no se restaurará evento azul`);
+                }
+                if (!innoviaCDMXCalendarId) {
+                  console.warn(`⚠️  No se encontró calendario "Innovia CDMX" - no se restaurará evento azul`);
+                }
               }
-            } else {
-              if (!originalEventStart) {
-                console.warn(`⚠️  No se pudo obtener originalEventStart - no se restaurará evento azul`);
-              }
-              if (!innoviaCDMXCalendarId) {
-                console.warn(`⚠️  No se encontró calendario "Innovia CDMX" - no se restaurará evento azul`);
-              }
+            } else if (sessionData.pending_delete_old_event) {
+              console.log(`📌 pending_delete_old_event activo - la restauración del evento azul se hará después de crear el nuevo evento`);
             }
             
             // CRITICAL: Delete the new blue event from the selected slot (same as when creating new appointment)
