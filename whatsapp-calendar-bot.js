@@ -2578,11 +2578,11 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
           }
         }
         
-        // Send confirmation (use first name for message, but full name is already saved in calendar)
+        // Send confirmation (use full name for message)
         // Solo enviar si el evento se creó exitosamente
         if (calendarEvent && calendarEvent.id) {
           const confirmationMessage = getAppointmentConfirmationMessage({
-            name: getClientFirstName(sessionData) || getClientName(sessionData) || 'Cliente',
+            name: getClientName(sessionData) || 'Cliente',
             date: appointmentDateForEvent || 'la fecha seleccionada',
             time: selectedSlot.time,
             calendarLink: calendarEvent?.htmlLink
