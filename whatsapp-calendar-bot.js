@@ -30,7 +30,8 @@ const {
   createCalendarEvent: createCalendarEventService,
   updateCalendarEvent: updateCalendarEventService,
   deleteCalendarEvent: deleteCalendarEventService,
-  findEventsByName: findEventsByNameService
+  findEventsByName: findEventsByNameService,
+  restoreBlueEvent: restoreBlueEventService
 } = require('./bot/calendar-service');
 
 const app = express();
@@ -2327,6 +2328,25 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
         // Check if we're rescheduling (have existing eventId)
         if (sessionData.calendar_event_id) {
           console.log(`📅 Reagendando evento existente: ${sessionData.calendar_event_id}`);
+          
+          // CRITICAL: Before updating, get the original event to restore the blue event
+          let originalEventStart = null;
+          try {
+            const auth = authClient && typeof authClient.getClient === 'function' 
+              ? await authClient.getClient() 
+              : authClient;
+            
+            const originalEventResponse = await calendar.events.get({
+              auth: auth,
+              calendarId: targetCalendarId,
+              eventId: sessionData.calendar_event_id
+            });
+            originalEventStart = originalEventResponse.data.start.dateTime || originalEventResponse.data.start.date;
+            console.log(`📅 Fecha/hora original de la cita: ${originalEventStart}`);
+          } catch (error) {
+            console.warn(`⚠️  No se pudo obtener evento original antes de reagendar: ${error.message}`);
+          }
+          
           calendarEvent = await updateCalendarEventService(
             sessionData.calendar_event_id,
             getClientName(sessionData) || 'Cliente',
@@ -2342,6 +2362,67 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
             console.log(`✅ Evento reagendado exitosamente en Google Calendar`);
             console.log(`   ID: ${calendarEvent.id}`);
             console.log(`   Link: ${calendarEvent.htmlLink || 'N/A'}`);
+            
+            // CRITICAL: Restore the original blue event in Innovia CDMX calendar
+            if (originalEventStart && innoviaCDMXCalendarId) {
+              try {
+                console.log(`🔄 Restaurando evento azul original en calendario "Innovia CDMX"...`);
+                await restoreBlueEventService(
+                  originalEventStart,
+                  calendar,
+                  authClient,
+                  innoviaCDMXCalendarId
+                );
+                console.log(`✅ Evento azul original restaurado exitosamente`);
+              } catch (error) {
+                console.error(`❌ Error restaurando evento azul original: ${error.message}`);
+                // No fallar el proceso completo si la restauración falla
+              }
+            }
+            
+            // CRITICAL: Delete the new blue event from the selected slot (same as when creating new appointment)
+            if (selectedSlot.eventId && innoviaCDMXCalendarId) {
+              try {
+                console.log(`🗑️  Eliminando nuevo evento azul (spot disponible) del calendario "Innovia CDMX"...`);
+                console.log(`   Event ID a eliminar: ${selectedSlot.eventId}`);
+                
+                let auth;
+                if (authClient && typeof authClient.getClient === 'function') {
+                  auth = await authClient.getClient();
+                } else {
+                  auth = authClient;
+                }
+                
+                // Verify it's a blue event before deleting
+                try {
+                  const eventToDelete = await calendar.events.get({
+                    auth: auth,
+                    calendarId: innoviaCDMXCalendarId,
+                    eventId: selectedSlot.eventId
+                  });
+                  
+                  if (eventToDelete.data.summary && eventToDelete.data.summary.trim() !== '') {
+                    console.warn(`   ⚠️  ADVERTENCIA: El evento ${selectedSlot.eventId} tiene nombre - NO se eliminará`);
+                  } else {
+                    await calendar.events.delete({
+                      auth: auth,
+                      calendarId: innoviaCDMXCalendarId,
+                      eventId: selectedSlot.eventId
+                    });
+                    console.log(`✅ Nuevo evento azul eliminado exitosamente (spot ${selectedSlot.time} ahora ocupado)`);
+                  }
+                } catch (getError) {
+                  if (getError.code === 404) {
+                    console.warn(`   ⚠️  El evento ${selectedSlot.eventId} ya no existe`);
+                  } else {
+                    throw getError;
+                  }
+                }
+              } catch (error) {
+                console.error(`❌ Error eliminando nuevo evento azul: ${error.message}`);
+                // No fallar el proceso completo si la eliminación falla
+              }
+            }
           } else {
             console.error(`❌ No se pudo reagendar el evento en Google Calendar`);
           }
@@ -2576,6 +2657,7 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
         }
         
         // Update etapa and clear slots, save event ID for rescheduling
+        // CRITICAL: Save the original blue event ID and date/time so we can restore it if appointment is cancelled/moved
         sessions.updateSession(cleanPhone, {
           etapa: 'cita_agendada',
           slots_disponibles: null,
@@ -2584,7 +2666,10 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
           calendar_event_id: calendarEvent?.id || null, // Save event ID for rescheduling
           pending_delete_old_event: null, // Clear flag
           fecha_cita_existente: null,
-          appointmentActions: appointmentActions
+          appointmentActions: appointmentActions,
+          original_blue_event_id: selectedSlot.eventId, // Save original blue event ID
+          original_blue_event_start: selectedSlot.start, // Save original blue event start time
+          original_blue_event_end: selectedSlot.end // Save original blue event end time
         });
         
         return; // Done, don't process as regular message
@@ -2758,6 +2843,24 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
             console.warn('⚠️  No se pudo obtener detalles del evento antes de cancelar:', error.message);
           }
           
+          // Get event start time before deletion to restore blue event
+          let eventStartTime = null;
+          try {
+            const auth = authClient && typeof authClient.getClient === 'function' 
+              ? await authClient.getClient() 
+              : authClient;
+            
+            const eventResponse = await calendar.events.get({
+              auth: auth,
+              calendarId: targetCalendarId,
+              eventId: session.calendar_event_id
+            });
+            eventStartTime = eventResponse.data.start.dateTime || eventResponse.data.start.date;
+            console.log(`📅 Fecha/hora de la cita a cancelar: ${eventStartTime}`);
+          } catch (error) {
+            console.warn(`⚠️  No se pudo obtener evento antes de cancelar: ${error.message}`);
+          }
+          
           // Delete the calendar event
           try {
             await deleteCalendarEventService(
@@ -2767,6 +2870,23 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
               targetCalendarId
             );
             console.log(`✅ Evento cancelado eliminado del calendario (ID: ${session.calendar_event_id})`);
+            
+            // CRITICAL: Restore the blue event in Innovia CDMX calendar
+            if (eventStartTime && innoviaCDMXCalendarId) {
+              try {
+                console.log(`🔄 Restaurando evento azul en calendario "Innovia CDMX" después de cancelar cita...`);
+                await restoreBlueEventService(
+                  eventStartTime,
+                  calendar,
+                  authClient,
+                  innoviaCDMXCalendarId
+                );
+                console.log(`✅ Evento azul restaurado exitosamente después de cancelar cita`);
+              } catch (error) {
+                console.error(`❌ Error restaurando evento azul después de cancelar: ${error.message}`);
+                // No fallar el proceso completo si la restauración falla
+              }
+            }
             
             // Send confirmation message
             const nombrePrimero = getClientFirstName(session);
@@ -2784,7 +2904,10 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
               pending_cancel_confirmation: false,
               slots_disponibles: null,
               fecha_cita_solicitada: null,
-              fecha_cita: null
+              fecha_cita: null,
+              original_blue_event_id: null,
+              original_blue_event_start: null,
+              original_blue_event_end: null
             });
           } catch (error) {
             console.error('❌ Error eliminando evento cancelado:', error.message);

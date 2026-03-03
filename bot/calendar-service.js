@@ -1404,6 +1404,111 @@ async function findEventsByName(clientName, calendarClient, authClient, calendar
   }
 }
 
+/**
+ * Restore a blue event (90-minute untitled event) in the Innovia CDMX calendar
+ * This is used when an appointment is cancelled or moved to restore the available slot
+ * @param {string} dateStart - Start date/time in ISO format
+ * @param {Object} calendarClient - Google Calendar API client
+ * @param {Object} authClient - Google Auth client
+ * @param {string} calendarId - Calendar ID (Innovia CDMX calendar)
+ * @returns {Promise<Object|null>} Created event object or null
+ */
+async function restoreBlueEvent(dateStart, calendarClient, authClient, calendarId) {
+  try {
+    if (!authClient || !calendarId) {
+      console.warn('⚠️  Google Auth no inicializado o calendarId faltante, no se puede restaurar evento azul');
+      return null;
+    }
+
+    // Obtener cliente de autenticación
+    let auth;
+    if (authClient && typeof authClient.getClient === 'function') {
+      auth = await authClient.getClient();
+    } else {
+      auth = authClient;
+    }
+    
+    // Parse dateStart to get start and end times
+    let startDate;
+    if (typeof dateStart === 'string' && dateStart.includes('T')) {
+      const hasOffset = dateStart.endsWith('Z') || dateStart.match(/[+-]\d{2}:\d{2}$/);
+      if (hasOffset) {
+        startDate = new Date(dateStart);
+      } else {
+        // No tiene offset, extraer componentes y agregar offset de CDMX
+        const dateMatch = dateStart.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+        if (dateMatch) {
+          const [, year, month, day, hour, minute, second] = dateMatch.map(Number);
+          
+          // Calcular el offset de CDMX para esta fecha específica
+          const getCDMXOffset = (y, m, d) => {
+            const testDate = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+            const cdmxHour = parseInt(testDate.toLocaleString('en-US', { 
+              timeZone: 'America/Mexico_City',
+              hour: '2-digit',
+              hour12: false
+            }));
+            const offsetHours = cdmxHour - 12;
+            return offsetHours;
+          };
+          
+          const offsetHours = getCDMXOffset(year, month, day);
+          const offsetStr = offsetHours >= 0 
+            ? `+${String(Math.abs(offsetHours)).padStart(2, '0')}:00` 
+            : `-${String(Math.abs(offsetHours)).padStart(2, '0')}:00`;
+          
+          const isoString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second || 0).padStart(2, '0')}${offsetStr}`;
+          startDate = new Date(isoString);
+        } else {
+          startDate = new Date(dateStart);
+        }
+      }
+    } else {
+      startDate = new Date(dateStart);
+    }
+    
+    // Verificar que la fecha se parseó correctamente
+    if (isNaN(startDate.getTime())) {
+      console.error(`   ❌ ERROR: No se pudo parsear dateStart: ${dateStart}`);
+      return null;
+    }
+    
+    // End date is 90 minutes after start
+    const endDate = new Date(startDate.getTime() + 90 * 60 * 1000);
+    
+    // Create event without title (blue event) - 90 minutes duration
+    const event = {
+      summary: '', // Sin título = evento azul
+      description: '', // Sin descripción
+      start: {
+        dateTime: startDate.toISOString(),
+        timeZone: 'America/Mexico_City'
+      },
+      end: {
+        dateTime: endDate.toISOString(),
+        timeZone: 'America/Mexico_City'
+      }
+    };
+    
+    console.log(`🔄 Restaurando evento azul en calendario "Innovia CDMX"...`);
+    console.log(`   Inicio: ${startDate.toISOString()} (${startDate.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })})`);
+    console.log(`   Fin: ${endDate.toISOString()} (${endDate.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })})`);
+    console.log(`   Duración: 90 minutos`);
+    
+    const createdEvent = await calendarClient.events.insert({
+      auth: auth,
+      calendarId: calendarId,
+      resource: event
+    });
+    
+    console.log(`✅ Evento azul restaurado exitosamente (ID: ${createdEvent.data.id})`);
+    return createdEvent.data;
+  } catch (error) {
+    console.error('❌ Error restaurando evento azul:', error.message);
+    return null;
+  }
+}
+
 module.exports = {
   getAvailableSlots,
   isDayOpen,
@@ -1412,5 +1517,6 @@ module.exports = {
   createCalendarEvent,
   updateCalendarEvent,
   deleteCalendarEvent,
-  findEventsByName
+  findEventsByName,
+  restoreBlueEvent
 };
