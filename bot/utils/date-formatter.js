@@ -111,7 +111,8 @@ function formatDateSpanishCDMX(dateInput) {
   const monthNames = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 
                       'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
   
-  // Use toLocaleDateString with timeZone to get components in CDMX
+  // CRITICAL: Use toLocaleDateString with timeZone to get components in CDMX
+  // This ensures the date is displayed correctly in Mexico City timezone
   const dateStr = date.toLocaleDateString('en-US', { 
     timeZone: 'America/Mexico_City',
     weekday: 'long',
@@ -119,6 +120,12 @@ function formatDateSpanishCDMX(dateInput) {
     month: 'long',
     day: 'numeric'
   });
+  
+  // Log para diagnóstico
+  console.log(`📅 [formatDateSpanishCDMX] Input: ${dateInput}`);
+  console.log(`   Date object: ${date.toISOString()}`);
+  console.log(`   Date en CDMX (toLocaleString): ${date.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })}`);
+  console.log(`   dateStr (toLocaleDateString): ${dateStr}`);
   
   // Parse the formatted string (e.g., "Friday, March 20, 2026")
   const match = dateStr.match(/(\w+), (\w+) (\d+), (\d+)/);
@@ -140,17 +147,50 @@ function formatDateSpanishCDMX(dateInput) {
     // Capitalize first letter
     const capitalizedDayOfWeek = dayOfWeek.charAt(0).toUpperCase() + dayOfWeek.slice(1);
     
-    return `${capitalizedDayOfWeek}, ${parseInt(day)} de ${month} ${year}`;
+    const result = `${capitalizedDayOfWeek}, ${parseInt(day)} de ${month} ${year}`;
+    console.log(`   Resultado formateado: ${result}`);
+    return result;
   }
   
-  // Fallback
+  // Fallback: usar componentes directamente del Date object en CDMX
+  // CRITICAL: Usar toLocaleDateString para obtener componentes en CDMX
+  const cdmxParts = date.toLocaleDateString('en-US', { 
+    timeZone: 'America/Mexico_City',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    weekday: 'long'
+  });
+  
+  // Extraer componentes del string formateado
+  const fallbackMatch = cdmxParts.match(/(\w+), (\d+)\/(\d+)\/(\d+)/);
+  if (fallbackMatch) {
+    const [, weekdayEn, month, day, year] = fallbackMatch;
+    const weekdayMap = {
+      'Sunday': 'domingo', 'Monday': 'lunes', 'Tuesday': 'martes', 'Wednesday': 'miércoles',
+      'Thursday': 'jueves', 'Friday': 'viernes', 'Saturday': 'sábado'
+    };
+    const monthNames = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 
+                        'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+    const dayOfWeek = weekdayMap[weekdayEn] || dayOfWeekNames[date.getDay()];
+    const monthName = monthNames[parseInt(month) - 1] || monthNames[date.getMonth()];
+    const capitalizedDayOfWeek = dayOfWeek.charAt(0).toUpperCase() + dayOfWeek.slice(1);
+    
+    const result = `${capitalizedDayOfWeek}, ${parseInt(day)} de ${monthName} ${year}`;
+    console.log(`   Resultado formateado (fallback): ${result}`);
+    return result;
+  }
+  
+  // Último fallback: usar métodos del Date object (puede ser incorrecto si el servidor no está en CDMX)
   const dayOfWeek = dayOfWeekNames[date.getDay()];
   const day = date.getDate();
   const month = monthNames[date.getMonth()];
   const year = date.getFullYear();
   const capitalizedDayOfWeek = dayOfWeek.charAt(0).toUpperCase() + dayOfWeek.slice(1);
   
-  return `${capitalizedDayOfWeek}, ${day} de ${month} ${year}`;
+  const result = `${capitalizedDayOfWeek}, ${day} de ${month} ${year}`;
+  console.warn(`   ⚠️  Usando último fallback (puede ser incorrecto): ${result}`);
+  return result;
 }
 
 module.exports = {

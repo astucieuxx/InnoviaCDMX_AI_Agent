@@ -143,8 +143,31 @@ async function execute(session, message, calendarDeps = null) {
       } else {
         // Parse from event start (when event comes directly from events.get)
         const eventStart = existingEvent.start.dateTime || existingEvent.start.date || existingEvent.start;
-        formattedDate = formatDateSpanish(eventStart);
-        formattedTime = formatTimeSpanish(eventStart);
+        
+        // Log para diagnóstico
+        console.log(`📅 [cancelar-cita] Parseando fecha del evento...`);
+        console.log(`   eventStart (raw): ${eventStart}`);
+        console.log(`   existingEvent.start.dateTime: ${existingEvent.start.dateTime || 'N/A'}`);
+        console.log(`   existingEvent.start.date: ${existingEvent.start.date || 'N/A'}`);
+        
+        // Parsear la fecha correctamente usando parseCalendarDate
+        const { parseCalendarDate } = require('../utils/date-formatter');
+        const parsedDate = parseCalendarDate(eventStart);
+        
+        if (parsedDate) {
+          console.log(`   parsedDate: ${parsedDate.toISOString()}`);
+          console.log(`   parsedDate en CDMX: ${parsedDate.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })}`);
+          
+          formattedDate = formatDateSpanish(parsedDate);
+          formattedTime = formatTimeSpanish(parsedDate);
+          
+          console.log(`   formattedDate: ${formattedDate}`);
+          console.log(`   formattedTime: ${formattedTime}`);
+        } else {
+          // Fallback al método anterior
+          formattedDate = formatDateSpanish(eventStart);
+          formattedTime = formatTimeSpanish(eventStart);
+        }
       }
       
       // Show appointment details and ask for confirmation
