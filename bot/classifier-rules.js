@@ -49,18 +49,53 @@ function classifyIntentWithRules(message, session) {
   
   // AGENDAR_NUEVA: If user is in the process of scheduling (pending flags)
   // This should be checked AFTER cancel/reschedule keywords to avoid conflicts
-  // CRITICAL: ALWAYS force AGENDAR_NUEVA when any pending flag is active
-  // This ensures the message reaches agendar.js handler, which can handle
-  // name collection, wedding date collection, and appointment date collection
+  // CRITICAL: Only force AGENDAR_NUEVA when pending flag is active AND message seems related
+  // If user wants to change topic (info, catalog, prices), let LLM classify correctly
+  // This allows users to switch topics even during info collection
+  
+  // Keywords that indicate user wants to change topic (not responding to pending question)
+  const topicChangeKeywords = [
+    'información', 'informacion', 'info', 'quiero información', 'quiero informacion',
+    'catálogo', 'catalogo', 'vestidos', 'modelos', 'colección', 'coleccion',
+    'precios', 'precio', 'cuánto', 'cuanto', 'cuesta', 'costo',
+    'ubicación', 'ubicacion', 'dirección', 'direccion', 'dónde', 'donde',
+    'asesor', 'hablar con', 'contactar'
+  ];
+  
+  const isChangingTopic = topicChangeKeywords.some(kw => msg.includes(kw));
+  
   if (session.pending_agendar_fecha) {
+    // For pending_agendar_fecha, always force AGENDAR_NUEVA (user is providing appointment date)
     console.log(`📌 pending_agendar_fecha activo - FORZANDO AGENDAR_NUEVA para que el mensaje llegue a agendar.js`);
     return 'AGENDAR_NUEVA';
   }
+  
   if (session.pending_nombre) {
+    // If user is changing topic, let LLM classify
+    if (isChangingTopic) {
+      console.log(`📌 pending_nombre activo pero usuario quiere cambiar de tema - dejando que LLM clasifique`);
+      return null;
+    }
     console.log(`📌 pending_nombre activo - FORZANDO AGENDAR_NUEVA para que el mensaje llegue a agendar.js`);
     return 'AGENDAR_NUEVA';
   }
+  
   if (session.pending_fecha_boda) {
+    // If user is changing topic, let LLM classify
+    if (isChangingTopic) {
+      console.log(`📌 pending_fecha_boda activo pero usuario quiere cambiar de tema - dejando que LLM clasifique`);
+      return null;
+    }
+    // Also check if message contains a date (likely responding to wedding date question)
+    const datePattern = /\d{1,2}\s*(de\s*)?(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic)\s*\d{0,4}/i;
+    const hasDate = datePattern.test(msg) || /\d{4}-\d{2}-\d{2}/.test(msg);
+    
+    if (hasDate) {
+      console.log(`📌 pending_fecha_boda activo y mensaje contiene fecha - FORZANDO AGENDAR_NUEVA`);
+      return 'AGENDAR_NUEVA';
+    }
+    
+    // If no date and not changing topic, still force AGENDAR_NUEVA (might be ambiguous response)
     console.log(`📌 pending_fecha_boda activo - FORZANDO AGENDAR_NUEVA para que el mensaje llegue a agendar.js`);
     return 'AGENDAR_NUEVA';
   }

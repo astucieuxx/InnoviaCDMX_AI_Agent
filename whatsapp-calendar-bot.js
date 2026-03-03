@@ -3318,6 +3318,20 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
     } else {
       // Normal flow - classify intent
       intent = await classifyIntent(incomingMessage, session);
+      
+      // CRITICAL: If user changes topic (intent is not AGENDAR_NUEVA) but has pending flags,
+      // clear the pending flags to allow normal conversation flow
+      // This prevents the bot from forcing scheduling flow when user wants to do something else
+      if (intent !== 'AGENDAR_NUEVA' && (session.pending_nombre || session.pending_fecha_boda || session.pending_agendar_fecha)) {
+        console.log(`📌 Usuario cambió de tema (intent: ${intent}), limpiando flags pending para permitir flujo normal`);
+        sessions.updateSession(cleanPhone, {
+          pending_nombre: false,
+          pending_fecha_boda: false,
+          pending_agendar_fecha: false
+        });
+        // Re-read session to get updated flags
+        session = sessions.getSession(cleanPhone);
+      }
     }
     // Guardar el intent en la sesión para métricas
     // Usar historial de intents para mejor tracking
