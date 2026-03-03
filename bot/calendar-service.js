@@ -1415,6 +1415,10 @@ async function findEventsByName(clientName, calendarClient, authClient, calendar
  */
 async function restoreBlueEvent(dateStart, calendarClient, authClient, calendarId) {
   try {
+    console.log(`🔄 [restoreBlueEvent] Iniciando restauración de evento azul...`);
+    console.log(`   dateStart recibido: ${dateStart}`);
+    console.log(`   calendarId: ${calendarId}`);
+    
     if (!authClient || !calendarId) {
       console.warn('⚠️  Google Auth no inicializado o calendarId faltante, no se puede restaurar evento azul');
       return null;
@@ -1470,11 +1474,17 @@ async function restoreBlueEvent(dateStart, calendarClient, authClient, calendarI
     // Verificar que la fecha se parseó correctamente
     if (isNaN(startDate.getTime())) {
       console.error(`   ❌ ERROR: No se pudo parsear dateStart: ${dateStart}`);
+      console.error(`   ❌ startDate resultante: ${startDate}`);
       return null;
     }
     
+    console.log(`   ✅ Fecha parseada correctamente: ${startDate.toISOString()}`);
+    console.log(`   ✅ Fecha en CDMX: ${startDate.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })}`);
+    
     // End date is 90 minutes after start
     const endDate = new Date(startDate.getTime() + 90 * 60 * 1000);
+    console.log(`   ✅ Fecha fin calculada: ${endDate.toISOString()}`);
+    console.log(`   ✅ Fecha fin en CDMX: ${endDate.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })}`);
     
     // Create event without title (blue event) - 90 minutes duration
     const event = {

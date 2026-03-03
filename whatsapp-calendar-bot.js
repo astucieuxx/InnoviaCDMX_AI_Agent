@@ -2336,15 +2336,27 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
               ? await authClient.getClient() 
               : authClient;
             
+            console.log(`📅 Obteniendo evento original antes de reagendar...`);
+            console.log(`   calendar_event_id: ${sessionData.calendar_event_id}`);
+            console.log(`   targetCalendarId: ${targetCalendarId}`);
+            
             const originalEventResponse = await calendar.events.get({
               auth: auth,
               calendarId: targetCalendarId,
               eventId: sessionData.calendar_event_id
             });
+            
             originalEventStart = originalEventResponse.data.start.dateTime || originalEventResponse.data.start.date;
+            console.log(`📅 ============================================`);
+            console.log(`📅 EVENTO ORIGINAL OBTENIDO`);
+            console.log(`📅 ============================================`);
             console.log(`📅 Fecha/hora original de la cita: ${originalEventStart}`);
+            console.log(`📅 start.dateTime: ${originalEventResponse.data.start.dateTime || 'N/A'}`);
+            console.log(`📅 start.date: ${originalEventResponse.data.start.date || 'N/A'}`);
+            console.log(`📅 ============================================`);
           } catch (error) {
-            console.warn(`⚠️  No se pudo obtener evento original antes de reagendar: ${error.message}`);
+            console.error(`❌ No se pudo obtener evento original antes de reagendar: ${error.message}`);
+            console.error(`   Stack: ${error.stack}`);
           }
           
           calendarEvent = await updateCalendarEventService(
@@ -2366,17 +2378,37 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
             // CRITICAL: Restore the original blue event in Innovia CDMX calendar
             if (originalEventStart && innoviaCDMXCalendarId) {
               try {
-                console.log(`🔄 Restaurando evento azul original en calendario "Innovia CDMX"...`);
-                await restoreBlueEventService(
+                console.log(`🔄 ============================================`);
+                console.log(`🔄 RESTAURANDO EVENTO AZUL ORIGINAL`);
+                console.log(`🔄 ============================================`);
+                console.log(`🔄 Fecha/hora original de la cita: ${originalEventStart}`);
+                console.log(`🔄 Calendario Innovia CDMX ID: ${innoviaCDMXCalendarId}`);
+                console.log(`🔄 Restaurando evento azul en calendario "Innovia CDMX"...`);
+                
+                const restoredEvent = await restoreBlueEventService(
                   originalEventStart,
                   calendar,
                   authClient,
                   innoviaCDMXCalendarId
                 );
-                console.log(`✅ Evento azul original restaurado exitosamente`);
+                
+                if (restoredEvent) {
+                  console.log(`✅ Evento azul original restaurado exitosamente (ID: ${restoredEvent.id})`);
+                } else {
+                  console.error(`❌ La función restoreBlueEvent retornó null - revisa los logs anteriores`);
+                }
+                console.log(`🔄 ============================================`);
               } catch (error) {
                 console.error(`❌ Error restaurando evento azul original: ${error.message}`);
+                console.error(`   Stack: ${error.stack}`);
                 // No fallar el proceso completo si la restauración falla
+              }
+            } else {
+              if (!originalEventStart) {
+                console.warn(`⚠️  No se pudo obtener originalEventStart - no se restaurará evento azul`);
+              }
+              if (!innoviaCDMXCalendarId) {
+                console.warn(`⚠️  No se encontró calendario "Innovia CDMX" - no se restaurará evento azul`);
               }
             }
             
