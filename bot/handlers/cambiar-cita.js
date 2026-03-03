@@ -97,7 +97,7 @@ async function execute(session, message, calendarDeps = null) {
     
     // Offer buttons: Move to new date or Cancel
     const buttons = [
-      { id: 'cita_mover', title: 'Mover a Nueva Fecha' },
+      { id: 'cita_mover', title: 'Cambiar Hora/Fecha' },
       { id: 'cita_cancelar', title: 'Cancelar Cita' }
     ];
     
