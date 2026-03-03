@@ -524,19 +524,27 @@ async function getAvailableSlots(date, calendarClient, authClient, innoviaCDMXCa
         const minutes = date.toLocaleString('en-US', { timeZone: 'America/Mexico_City', minute: '2-digit' });
         const seconds = date.toLocaleString('en-US', { timeZone: 'America/Mexico_City', second: '2-digit' });
         
+        // Asegurar que todos los valores tengan padding de ceros (2 dígitos)
+        const yearPadded = String(year).padStart(4, '0');
+        const monthPadded = String(month).padStart(2, '0');
+        const dayPadded = String(day).padStart(2, '0');
+        const hoursPadded = String(hours).padStart(2, '0');
+        const minutesPadded = String(minutes).padStart(2, '0');
+        const secondsPadded = String(seconds).padStart(2, '0');
+        
         // Calcular offset de CDMX para esta fecha
-        const testDateUTC = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day), 12, 0, 0));
+        const testDateUTC = new Date(Date.UTC(parseInt(yearPadded), parseInt(monthPadded) - 1, parseInt(dayPadded), 12, 0, 0));
         const cdmxHour = parseInt(testDateUTC.toLocaleString('en-US', { 
           timeZone: 'America/Mexico_City',
           hour: '2-digit',
           hour12: false
         }));
-        const offsetHours = 12 - cdmxHour;
+        const offsetHours = cdmxHour - 12; // Cambiar a cdmxHour - 12 para obtener offset negativo
         const offsetStr = offsetHours >= 0 
           ? `+${String(Math.abs(offsetHours)).padStart(2, '0')}:00` 
           : `-${String(Math.abs(offsetHours)).padStart(2, '0')}:00`;
         
-        return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${offsetStr}`;
+        return `${yearPadded}-${monthPadded}-${dayPadded}T${hoursPadded}:${minutesPadded}:${secondsPadded}${offsetStr}`;
       };
       
       const startISO = formatISOWithCDMXOffset(spot.start);
