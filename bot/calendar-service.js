@@ -123,21 +123,38 @@ async function getAvailableSlots(date, calendarClient, authClient, innoviaCDMXCa
     const [year, month, day] = date.split('-').map(Number);
     
     // Calcular el offset de CDMX para esta fecha específica
+    // CDMX está en UTC-6 (horario estándar) o UTC-5 (horario de verano)
+    // Usar un método más directo: crear una fecha en UTC y ver qué hora es en CDMX
     const getCDMXOffset = (y, m, d) => {
-      const testDate = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
-      const cdmxHour = parseInt(testDate.toLocaleString('en-US', { 
+      // Crear una fecha en UTC para el mediodía del día solicitado
+      const utcDate = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+      
+      // Obtener la hora en CDMX usando toLocaleString
+      const cdmxHour = parseInt(utcDate.toLocaleString('en-US', { 
         timeZone: 'America/Mexico_City',
         hour: '2-digit',
         hour12: false
       }));
-      const offsetHours = 12 - cdmxHour;
+      
+      // Si UTC es 12:00 y CDMX es 6:00, el offset es -6
+      // Si UTC es 12:00 y CDMX es 7:00, el offset es -5 (horario de verano)
+      const offsetHours = cdmxHour - 12;
+      
       return offsetHours;
     };
     
     const offsetHours = getCDMXOffset(year, month, day);
+    // El offset debe ser negativo para CDMX (UTC-6 o UTC-5)
     const offsetStr = offsetHours >= 0 
       ? `+${String(Math.abs(offsetHours)).padStart(2, '0')}:00` 
       : `-${String(Math.abs(offsetHours)).padStart(2, '0')}:00`;
+    
+    console.log(`   📅 [getAvailableSlots] Offset calculado: ${offsetHours} horas (${offsetStr})`);
+    
+    // Verificar que el offset sea correcto (debe ser -6 o -5 para CDMX)
+    if (offsetHours > 0 || offsetHours < -6) {
+      console.warn(`   ⚠️  ADVERTENCIA: Offset inesperado (${offsetHours}), debería ser -6 o -5 para CDMX`);
+    }
     
     // CRITICAL: Crear strings ISO con el offset de CDMX para que se interpreten correctamente
     // Inicio del día: 00:00:00 en CDMX
