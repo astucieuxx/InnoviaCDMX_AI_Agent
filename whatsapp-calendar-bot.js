@@ -2325,11 +2325,16 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
         
         let calendarEvent;
         
-        // Check if we're rescheduling (have existing eventId)
-        if (sessionData.calendar_event_id) {
-          console.log(`📅 Reagendando evento existente: ${sessionData.calendar_event_id}`);
+        // Check if we're rescheduling (have existing eventId OR pending_delete_old_event)
+        // pending_delete_old_event means we're moving an appointment (delete old + create new)
+        const isRescheduling = sessionData.calendar_event_id || sessionData.pending_delete_old_event;
+        const eventIdToUpdate = sessionData.calendar_event_id || sessionData.pending_delete_old_event;
+        
+        if (isRescheduling && eventIdToUpdate) {
+          console.log(`📅 Reagendando evento existente: ${eventIdToUpdate}`);
+          console.log(`   Tipo: ${sessionData.calendar_event_id ? 'Actualizar existente' : 'Eliminar y crear nuevo'}`);
           
-          // CRITICAL: Before updating, get the original event to restore the blue event
+          // CRITICAL: Before updating/deleting, get the original event to restore the blue event
           let originalEventStart = null;
           try {
             const auth = authClient && typeof authClient.getClient === 'function' 
@@ -2337,13 +2342,13 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
               : authClient;
             
             console.log(`📅 Obteniendo evento original antes de reagendar...`);
-            console.log(`   calendar_event_id: ${sessionData.calendar_event_id}`);
+            console.log(`   eventIdToUpdate: ${eventIdToUpdate}`);
             console.log(`   targetCalendarId: ${targetCalendarId}`);
             
             const originalEventResponse = await calendar.events.get({
               auth: auth,
               calendarId: targetCalendarId,
-              eventId: sessionData.calendar_event_id
+              eventId: eventIdToUpdate
             });
             
             originalEventStart = originalEventResponse.data.start.dateTime || originalEventResponse.data.start.date;
@@ -2372,17 +2377,25 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
             console.error(`   Stack: ${error.stack}`);
           }
           
-          calendarEvent = await updateCalendarEventService(
-            sessionData.calendar_event_id,
-            getClientName(sessionData) || 'Cliente',
-            cleanPhone,
-            null, // Email not available in session yet
-            selectedSlot.start,
-            sessionData.fecha_boda,
-            calendar,
-            authClient,
-            targetCalendarId
-          );
+          // If we have calendar_event_id, update the existing event
+          // If we have pending_delete_old_event, we'll create a new event and delete the old one later
+          if (sessionData.calendar_event_id) {
+            calendarEvent = await updateCalendarEventService(
+              sessionData.calendar_event_id,
+              getClientName(sessionData) || 'Cliente',
+              cleanPhone,
+              null, // Email not available in session yet
+              selectedSlot.start,
+              sessionData.fecha_boda,
+              calendar,
+              authClient,
+              targetCalendarId
+            );
+          } else {
+            // pending_delete_old_event: create new event first, then delete old one later
+            // This will be handled in the "else" block below
+            calendarEvent = null;
+          }
           if (calendarEvent) {
             console.log(`✅ Evento reagendado exitosamente en Google Calendar`);
             console.log(`   ID: ${calendarEvent.id}`);
@@ -2613,12 +2626,79 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
           sessions.addToHistory(cleanPhone, 'assistant', confirmationMessage);
         }
         
-        // If we have pending_delete_old_event, delete it now (moving appointment)
-        // IMPORTANT: Only delete if we successfully created the new event AND it's different from the old one
+        // If we have pending_delete_old_event, restore the blue event and delete the old appointment
+        // IMPORTANT: Only do this if we successfully created the new event AND it's different from the old one
         if (sessionData.pending_delete_old_event && calendarEvent && calendarEvent.id) {
-          // Double check: only delete if the new event ID is different from the old one
+          // Double check: only proceed if the new event ID is different from the old one
           if (calendarEvent.id !== sessionData.pending_delete_old_event) {
             const targetCalendarId = citasNuevasCalendarId || process.env.CALENDAR_ID || 'primary';
+            
+            // CRITICAL: Get the original event to restore the blue event
+            let originalEventStart = null;
+            try {
+              const auth = authClient && typeof authClient.getClient === 'function' 
+                ? await authClient.getClient() 
+                : authClient;
+              
+              console.log(`📅 Obteniendo evento original para restaurar evento azul...`);
+              console.log(`   pending_delete_old_event: ${sessionData.pending_delete_old_event}`);
+              
+              const originalEventResponse = await calendar.events.get({
+                auth: auth,
+                calendarId: targetCalendarId,
+                eventId: sessionData.pending_delete_old_event
+              });
+              
+              originalEventStart = originalEventResponse.data.start.dateTime || originalEventResponse.data.start.date;
+              
+              if (originalEventResponse.data.start.date && !originalEventResponse.data.start.dateTime) {
+                console.warn(`⚠️  El evento original es de todo el día (sin hora específica)`);
+                originalEventStart = originalEventResponse.data.start.date + 'T11:00:00-06:00';
+                console.warn(`⚠️  Usando hora por defecto: ${originalEventStart}`);
+              }
+              
+              console.log(`📅 Fecha/hora original de la cita: ${originalEventStart}`);
+            } catch (error) {
+              console.error(`❌ No se pudo obtener evento original: ${error.message}`);
+            }
+            
+            // CRITICAL: Restore the blue event in Innovia CDMX calendar
+            if (originalEventStart && innoviaCDMXCalendarId) {
+              try {
+                console.log(`🔄 ============================================`);
+                console.log(`🔄 RESTAURANDO EVENTO AZUL ORIGINAL (después de mover cita)`);
+                console.log(`🔄 ============================================`);
+                console.log(`🔄 Fecha/hora original de la cita: ${originalEventStart}`);
+                console.log(`🔄 Calendario Innovia CDMX ID: ${innoviaCDMXCalendarId}`);
+                
+                const restoredEvent = await restoreBlueEventService(
+                  originalEventStart,
+                  calendar,
+                  authClient,
+                  innoviaCDMXCalendarId
+                );
+                
+                if (restoredEvent) {
+                  console.log(`✅ Evento azul original restaurado exitosamente (ID: ${restoredEvent.id})`);
+                } else {
+                  console.error(`❌ La función restoreBlueEvent retornó null - revisa los logs anteriores`);
+                }
+                console.log(`🔄 ============================================`);
+              } catch (error) {
+                console.error(`❌ Error restaurando evento azul original: ${error.message}`);
+                console.error(`   Stack: ${error.stack}`);
+                // No fallar el proceso completo si la restauración falla
+              }
+            } else {
+              if (!originalEventStart) {
+                console.warn(`⚠️  No se pudo obtener originalEventStart - no se restaurará evento azul`);
+              }
+              if (!innoviaCDMXCalendarId) {
+                console.warn(`⚠️  No se encontró calendario "Innovia CDMX" - no se restaurará evento azul`);
+              }
+            }
+            
+            // Now delete the old appointment
             try {
               console.log(`🗑️  Eliminando evento anterior (ID: ${sessionData.pending_delete_old_event}) después de crear nueva cita (ID: ${calendarEvent.id})`);
               await deleteCalendarEventService(
