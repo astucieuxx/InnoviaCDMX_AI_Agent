@@ -2347,12 +2347,25 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
             });
             
             originalEventStart = originalEventResponse.data.start.dateTime || originalEventResponse.data.start.date;
+            
+            // CRITICAL: Si es solo fecha (sin hora), necesitamos obtener la hora del evento original
+            // Para eventos de todo el día, usar la hora de inicio del día
+            if (originalEventResponse.data.start.date && !originalEventResponse.data.start.dateTime) {
+              // Es un evento de todo el día, necesitamos la hora original
+              // Intentar obtener la hora de la descripción o usar una hora por defecto
+              console.warn(`⚠️  El evento original es de todo el día (sin hora específica)`);
+              // Por ahora, usar la hora de inicio del día (pero esto debería venir de la sesión)
+              originalEventStart = originalEventResponse.data.start.date + 'T11:00:00-06:00';
+              console.warn(`⚠️  Usando hora por defecto: ${originalEventStart}`);
+            }
+            
             console.log(`📅 ============================================`);
             console.log(`📅 EVENTO ORIGINAL OBTENIDO`);
             console.log(`📅 ============================================`);
             console.log(`📅 Fecha/hora original de la cita: ${originalEventStart}`);
             console.log(`📅 start.dateTime: ${originalEventResponse.data.start.dateTime || 'N/A'}`);
             console.log(`📅 start.date: ${originalEventResponse.data.start.date || 'N/A'}`);
+            console.log(`📅 Tipo de evento: ${originalEventResponse.data.start.dateTime ? 'Con hora específica' : 'Todo el día'}`);
             console.log(`📅 ============================================`);
           } catch (error) {
             console.error(`❌ No se pudo obtener evento original antes de reagendar: ${error.message}`);

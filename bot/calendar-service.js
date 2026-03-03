@@ -1504,15 +1504,29 @@ async function restoreBlueEvent(dateStart, calendarClient, authClient, calendarI
     console.log(`   Inicio: ${startDate.toISOString()} (${startDate.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })})`);
     console.log(`   Fin: ${endDate.toISOString()} (${endDate.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })})`);
     console.log(`   Duración: 90 minutos`);
+    console.log(`   Calendario ID: ${calendarId}`);
+    console.log(`   Evento a crear:`, JSON.stringify(event, null, 2));
     
-    const createdEvent = await calendarClient.events.insert({
-      auth: auth,
-      calendarId: calendarId,
-      resource: event
-    });
-    
-    console.log(`✅ Evento azul restaurado exitosamente (ID: ${createdEvent.data.id})`);
-    return createdEvent.data;
+    try {
+      const createdEvent = await calendarClient.events.insert({
+        auth: auth,
+        calendarId: calendarId,
+        resource: event
+      });
+      
+      console.log(`✅ Evento azul restaurado exitosamente (ID: ${createdEvent.data.id})`);
+      console.log(`   Link: ${createdEvent.data.htmlLink || 'N/A'}`);
+      console.log(`   Summary: "${createdEvent.data.summary || '(Sin título)'}"`);
+      console.log(`   Start: ${createdEvent.data.start.dateTime || createdEvent.data.start.date}`);
+      console.log(`   End: ${createdEvent.data.end.dateTime || createdEvent.data.end.date}`);
+      return createdEvent.data;
+    } catch (insertError) {
+      console.error(`❌ Error al insertar evento azul en Google Calendar:`, insertError.message);
+      console.error(`   Stack:`, insertError.stack);
+      console.error(`   Calendar ID usado: ${calendarId}`);
+      console.error(`   Evento que se intentó crear:`, JSON.stringify(event, null, 2));
+      throw insertError; // Re-lanzar para que el caller pueda manejarlo
+    }
   } catch (error) {
     console.error('❌ Error restaurando evento azul:', error.message);
     return null;
