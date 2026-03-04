@@ -31,16 +31,8 @@ async function execute(session, message) {
   // Check if this is a button click (message will be the button ID like 'info_ubicacion')
   const isButtonClick = message === 'info_ubicacion' || message === 'UBICACION';
   
-  // Build location message (no greeting if it's a button click - user is already in conversation)
+  // Build location message (no greeting)
   let reply = '';
-  
-  if (!isButtonClick && nombrePrimero) {
-    // Only greet if it's a text message and we have the name
-    reply = `¡Hola ${nombrePrimero}! ✨\n\n`;
-  } else if (!isButtonClick) {
-    // Only greet if it's a text message
-    reply = `¡Hola! ✨\n\n`;
-  }
   
   reply += `¡Claro! Estamos en 📍${direccion}, en un showroom pensado para que vivas tu elección con calma y estilo ✨\n\n`;
   
