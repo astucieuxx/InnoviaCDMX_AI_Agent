@@ -2102,7 +2102,44 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
     }
     
     // STEP 2: Check if user is selecting a slot (if slots are available in session)
+    // BUT FIRST: Check if user is providing a NEW date (e.g., "11 de marzo" when slots are for a different date)
     if (session.slots_disponibles && session.slots_disponibles.length > 0) {
+      // CRITICAL: Before trying to match with slots, check if user is providing a new date
+      // This prevents "11 de marzo" from being interpreted as "11:00 a.m." when user wants to change the date
+      const { extractFechaCitaDeseada } = require('./bot/handlers/agendar');
+      const newDate = await extractFechaCitaDeseada(incomingMessage, session.fecha_boda);
+      
+      if (newDate && newDate !== session.fecha_cita_solicitada) {
+        // User provided a NEW date - update fecha_cita_solicitada and show slots for new date
+        console.log(`📅 Usuario proporcionó una nueva fecha: ${newDate} (fecha anterior: ${session.fecha_cita_solicitada})`);
+        console.log(`📅 Actualizando fecha y mostrando slots para la nueva fecha...`);
+        
+        // Clear current slots and update date
+        sessions.updateSession(cleanPhone, {
+          fecha_cita_solicitada: newDate,
+          slots_disponibles: null
+        });
+        
+        // Process the new date through the agendar handler to get slots
+        const agendarHandler = require('./bot/handlers/agendar');
+        const agendarResult = await agendarHandler.execute(
+          sessions.getSession(cleanPhone),
+          incomingMessage,
+          { calendarClient: calendar, authClient: authClient, calendarId: citasNuevasCalendarId || process.env.CALENDAR_ID || 'primary' }
+        );
+        
+        if (agendarResult.reply) {
+          await sendWhatsAppMessage(cleanPhone, agendarResult.reply, agendarResult.buttons ? { buttons: agendarResult.buttons } : {});
+          sessions.addToHistory(cleanPhone, 'assistant', agendarResult.reply);
+          
+          if (agendarResult.sessionUpdates && Object.keys(agendarResult.sessionUpdates).length > 0) {
+            sessions.updateSession(cleanPhone, agendarResult.sessionUpdates);
+          }
+        }
+        
+        return; // Exit - we've handled the new date
+      }
+      
       let slotIndex = -1;
       
       // If it's a button click
@@ -2120,7 +2157,16 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
         }
         
         // If no number match, try to match by time (e.g., "11:00 AM", "2:00 PM", "14:00")
+        // BUT: Only if the message doesn't look like a date (e.g., "11 de marzo" should not match "11:00 a.m.")
         if (slotIndex === -1) {
+          // Check if message looks like a date (contains month names or "de" + month)
+          const datePattern = /(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|de\s+(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre))/i;
+          const looksLikeDate = datePattern.test(incomingMessage);
+          
+          if (looksLikeDate) {
+            console.log(`📅 Mensaje parece ser una fecha, no un horario: "${incomingMessage}"`);
+            // Don't try to match with slots - treat as new date (handled above)
+          } else {
           const msgLower = incomingMessage.toLowerCase().trim();
           
           // Try to find matching slot by time
@@ -2170,6 +2216,7 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
             }
             
             // Also try matching just the hour if user says something like "las 11", "a las 2", "11am", "2pm"
+            // BUT: Only if message doesn't look like a date
             const hourOnlyMatch = msgLower.match(/(?:las?\s*)?(\d{1,2})(?:\s*(?:de\s*la\s*)?(?:mañana|tarde|noche))?(?:\s*(am|pm))?/);
             if (hourOnlyMatch) {
               const [, hourStr, ampm] = hourOnlyMatch;
@@ -2204,7 +2251,9 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
                   }
                 } else {
                   // No AM/PM specified, try to match
-                  if (userHour === slotHour || userHour === slotHour24) {
+                  // BUT: Only if message doesn't contain month names (to avoid "11 de marzo" matching "11:00 a.m.")
+                  const hasMonthName = /(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)/i.test(incomingMessage);
+                  if (!hasMonthName && (userHour === slotHour || userHour === slotHour24)) {
                     slotIndex = i;
                     console.log(`✅ Horario reconocido por hora (sin AM/PM): "${incomingMessage}" → ${slot.time} (índice ${i})`);
                     break;
@@ -2212,6 +2261,7 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
                 }
               }
             }
+          }
           }
         }
       }
