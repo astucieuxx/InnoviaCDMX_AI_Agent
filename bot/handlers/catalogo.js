@@ -62,7 +62,7 @@ async function execute(session, message) {
   
   // If we have nombre and fecha_boda, personalize more
   if (nombreCliente && session.fecha_boda) {
-    reply += `Sería un honor ayudarte a encontrar el vestido perfecto para tu boda ✨`;
+    reply += `Sería increíble ayudarte a encontrar el vestido perfecto para tu boda ✨`;
   } else {
     // If we don't have full info, gently ask (only if not from button click)
     if (!isButtonClick) {
