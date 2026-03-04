@@ -3091,7 +3091,7 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
             // Send confirmation message
             const nombrePrimero = getClientFirstName(session);
             const reply = `Entiendo ${nombrePrimero}, gracias por avisarnos 💫\n\n`;
-            const reply2 = `Tu cita del ${formattedDate} a las ${formattedTime} ha sido cancelada. Si cambias de opinión o quieres agendar para otro día, aquí estaremos para ayudarte ✨\n\n`;
+            const reply2 = `Tu cita del ${formattedDate} a las ${formattedTime} ha sido cancelada. Si cambias de opinión o quieres agendar para otro día, aquí estaremos para ayudarte! ✨\n\n`;
             const reply3 = `¡Esperamos verte pronto! 👰‍♀️`;
             
             await sendWhatsAppMessage(cleanPhone, reply + reply2 + reply3);
