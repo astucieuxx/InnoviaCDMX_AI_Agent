@@ -201,6 +201,50 @@ No agregues explicaciones, solo la fecha o "null".`;
 }
 
 /**
+ * Check if message is a vague/relative date question (not a specific date)
+ * @param {string} message - User's message
+ * @returns {boolean} True if message is a vague date question
+ */
+function isVagueDateQuestion(message) {
+  const msgLower = message.toLowerCase().trim();
+  
+  // Patterns that indicate vague/relative date questions
+  const vaguePatterns = [
+    /siguiente fin de semana/i,
+    /próximo fin de semana/i,
+    /proximo fin de semana/i,
+    /siguiente semana/i,
+    /próxima semana/i,
+    /proxima semana/i,
+    /fin de semana/i,
+    /este fin de semana/i,
+    /próximo/i,
+    /proximo/i,
+    /siguiente/i,
+    /hay.*disponible/i,
+    /tienen.*disponible/i,
+    /qué.*disponible/i,
+    /cuándo.*disponible/i,
+    /cuando.*disponible/i,
+    /horarios.*disponible/i,
+    /disponibilidad/i
+  ];
+  
+  // Check if message contains vague patterns
+  const hasVaguePattern = vaguePatterns.some(pattern => pattern.test(msgLower));
+  
+  // Also check if message is a question (contains question words but no specific date)
+  const isQuestion = /^(hay|tienen|qué|que|cuándo|cuando|tienes|tiene)/i.test(msgLower.trim());
+  
+  // If it has vague patterns OR is a question without specific date indicators, it's vague
+  if (hasVaguePattern || (isQuestion && !/\d{1,2}\s*(de|/)/.test(msgLower))) {
+    return true;
+  }
+  
+  return false;
+}
+
+/**
  * Format date for display (DD/MM/YYYY)
  * @param {string} date - Date in YYYY-MM-DD format
  * @returns {string} Formatted date
@@ -248,12 +292,26 @@ async function execute(session, message, calendarDeps = null) {
   // Skip ALL info collection and submenu logic - user is providing appointment date
   if (session.pending_agendar_fecha || session.fecha_cita_solicitada) {
     console.log(`📅 Usuario está proporcionando fecha de cita (pending_agendar_fecha activo o fecha_cita_solicitada ya establecida), procesando directamente...`);
+    
+    // CRITICAL: Check if message is a vague date question BEFORE trying to extract date
+    // If it's a vague question, respond naturally asking for a specific date
+    if (isVagueDateQuestion(message)) {
+      console.log(`📅 Mensaje es una pregunta vaga sobre fechas: "${message}"`);
+      return {
+        reply: `¡Claro! Para darte los horarios exactos, ¿podrías decirme un día específico? 💫\n\nPor ejemplo:\n• "el sábado 29 de marzo"\n• "el domingo 30 de marzo"\n• "el 4 de abril"\n\nAsí te muestro los horarios disponibles para ese día ✨`,
+        sessionUpdates: {
+          pending_agendar_fecha: true // Keep flag since we're still waiting for a specific date
+        }
+      };
+    }
+    
     // CRITICAL: Siempre intentar extraer fecha del mensaje primero
     // Solo usar fecha de sesión si no se encuentra una nueva fecha en el mensaje
     let fechaCitaDeseada = await extractFechaCitaDeseada(message, session.fecha_boda);
     
-    // Si no se encontró fecha en el mensaje, usar la de la sesión (para casos de rescheduling)
-    if (!fechaCitaDeseada && session.fecha_cita_solicitada) {
+    // Si no se encontró fecha en el mensaje, verificar si es una pregunta vaga
+    // Si NO es una pregunta vaga Y hay fecha_cita_solicitada, usar la de la sesión (para casos de rescheduling)
+    if (!fechaCitaDeseada && session.fecha_cita_solicitada && !isVagueDateQuestion(message)) {
       console.log(`📅 No se encontró fecha en el mensaje, usando fecha de sesión: ${session.fecha_cita_solicitada}`);
       fechaCitaDeseada = session.fecha_cita_solicitada;
     }
