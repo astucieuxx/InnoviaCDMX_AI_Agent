@@ -237,7 +237,9 @@ function isVagueDateQuestion(message) {
   const isQuestion = /^(hay|tienen|qué|que|cuándo|cuando|tienes|tiene)/i.test(msgLower.trim());
   
   // If it has vague patterns OR is a question without specific date indicators, it's vague
-  if (hasVaguePattern || (isQuestion && !/\d{1,2}\s*(de|/)/.test(msgLower))) {
+  // Check for specific date patterns (e.g., "11 de marzo", "4/3", "4-3")
+  const hasSpecificDate = /\d{1,2}\s*(de|\/|-)/.test(msgLower);
+  if (hasVaguePattern || (isQuestion && !hasSpecificDate)) {
     return true;
   }
   
