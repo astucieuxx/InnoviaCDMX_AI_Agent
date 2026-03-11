@@ -3453,21 +3453,21 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
     }
     
     // Prepare calendar dependencies for handlers that need calendar access
-    let calendarDeps = null;
+    let legacyCalendarDeps = null;
     const calendarIntents = ['AGENDAR_NUEVA', 'CAMBIAR_CITA', 'CANCELAR_CITA'];
     if (calendarIntents.includes(intent)) {
       const targetCalendarId = citasNuevasCalendarId || process.env.CALENDAR_ID || 'primary';
-      calendarDeps = {
+      legacyCalendarDeps = {
         calendarClient: calendar,
         authClient: authClient,
         calendarId: targetCalendarId, // Calendario "CITAS NUEVAS" para guardar citas
         innoviaCDMXCalendarId: innoviaCDMXCalendarId // Calendario "Innovia CDMX" para spots disponibles
       };
     }
-    
-    // Execute handler (pass calendarDeps for handlers that need it)
+
+    // Execute handler (pass legacyCalendarDeps for handlers that need it)
     const result = calendarIntents.includes(intent)
-      ? await handler.execute(session, incomingMessage, calendarDeps)
+      ? await handler.execute(session, incomingMessage, legacyCalendarDeps)
       : await handler.execute(session, incomingMessage);
     
     // STEP 5: Handle pending calendar operations (cancel/update)
