@@ -2100,8 +2100,46 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
     } catch (profileError) {
       console.error('⚠️  Error extrayendo perfil, continuando:', profileError.message);
     }
-    
-    // STEP 2: Check if user is selecting a slot (if slots are available in session)
+
+    // STEP 2: Re-read session after profile extraction
+    session = sessions.getSession(cleanPhone);
+
+    // STEP 3: Run conversational agent (handles all intents + calendar tools)
+    const { runAgent } = require('./bot/agent');
+
+    const calendarDeps = {
+      calendarClient: calendar,
+      authClient: authClient,
+      calendarId: citasNuevasCalendarId || process.env.CALENDAR_ID || 'primary',
+      innoviaCDMXCalendarId: innoviaCDMXCalendarId
+    };
+
+    const agentResult = await runAgent(
+      cleanPhone,
+      session,
+      incomingMessage,
+      calendarDeps,
+      options.isButtonClick || false,
+      options.buttonTitle || null
+    );
+
+    // Send the agent's natural-language reply
+    if (agentResult.reply) {
+      await sendWhatsAppMessage(cleanPhone, agentResult.reply);
+      sessions.addToHistory(cleanPhone, 'assistant', agentResult.reply);
+    }
+
+    // Persist any session changes produced by tool calls
+    if (agentResult.sessionUpdates && Object.keys(agentResult.sessionUpdates).length > 0) {
+      sessions.updateSession(cleanPhone, agentResult.sessionUpdates);
+    }
+
+    // Done — agent handled everything above.
+    return;
+
+    /* eslint-disable no-unreachable */
+    // --- LEGACY CODE BELOW (kept for reference, never reached) ---
+    // STEP 2 (old): Check if user is selecting a slot (if slots are available in session)
     // BUT FIRST: Check if user is providing a NEW date (e.g., "11 de marzo" when slots are for a different date)
     if (session.slots_disponibles && session.slots_disponibles.length > 0) {
       // CRITICAL: Before trying to match with slots, check if user is providing a new date
