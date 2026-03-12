@@ -21,6 +21,7 @@ const { getAIResponse, extractConversationData } = require('./openai-client');
 const { extractAppointmentDate, parseDateFromText } = require('./date-parser');
 
 // Import new intent-based architecture
+const { logPendingTask } = require('./bot/sheets-service');
 const { classifyIntent } = require('./bot/classifier');
 const { extractBrideProfile } = require('./bot/profile-extractor');
 const { handlers } = require('./bot/handlers');
@@ -3498,6 +3499,17 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
     // Reset consecutive_otro_count if intent is not OTRO
     if (intent !== 'OTRO' && session.consecutive_otro_count) {
       sessions.updateSession(cleanPhone, { consecutive_otro_count: 0 });
+    }
+
+    // STEP 6b: Log pending task to Google Sheets on escalation
+    if (intent === 'OTRO') {
+      const clientName = session.nombre_cliente || session.nombre || '';
+      logPendingTask({
+        phone: cleanPhone,
+        name: clientName,
+        message: incomingMessage,
+        historial: session.historial || []
+      });
     }
     
     // STEP 7: Send reply via Chakra (with buttons if handler returned them)
