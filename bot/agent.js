@@ -19,7 +19,9 @@ const {
   getAvailableSlots,
   createCalendarEvent: createCalendarEventService,
   deleteCalendarEvent: deleteCalendarEventService,
-  updateCalendarEvent: updateCalendarEventService
+  updateCalendarEvent: updateCalendarEventService,
+  restoreBlueEvent: restoreBlueEventService,
+  getCalendarEvent: getCalendarEventService
 } = require('./calendar-service');
 const { getClientName } = require('./utils/name-utils');
 
@@ -190,7 +192,7 @@ Hoy es ${today}.
    - Muestra los horarios disponibles de forma clara y amigable.
    - **ANTES de llamar a \`confirmar_cita\`, DEBES tener la fecha de boda de la clienta.** Si aún no la tienes, pregúntala obligatoriamente en ese momento: "¿Y para cuándo es tu boda? 💍" (o variación natural). No puedes confirmar la cita sin este dato.
    - Cuando la clienta confirme un horario específico Y ya tengas su fecha de boda, llama a \`confirmar_cita\`.
-6. **Para cancelar:** usa \`cancelar_cita\` con el event_id disponible en el contexto, si existe. Si no está en el contexto, pide a la clienta los datos de su cita para identificarla.
+6. **Para cancelar:** ANTES de llamar a \`cancelar_cita\`, DEBES mostrarle a la clienta los detalles de la cita que encontraste (fecha, hora) y preguntarle si está segura de que quiere cancelar. Ejemplo: "Encontré tu cita: está programada para el [día] a las [hora]. ¿Estás segura de que deseas cancelarla? 🤍". Solo llama a \`cancelar_cita\` cuando la clienta confirme explícitamente que sí quiere cancelar. El event_id lo tienes disponible en el contexto de la clienta.
 7. **Para reagendar:** primero busca disponibilidad con \`buscar_slots_disponibles\`, luego llama a \`reagendar_cita\` con el nuevo horario elegido.
 8. **Para preguntas generales:** responde directamente sin forzar un flujo de agendamiento.
 9. **Tono:** cálido, emocionante, personal. Como una amiga experta en bodas. Usa emojis con moderación (👰‍♀️ ✨ 💐 🤍).
@@ -250,6 +252,19 @@ async function executeTool(toolName, toolArgs, calendarDeps, session, phone) {
       );
 
       if (event) {
+        // Eliminar el evento azul (slot disponible) del calendario Innovia CDMX
+        const storedSlots = session.slots_disponibles || [];
+        const appointmentTime = new Date(hora_inicio).getTime();
+        const matchingSlot = storedSlots.find(slot => {
+          return Math.abs(new Date(slot.start).getTime() - appointmentTime) < 60000;
+        });
+        if (matchingSlot && matchingSlot.eventId) {
+          console.log(`🗑️  Eliminando slot azul del calendario Innovia CDMX (ID: ${matchingSlot.eventId})`);
+          await deleteCalendarEventService(matchingSlot.eventId, calendarClient, authClient, innoviaCDMXCalendarId);
+        } else {
+          console.warn(`⚠️  No se encontró slot azul coincidente para eliminar en hora: ${hora_inicio}`);
+        }
+
         return {
           exito: true,
           event_id: event.id,
@@ -265,7 +280,20 @@ async function executeTool(toolName, toolArgs, calendarDeps, session, phone) {
       const { event_id } = toolArgs;
       console.log(`🔧 Agent tool: cancelar_cita(${event_id})`);
 
+      // Obtener detalles del evento ANTES de eliminarlo para recuperar la hora
+      const existingEvent = await getCalendarEventService(event_id, calendarClient, authClient, calendarId);
+      const startIso = existingEvent?.start?.dateTime || existingEvent?.start?.date || null;
+
       await deleteCalendarEventService(event_id, calendarClient, authClient, calendarId);
+
+      // Restaurar el slot azul en el calendario Innovia CDMX
+      if (startIso) {
+        console.log(`🔵 Restaurando slot azul en Innovia CDMX para: ${startIso}`);
+        await restoreBlueEventService(startIso, calendarClient, authClient, innoviaCDMXCalendarId);
+      } else {
+        console.warn(`⚠️  No se pudo obtener la hora de inicio del evento para restaurar el slot azul`);
+      }
+
       return { exito: true, mensaje: 'Cita cancelada exitosamente.' };
     }
 
