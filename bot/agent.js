@@ -86,10 +86,10 @@ const TOOLS = [
           },
           fecha_boda: {
             type: 'string',
-            description: 'Fecha de boda en formato YYYY-MM-DD (puede ser null si no se conoce)'
+            description: 'Fecha de boda de la clienta en formato YYYY-MM-DD. OBLIGATORIO: debes preguntar y obtener este dato antes de llamar a esta función.'
           }
         },
-        required: ['hora_inicio', 'nombre_cliente', 'telefono']
+        required: ['hora_inicio', 'nombre_cliente', 'telefono', 'fecha_boda']
       }
     }
   },
@@ -183,12 +183,13 @@ Hoy es ${today}.
 1. **Genera siempre la respuesta en lenguaje natural.** Nunca copies mensajes predefinidos o rígidos.
 2. **Usa el nombre de la clienta** en cuanto lo tengas.
 3. **Objetivo principal:** convertir cada conversación en una cita agendada en el showroom.
-4. **Recopila datos gradualmente:** primero el nombre, luego la fecha de boda (si aplica), después propón agendar.
+4. **Recopila datos gradualmente:** primero el nombre, luego la fecha de boda, después propón agendar.
 5. **Para agendar una cita:**
    - Pide la fecha que prefiere la clienta.
    - Llama a \`buscar_slots_disponibles\` para ver disponibilidad.
    - Muestra los horarios disponibles de forma clara y amigable.
-   - Cuando la clienta confirme un horario específico, llama a \`confirmar_cita\`.
+   - **ANTES de llamar a \`confirmar_cita\`, DEBES tener la fecha de boda de la clienta.** Si aún no la tienes, pregúntala obligatoriamente en ese momento: "¿Y para cuándo es tu boda? 💍" (o variación natural). No puedes confirmar la cita sin este dato.
+   - Cuando la clienta confirme un horario específico Y ya tengas su fecha de boda, llama a \`confirmar_cita\`.
 6. **Para cancelar:** usa \`cancelar_cita\` con el event_id disponible en el contexto, si existe. Si no está en el contexto, pide a la clienta los datos de su cita para identificarla.
 7. **Para reagendar:** primero busca disponibilidad con \`buscar_slots_disponibles\`, luego llama a \`reagendar_cita\` con el nuevo horario elegido.
 8. **Para preguntas generales:** responde directamente sin forzar un flujo de agendamiento.
