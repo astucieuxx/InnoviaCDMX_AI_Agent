@@ -136,6 +136,53 @@ app.get('/api/logs', (req, res) => {
   }
 });
 
+// ─── Endpoints temporales para regenerar OAuth token ─────────────────────────
+app.get('/reauth', (req, res) => {
+  try {
+    let credentials = null;
+    if (process.env.GOOGLE_CREDENTIALS) {
+      credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
+    } else if (fs.existsSync('./credentials.json')) {
+      credentials = JSON.parse(fs.readFileSync('./credentials.json', 'utf8'));
+    }
+    if (!credentials) return res.status(500).send('No se encontraron GOOGLE_CREDENTIALS');
+
+    const { client_secret, client_id, redirect_uris } = credentials.installed || credentials.web;
+    const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
+    const authUrl = oAuth2Client.generateAuthUrl({
+      access_type: 'offline',
+      scope: ['https://www.googleapis.com/auth/calendar', 'https://www.googleapis.com/auth/spreadsheets'],
+      prompt: 'consent'
+    });
+    res.send(`<h2>Paso 1: Autorizar</h2><p>Abre este link en tu navegador:</p><a href="${authUrl}" target="_blank">${authUrl}</a><br><br><p>Después de autorizar, copia el <b>code</b> de la URL de redirect y ve a:<br><b>/reauth/token?code=TU_CODE_AQUI</b></p>`);
+  } catch (e) {
+    res.status(500).send('Error: ' + e.message);
+  }
+});
+
+app.get('/reauth/token', async (req, res) => {
+  try {
+    const code = req.query.code;
+    if (!code) return res.status(400).send('Falta el parámetro ?code=');
+
+    let credentials = null;
+    if (process.env.GOOGLE_CREDENTIALS) {
+      credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
+    } else if (fs.existsSync('./credentials.json')) {
+      credentials = JSON.parse(fs.readFileSync('./credentials.json', 'utf8'));
+    }
+
+    const { client_secret, client_id, redirect_uris } = credentials.installed || credentials.web;
+    const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
+    const { tokens } = await oAuth2Client.getToken(code);
+
+    res.send(`<h2>✅ Nuevo token generado</h2><p>Copia este JSON y pégalo como el valor de <b>GOOGLE_TOKEN</b> en Railway:</p><pre style="background:#f0f0f0;padding:16px;word-break:break-all">${JSON.stringify(tokens)}</pre>`);
+  } catch (e) {
+    res.status(500).send('Error obteniendo token: ' + e.message);
+  }
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Endpoint de prueba para verificar que el servidor responde
 app.get('/api/test', (req, res) => {
   res.json({ 
