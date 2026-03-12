@@ -160,7 +160,7 @@ IMPORTANTE:
 
     const userPrompt = `Usuario dice: "${message}"${contextString}${historyContext}
 
-IMPORTANTE: Al final de tu respuesta, SIEMPRE menciona que si prefiere, puede hablar con un asesor para mejor ayuda. Responde de manera natural tratando de entender qué quiere el usuario. Si no está claro, haz una pregunta amigable.`;
+IMPORTANTE: Responde de manera natural reconociendo la solicitud del usuario. NO preguntes si quiere hablar con un asesor. En cambio, indícale que hemos tomado nota de su solicitud y que en breve uno de nuestros agentes del staff se pondrá en contacto con él/ella para atenderlo personalmente.`;
 
     const client = getOpenAIClient();
     const response = await client.chat.completions.create({
@@ -185,20 +185,13 @@ IMPORTANTE: Al final de tu respuesta, SIEMPRE menciona que si prefiere, puede ha
       consecutive_otro_count: newOtroCount
     };
 
-    const buttons = [];
-    // Always offer advisor button for OTRO intent
-    reply += `\n\nSi prefieres, puedo conectarte con uno de nuestros asesores que te ayudará mejor. ¿Te gustaría hablar con un asesor?`;
-    buttons.push({
-      id: 'menu_asesor',
-      title: 'Hablar con Asesor' // 20 caracteres (máximo)
-    });
+    reply += `\n\n📋 Hemos tomado nota de tu solicitud. En breve uno de nuestros agentes del staff se pondrá en contacto contigo para atenderte personalmente. 💕`;
 
-    console.log(`🤖 LLM guiando usuario (intent no claro, intento ${newOtroCount}): ${message.substring(0, 50)}...`);
+    console.log(`🤖 LLM escalando a humano (intento ${newOtroCount}): ${message.substring(0, 50)}...`);
 
     return {
       reply,
-      sessionUpdates,
-      buttons: buttons.length > 0 ? buttons : undefined
+      sessionUpdates
     };
   } catch (error) {
     console.error('❌ Error usando LLM para guiar usuario:', error.message);
@@ -213,26 +206,19 @@ IMPORTANTE: Al final de tu respuesta, SIEMPRE menciona que si prefiere, puede ha
 function getFallbackResponse(nombrePrimero, hasAppointment, offerAdvisor = false, currentCount = 0) {
   const greeting = nombrePrimero ? `¡Hola ${nombrePrimero}! ✨` : `¡Hola! ✨`;
   let reply = `${greeting}\n\n`;
-  
-  reply += `No estoy seguro de entender exactamente qué necesitas. Puedo ayudarte con:\n\n`;
-  
+
+  reply += `Hemos tomado nota de tu solicitud. En breve uno de nuestros agentes del staff se pondrá en contacto contigo para atenderte personalmente. 💕\n\n`;
+  reply += `Mientras tanto, si necesitas algo más puedo ayudarte con:\n`;
+
   if (hasAppointment) {
     reply += `• Reagendar o cancelar tu cita existente\n`;
   }
-  reply += `• Agendar o editar una cita\n`;
-  reply += `• Ver información sobre catálogo, precios o ubicación\n`;
-  reply += `• Hablar con un asesor\n\n`;
-  reply += `Si prefieres, puedo conectarte con uno de nuestros asesores que te ayudará mejor. ¿Te gustaría hablar con un asesor?`;
-
-  const buttons = [{
-    id: 'menu_asesor',
-    title: 'Hablar con Asesor'
-  }];
+  reply += `• Agendar una cita\n`;
+  reply += `• Ver catálogo, precios o ubicación`;
 
   return {
     reply,
-    sessionUpdates: { consecutive_otro_count: currentCount + 1 },
-    buttons: buttons.length > 0 ? buttons : undefined
+    sessionUpdates: { consecutive_otro_count: currentCount + 1 }
   };
 }
 
