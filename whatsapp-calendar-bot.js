@@ -399,6 +399,7 @@ async function initGoogleAuth() {
       
       // Verificar si ya tenemos token guardado
       // PRIORIDAD 1: Variable de entorno GOOGLE_TOKEN (para Railway/producción)
+      const TOKEN_PATH = path.join(__dirname, 'token.json');
       let token = null;
       if (process.env.GOOGLE_TOKEN) {
         try {
@@ -410,7 +411,6 @@ async function initGoogleAuth() {
       }
       // PRIORIDAD 2: Archivo token.json local (para desarrollo)
       else {
-        const TOKEN_PATH = path.join(__dirname, 'token.json');
         if (fs.existsSync(TOKEN_PATH)) {
           token = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8'));
           console.log('✅ Token de Google cargado desde archivo token.json');
