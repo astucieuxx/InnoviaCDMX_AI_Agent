@@ -25,6 +25,7 @@ const {
   getCalendarEvent: getCalendarEventService
 } = require('./calendar-service');
 const { getClientName } = require('./utils/name-utils');
+const { logPendingTask } = require('./sheets-service');
 
 // ---------------------------------------------------------------------------
 // OpenAI client (lazy)
@@ -116,6 +117,26 @@ const TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'escalar_a_humano',
+      description:
+        'Registra una solicitud que no puedes resolver directamente para que un agente humano del staff dé seguimiento. ' +
+        'Úsala cuando la clienta pida algo fuera de tu alcance: hablar con una persona, consultar precios específicos por modelo, ' +
+        'temas de pago ya realizados, quejas, o cualquier solicitud especial que requiera atención personalizada.',
+      parameters: {
+        type: 'object',
+        properties: {
+          descripcion_solicitud: {
+            type: 'string',
+            description: 'Descripción breve de lo que la clienta necesita o preguntó'
+          }
+        },
+        required: ['descripcion_solicitud']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'reagendar_cita',
       description:
         'Mueve una cita existente a una nueva fecha y hora en Google Calendar.',
@@ -201,6 +222,7 @@ Hoy es ${today}.
 10. **Nunca** des precios exactos por modelo (solo el precio base), ni confirmes disponibilidad sin verificar con herramientas.
 11. **Responde siempre en español.**
 12. **Mensajes concisos:** WhatsApp no es email; evita respuestas largas o con demasiados párrafos.
+13. **Cuando una clienta pida hablar con un humano, necesite atención personalizada, o solicite algo fuera de tu alcance:** llama a \`escalar_a_humano\` con una descripción de la solicitud. Luego, en tu respuesta, indícale a la clienta que hemos tomado nota y que en breve uno de nuestros agentes del staff se pondrá en contacto con ella. No le digas que "intentarás" o que "podrías" — confirma que ya quedó registrado.
 
 ## Preguntas frecuentes — responde estas directamente sin rodeos
 ${faqs.map(f => `- **${f.pregunta}** → ${f.respuesta}`).join('\n')}`;
@@ -367,6 +389,25 @@ async function executeTool(toolName, toolArgs, calendarDeps, session, phone) {
         };
       }
       return { exito: false, mensaje: 'No se pudo reagendar la cita.' };
+    }
+
+    // ---- escalar_a_humano ------------------------------------------------
+    if (toolName === 'escalar_a_humano') {
+      const { descripcion_solicitud } = toolArgs;
+      console.log(`🔧 Agent tool: escalar_a_humano("${descripcion_solicitud}")`);
+
+      const clientName = getClientName(session) || '';
+      await logPendingTask({
+        phone,
+        name: clientName,
+        message: descripcion_solicitud,
+        historial: session.historial || []
+      });
+
+      return {
+        exito: true,
+        mensaje: 'Solicitud registrada. Un agente del staff se pondrá en contacto con la clienta.'
+      };
     }
 
     return { error: `Herramienta desconocida: ${toolName}` };
