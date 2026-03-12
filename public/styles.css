@@ -1036,6 +1036,39 @@ body {
     border-radius: 4px;
 }
 
+.faq-card {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 12px;
+    transition: all 0.2s;
+}
+
+.faq-card:hover {
+    border-color: var(--border-accent);
+    box-shadow: 0 0 8px rgba(0, 245, 255, 0.1);
+}
+
+.faq-question {
+    color: var(--text-primary);
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.faq-answer {
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+}
+
+.faqs-list {
+    display: flex;
+    flex-direction: column;
+}
+
 .variables-info {
     background: rgba(0, 245, 255, 0.1);
     border-left: 3px solid var(--cyan);

@@ -56,6 +56,7 @@ function initTabs() {
             } else if (targetTab === 'appointments') {
                 loadAppointments();
             } else if (targetTab === 'messages') {
+                loadFAQs();
                 loadMessages();
             } else if (targetTab === 'logs') {
                 loadLogs();
@@ -1390,6 +1391,60 @@ function stopLogsAutoRefresh() {
     if (logsRefreshInterval) {
         clearInterval(logsRefreshInterval);
         logsRefreshInterval = null;
+    }
+}
+
+// Cargar y mostrar FAQs del Help Center
+async function loadFAQs() {
+    const container = document.getElementById('faqs-container');
+    if (!container) return;
+
+    try {
+        const response = await fetch('/api/faqs');
+        if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
+        const faqs = await response.json();
+
+        // Group by category
+        const categories = {};
+        faqs.forEach(faq => {
+            const cat = faq.categoria || 'General';
+            if (!categories[cat]) categories[cat] = [];
+            categories[cat].push(faq);
+        });
+
+        container.innerHTML = '';
+
+        const categoryIcons = {
+            'Cita': '📅',
+            'Ubicación': '📍',
+            'Pagos': '💳',
+            'Vestidos': '👗',
+            'Precios': '💰',
+            'General': '💬'
+        };
+
+        Object.entries(categories).forEach(([cat, items]) => {
+            const icon = categoryIcons[cat] || '❓';
+            const card = document.createElement('div');
+            card.className = 'flow-card';
+            card.innerHTML = `
+                <div class="flow-header">
+                    <h3>${icon} ${cat}</h3>
+                </div>
+                <div class="faqs-list">
+                    ${items.map(faq => `
+                        <div class="faq-card">
+                            <div class="faq-question">❓ ${escapeHtml(faq.pregunta)}</div>
+                            <div class="faq-answer">${escapeHtml(faq.respuesta).replace(/\n/g, '<br>')}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            container.appendChild(card);
+        });
+    } catch (error) {
+        console.error('Error cargando FAQs:', error);
+        container.innerHTML = `<p class="loading-text" style="color: var(--danger-color);">Error cargando FAQs: ${error.message}</p>`;
     }
 }
 

@@ -13,7 +13,8 @@ const {
   getBusinessInfo,
   getBusinessHours,
   getCatalogInfo,
-  getPricingInfo
+  getPricingInfo,
+  getFAQs
 } = require('../config');
 const {
   getAvailableSlots,
@@ -144,6 +145,7 @@ function buildSystemPrompt(session, phone) {
   const hours = getBusinessHours();
   const catalog = getCatalogInfo();
   const pricing = getPricingInfo();
+  const faqs = getFAQs();
   const clientName = getClientName(session);
 
   const today = new Date().toLocaleDateString('es-MX', {
@@ -198,7 +200,10 @@ Hoy es ${today}.
 9. **Tono:** cálido, emocionante, personal. Como una amiga experta en bodas. Usa emojis con moderación (👰‍♀️ ✨ 💐 🤍).
 10. **Nunca** des precios exactos por modelo (solo el precio base), ni confirmes disponibilidad sin verificar con herramientas.
 11. **Responde siempre en español.**
-12. **Mensajes concisos:** WhatsApp no es email; evita respuestas largas o con demasiados párrafos.`;
+12. **Mensajes concisos:** WhatsApp no es email; evita respuestas largas o con demasiados párrafos.
+
+## Preguntas frecuentes — responde estas directamente sin rodeos
+${faqs.map(f => `- **${f.pregunta}** → ${f.respuesta}`).join('\n')}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -331,7 +336,23 @@ async function executeTool(toolName, toolArgs, calendarDeps, session, phone) {
         // CRITICAL: Delete the blue event at the NEW slot (it's now occupied)
         const storedSlots = session.slots_disponibles || [];
         const appointmentTime = new Date(nueva_hora_inicio).getTime();
-        const matchingSlot = storedSlots.find(slot => Math.abs(new Date(slot.start).getTime() - appointmentTime) < 60000);
+        let matchingSlot = storedSlots.find(slot => Math.abs(new Date(slot.start).getTime() - appointmentTime) < 60000);
+
+        // Fallback: if not found in session (session may be stale), fetch fresh slots for that date
+        if ((!matchingSlot || !matchingSlot.eventId) && innoviaCDMXCalendarId) {
+          console.log(`🔍 Slot no encontrado en sesión, buscando en calendario Innovia CDMX para: ${nueva_hora_inicio}`);
+          try {
+            const newDate = nueva_hora_inicio.split('T')[0]; // YYYY-MM-DD
+            const freshSlots = await getAvailableSlots(newDate, calendarClient, authClient, innoviaCDMXCalendarId, null);
+            matchingSlot = freshSlots.find(slot => Math.abs(new Date(slot.start).getTime() - appointmentTime) < 60000);
+            if (matchingSlot) {
+              console.log(`✅ Slot encontrado en búsqueda fresca (ID: ${matchingSlot.eventId})`);
+            }
+          } catch (fetchErr) {
+            console.warn(`⚠️  Error buscando slots frescos: ${fetchErr.message}`);
+          }
+        }
+
         if (matchingSlot && matchingSlot.eventId) {
           console.log(`🗑️  Eliminando slot azul del nuevo horario en Innovia CDMX (ID: ${matchingSlot.eventId})`);
           await deleteCalendarEventService(matchingSlot.eventId, calendarClient, authClient, innoviaCDMXCalendarId);
@@ -437,6 +458,8 @@ async function runAgent(phone, session, message, calendarDeps, isButtonClick = f
         if (toolName === 'buscar_slots_disponibles' && result.slots_disponibles) {
           sessionUpdates.slots_disponibles = result.slots_disponibles;
           sessionUpdates.fecha_cita_solicitada = toolArgs.fecha;
+          // Also update session in-place so subsequent tool calls in the same turn can use it
+          session.slots_disponibles = result.slots_disponibles;
         }
         if (toolName === 'confirmar_cita' && result.exito) {
           sessionUpdates.calendar_event_id = result.event_id;
