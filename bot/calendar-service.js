@@ -1533,6 +1533,35 @@ async function restoreBlueEvent(dateStart, calendarClient, authClient, calendarI
   }
 }
 
+/**
+ * Get a single calendar event by ID
+ * @param {string} eventId - Event ID to fetch
+ * @param {Object} calendarClient - Google Calendar API client
+ * @param {Object} authClient - Google Auth client
+ * @param {string} calendarId - Calendar ID where the event exists
+ * @returns {Promise<Object|null>} Event data or null
+ */
+async function getCalendarEvent(eventId, calendarClient, authClient, calendarId) {
+  try {
+    if (!authClient || !eventId) return null;
+    let auth;
+    if (authClient && typeof authClient.getClient === 'function') {
+      auth = await authClient.getClient();
+    } else {
+      auth = authClient;
+    }
+    const response = await calendarClient.events.get({
+      auth,
+      calendarId,
+      eventId
+    });
+    return response.data;
+  } catch (error) {
+    console.error('❌ Error obteniendo evento del calendario:', error.message);
+    return null;
+  }
+}
+
 module.exports = {
   getAvailableSlots,
   isDayOpen,
@@ -1542,5 +1571,6 @@ module.exports = {
   updateCalendarEvent,
   deleteCalendarEvent,
   findEventsByName,
-  restoreBlueEvent
+  restoreBlueEvent,
+  getCalendarEvent
 };
