@@ -19,7 +19,7 @@
   },
 
   "precios": {
-    "precio_base": 25000,
+    "precio_base": 29000,
     "moneda": "MXN",
     "nota": "El precio varía según modelo, forma de pago, fecha de compra, promociones y personalizaciones. Las asesoras pueden ofrecer descuentos exclusivos en showroom."
   },
@@ -35,59 +35,154 @@
 
   "faqs": [
     {
-      "pregunta": "¿Puedo llevar acompañantes, amigas, damas, familiares?",
-      "respuesta": "Claro, nuestros espacios son ideales para ti y 3 acompañantes más. ¡Nos encantará recibirlas!",
-      "categoria": "Cita"
+      "pregunta": "¿Cuáles son sus horarios de atención?",
+      "respuesta": "🕒 Martes a sábado de 11am a 8pm, domingos de 11am a 6pm. Los lunes la sucursal está cerrada.",
+      "categoria": "Horarios y Ubicación"
     },
     {
-      "pregunta": "¿Tiene costo la cita?",
-      "respuesta": "No, la cita no tiene costo. Es solo para garantizar un espacio en probador y una asesora que te ayude con tus pruebas.",
-      "categoria": "Cita"
-    },
-    {
-      "pregunta": "¿Cuánto dura la cita?",
-      "respuesta": "La duración aproximada es de hora y media.",
-      "categoria": "Cita"
-    },
-    {
-      "pregunta": "¿Hay límite de vestidos para probarme?",
-      "respuesta": "No ponemos límite de vestidos, es los que podamos probar durante tu cita.",
-      "categoria": "Cita"
+      "pregunta": "¿Dónde están ubicados?",
+      "respuesta": "📍 Tampico 26, Roma Norte, CDMX. ¿Quisieras venir a conocer nuestro showroom? 😊",
+      "categoria": "Horarios y Ubicación"
     },
     {
       "pregunta": "¿Tienen estacionamiento?",
-      "respuesta": "No contamos con estacionamiento, pero la calle es de parquímetro y justo en frente hay un estacionamiento de paga.",
-      "categoria": "Ubicación"
+      "respuesta": "No contamos con estacionamiento, pero la calle es de parquímetro y justo en frente hay un estacionamiento de paga. ✨",
+      "categoria": "Horarios y Ubicación"
     },
     {
-      "pregunta": "¿Qué formas de pago aceptan? ¿Tienen meses sin intereses?",
-      "respuesta": "Aceptamos todas las tarjetas de débito y crédito. En este mes por promoción contamos con hasta 6 meses sin intereses.",
-      "categoria": "Pagos"
+      "pregunta": "¿Atienden en otras ciudades?",
+      "respuesta": "Ahora estás hablando con la sucursal en 📍 CDMX pero contamos con sucursal en Querétaro, Aguascalientes, SLP y Chihuahua.",
+      "categoria": "Horarios y Ubicación"
     },
     {
-      "pregunta": "¿A qué cuenta debo hacer mi pago/transferencia? ¿A qué cuenta debo hacer mi apartado?",
-      "respuesta": "Innovia: BANAMEX\nCLABE: 002760702155214688\nCUENTA: 5521468\nSUCURSAL: 7021\nPersona Física: Olga Alicia Acosta Dingfelder",
-      "categoria": "Pagos"
+      "pregunta": "¿Tiene costo la cita?",
+      "respuesta": "No, la cita no tiene costo. Es solo para garantizar un espacio en probador y una asesora que te ayude con las pruebas de tu vestido. 👰‍♀️💕",
+      "categoria": "Citas"
     },
     {
-      "pregunta": "Soy gordita, soy curvy, soy talla grande ¿hay vestidos talla grande?",
-      "respuesta": "Todos nuestros vestidos se mandan a confeccionar a la talla de la novia, por lo que nos adaptamos a cualquier silueta.",
-      "categoria": "Vestidos"
+      "pregunta": "¿Cuánto dura la cita?",
+      "respuesta": "Aproximadamente 1 hora y media. ⏳",
+      "categoria": "Citas"
     },
     {
-      "pregunta": "¿Tienen vestidos para civil?",
-      "respuesta": "Nuestros vestidos rectos y corte sirena son ideales para bodas civil. ¿Quisieras agendar una cita?",
-      "categoria": "Vestidos"
+      "pregunta": "¿Qué días tienen disponibilidad?",
+      "respuesta": "🕒 Nuestro horario de atención es de martes a sábado de 11am a 7pm y domingos de 11am a 5pm. Te recomendamos agendar cuanto antes ya que principalmente en fines de semana tenemos lleno. ✨",
+      "categoria": "Citas"
+    },
+    {
+      "pregunta": "¿Puedo agendar con mucha anticipación?",
+      "respuesta": "Sí, es totalmente recomendable ya que nuestros vestidos tardan aproximadamente 6 meses en confeccionarse a tu medida. 👰‍♀️",
+      "categoria": "Citas"
+    },
+    {
+      "pregunta": "¿Qué pasa si necesito cancelar o reagendar?",
+      "respuesta": "Sin problema, escríbenos y con gusto te buscamos otra fecha disponible.",
+      "categoria": "Citas"
+    },
+    {
+      "pregunta": "¿Puedo llevar acompañantes?",
+      "respuesta": "Claro, nuestros espacios son ideales para ti y 3 acompañantes más. ¡Nos encantará recibirlas! 💕",
+      "categoria": "Citas"
+    },
+    {
+      "pregunta": "¿Qué debo llevar a mi cita?",
+      "respuesta": "Para tu cita de elección de vestido es importante que vengas cómoda, con ropa interior similar a la que te pondrías el día de tu evento, y acompañada de hasta 3 personas para que te ayuden en tu búsqueda del vestido de tus sueños. 👰‍♀️",
+      "categoria": "Citas"
+    },
+    {
+      "pregunta": "¿Cuánto cuestan los vestidos? ¿Cuáles son los precios?",
+      "respuesta": "Nuestros vestidos inician desde $29,000 MXN y el precio varía dependiendo del modelo, la forma de pago, fecha de compra, promoción aplicada y personalizaciones finales. ✨\nNo hay nada como verlos en persona. 👰‍♀️",
+      "categoria": "Precios y Pagos"
+    },
+    {
+      "pregunta": "¿Cuáles son las formas de pago?",
+      "respuesta": "Aceptamos todas las tarjetas de débito/crédito, y transferencia. También se puede pagar a contado o a meses en tienda. 💳",
+      "categoria": "Precios y Pagos"
+    },
+    {
+      "pregunta": "¿Tienen descuentos o promociones?",
+      "respuesta": "Sí, estamos en promoción que aplica a toda nuestra colección. Adicionalmente nuestras asesoras pueden conseguirte sorpresas especiales o descuentos exclusivos según el modelo y la fecha de tu compra. 💕",
+      "categoria": "Precios y Pagos"
+    },
+    {
+      "pregunta": "¿Los descuentos aplican solo a vestidos?",
+      "respuesta": "Sí, los descuentos de promociones especiales aplican únicamente a vestidos. 💕",
+      "categoria": "Precios y Pagos"
+    },
+    {
+      "pregunta": "¿Puedo pagar en parcialidades?",
+      "respuesta": "Sí, se puede hacer un plan de pagos. Por ejemplo, hay clientes que hacen depósitos parciales con fecha límite acordada. 💕",
+      "categoria": "Precios y Pagos"
+    },
+    {
+      "pregunta": "Vi que hay descuentos ¿para qué modelos aplica?",
+      "respuesta": "Aplica para toda nuestra colección. 👰‍♀️",
+      "categoria": "Precios y Pagos"
+    },
+    {
+      "pregunta": "¿Manejan tallas plus o curvy?",
+      "respuesta": "Nuestros vestidos se confeccionan a la medida de la novia por lo que nos adaptamos a la silueta de nuestras novias. Para los modelos en prueba, son talla americana 12 / 14. 👰‍♀️",
+      "categoria": "Producto"
+    },
+    {
+      "pregunta": "¿El modelo que vi en redes sociales lo tienen en tienda?",
+      "respuesta": "En tienda contamos con los siguientes modelos, aquí verás nuestro catálogo, mismo que podrás conocer físicamente durante tu visita: https://drive.google.com/file/d/1nwWaTw1bmGbmm5M0ygTsgXnOd534-qbM/view?usp=drive_link",
+      "categoria": "Producto"
+    },
+    {
+      "pregunta": "¿Fabrican sus propios vestidos?",
+      "respuesta": "Nuestros diseños son propios, y los confeccionamos en Aguascalientes.",
+      "categoria": "Producto"
+    },
+    {
+      "pregunta": "¿Venden accesorios como velos?",
+      "respuesta": "Sí. En la tienda contamos con velos, tocados, tiaras y zapatos. 👰‍♀️",
+      "categoria": "Producto"
+    },
+    {
+      "pregunta": "¿Tienen vestidos para boda civil?",
+      "respuesta": "Sí, todos nuestros modelos son vestidos largos, pero los cortes rectos y sirena son los que recomendamos para civil. Al inicio de nuestro catálogo los puedes encontrar: https://drive.google.com/file/d/1nwWaTw1bmGbmm5M0ygTsgXnOd534-qbM/view?usp=drive_link",
+      "categoria": "Producto"
+    },
+    {
+      "pregunta": "¿Cuándo se hacen los ajustes?",
+      "respuesta": "Los ajustes los agendamos aproximadamente 15 días antes de tu evento para que estés lo más apegada a tu talla del día de tu evento y te quede a la perfección. 👰‍♀️ Si tienes más dudas, te pondremos en contacto con una asesora.",
+      "categoria": "Ajustes y Post-compra"
+    },
+    {
+      "pregunta": "¿Qué incluye la cita de ajustes?",
+      "respuesta": "En la cita de ajustes se trabaja en el largo, y el talle para que quede perfectamente a tu medida.",
+      "categoria": "Ajustes y Post-compra"
+    },
+    {
+      "pregunta": "¿Puedo ir a liquidar mi vestido cualquier día?",
+      "respuesta": "Puedes pasar cualquier día a dar tu liquidación en tienda si tus pagos son en efectivo o con tarjeta, en el horario de atención habitual: Martes a sábado de 11am a 8pm 🕒 y domingos de 11am a 6pm 🕒. Los lunes cerramos.",
+      "categoria": "Ajustes y Post-compra"
+    },
+    {
+      "pregunta": "¿Puedo comprar accesorios o ir a ver velos sin tener cita de vestido?",
+      "respuesta": "Sí, puedes acercarte a tienda para ver velos y accesorios. No se requiere cita para ello.",
+      "categoria": "Ajustes y Post-compra"
+    },
+    {
+      "pregunta": "¿Compran vestidos de segunda mano?",
+      "respuesta": "No. Innovia se dedica únicamente a la realización y venta de vestidos de su propia marca. Para vender un vestido de segunda mano se recomiendan plataformas como GoTrendier.",
+      "categoria": "Otros"
+    },
+    {
+      "pregunta": "¿Tienen sucursal en Querétaro?",
+      "respuesta": "Sí, además de nuestra sucursal en CDMX, contamos con sucursal en Querétaro, Aguascalientes, SLP y Chihuahua.",
+      "categoria": "Otros"
     },
     {
       "pregunta": "¿Rentan vestidos?",
       "respuesta": "Nuestra colección es para venta únicamente.",
-      "categoria": "Vestidos"
+      "categoria": "Otros"
     },
     {
-      "pregunta": "¿Cuáles son los precios? ¿Cuánto cuestan los vestidos?",
-      "respuesta": "Los precios por modelo únicamente se dan en tienda. Nos encantará recibirte y presentarte nuestra colección, así como nuestras promociones. ¿Quisieras agendar una cita?",
-      "categoria": "Precios"
+      "pregunta": "¿A qué cuenta debo hacer mi pago/transferencia? ¿A qué cuenta debo hacer mi apartado?",
+      "respuesta": "Innovia: BANAMEX\nCLABE: 002760702155214688\nCUENTA: 5521468\nSUCURSAL: 7021\nPersona Física: Olga Alicia Acosta Dingfelder",
+      "categoria": "Otros"
     }
   ],
 
