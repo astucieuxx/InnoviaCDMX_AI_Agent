@@ -57,7 +57,6 @@ function initTabs() {
                 loadAppointments();
             } else if (targetTab === 'messages') {
                 loadFAQs();
-                loadMessages();
             } else if (targetTab === 'logs') {
                 loadLogs();
                 startLogsAutoRefresh();
