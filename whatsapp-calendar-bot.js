@@ -4334,6 +4334,41 @@ app.put('/api/messages', async (req, res) => {
   }
 });
 
+// GET /api/faqs - Obtener preguntas frecuentes del bot
+app.get('/api/faqs', async (req, res) => {
+  try {
+    const configPath = path.join(__dirname, 'business_config.json');
+    const fileContent = await fs.promises.readFile(configPath, 'utf8');
+    const businessConfig = JSON.parse(fileContent);
+    res.json(businessConfig.faqs || []);
+  } catch (error) {
+    console.error('Error en /api/faqs:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PUT /api/faqs - Actualizar preguntas frecuentes
+app.put('/api/faqs', async (req, res) => {
+  try {
+    const { faqs } = req.body;
+    if (!Array.isArray(faqs)) {
+      return res.status(400).json({ error: 'Se requiere un array de FAQs' });
+    }
+    const configPath = path.join(__dirname, 'business_config.json');
+    const fileContent = await fs.promises.readFile(configPath, 'utf8');
+    const businessConfig = JSON.parse(fileContent);
+    businessConfig.faqs = faqs;
+    await fs.promises.writeFile(configPath, JSON.stringify(businessConfig, null, 2), 'utf8');
+    // Reload config cache
+    delete require.cache[require.resolve('./config')];
+    console.log('✅ FAQs actualizadas correctamente');
+    res.json({ success: true, message: 'FAQs actualizadas correctamente' });
+  } catch (error) {
+    console.error('Error en PUT /api/faqs:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET /api/bot-mode - Obtener estado del bot (unificado: inactive, test, active)
 app.get('/api/bot-mode', (req, res) => {
   try {

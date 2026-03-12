@@ -33,7 +33,7 @@
             <button class="tab-btn active" data-tab="analytics">📊 Analytics</button>
             <button class="tab-btn" data-tab="conversations">💬 Conversaciones</button>
             <button class="tab-btn" data-tab="appointments">📅 Citas</button>
-            <button class="tab-btn" data-tab="messages">✏️ Mensajes</button>
+            <button class="tab-btn" data-tab="messages">❓ Help Center Info</button>
             <button class="tab-btn" data-tab="logs">📋 Logs</button>
             <button class="tab-btn" data-tab="config">⚙️ Configuración</button>
         </div>
@@ -181,12 +181,23 @@
             </div>
         </div>
 
-        <!-- Tab: Mensajes -->
+        <!-- Tab: Help Center Info -->
         <div id="messages" class="tab-content">
             <div class="messages-section">
+                <!-- FAQs Section -->
                 <div class="messages-header">
-                    <h2>📝 Gestión de Mensajes del AI Agent</h2>
-                    <p class="section-description">Edita todos los mensajes que el AI Agent envía a los usuarios, organizados por flujo de conversación.</p>
+                    <h2>❓ Help Center Info</h2>
+                    <p class="section-description">Toda la información que el AI Agent está programado para responder a los clientes, organizada por categoría.</p>
+                </div>
+
+                <div id="faqs-container" class="messages-container">
+                    <p class="loading-text">Cargando información...</p>
+                </div>
+
+                <!-- Messages Editor Section -->
+                <div class="messages-header" style="margin-top: 48px;">
+                    <h2>📝 Mensajes del AI Agent</h2>
+                    <p class="section-description">Edita los mensajes que el AI Agent envía en cada flujo de conversación.</p>
                     <button id="save-all-messages" class="btn-primary" style="margin-top: 20px;">💾 Guardar Todos los Cambios</button>
                     <div id="messages-status" class="status-message"></div>
                 </div>

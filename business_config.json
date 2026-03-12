@@ -33,6 +33,64 @@
     "tipo_titular": "Persona Física"
   },
 
+  "faqs": [
+    {
+      "pregunta": "¿Puedo llevar acompañantes, amigas, damas, familiares?",
+      "respuesta": "Claro, nuestros espacios son ideales para ti y 3 acompañantes más. ¡Nos encantará recibirlas!",
+      "categoria": "Cita"
+    },
+    {
+      "pregunta": "¿Tiene costo la cita?",
+      "respuesta": "No, la cita no tiene costo. Es solo para garantizar un espacio en probador y una asesora que te ayude con tus pruebas.",
+      "categoria": "Cita"
+    },
+    {
+      "pregunta": "¿Cuánto dura la cita?",
+      "respuesta": "La duración aproximada es de hora y media.",
+      "categoria": "Cita"
+    },
+    {
+      "pregunta": "¿Hay límite de vestidos para probarme?",
+      "respuesta": "No ponemos límite de vestidos, es los que podamos probar durante tu cita.",
+      "categoria": "Cita"
+    },
+    {
+      "pregunta": "¿Tienen estacionamiento?",
+      "respuesta": "No contamos con estacionamiento, pero la calle es de parquímetro y justo en frente hay un estacionamiento de paga.",
+      "categoria": "Ubicación"
+    },
+    {
+      "pregunta": "¿Qué formas de pago aceptan? ¿Tienen meses sin intereses?",
+      "respuesta": "Aceptamos todas las tarjetas de débito y crédito. En este mes por promoción contamos con hasta 6 meses sin intereses.",
+      "categoria": "Pagos"
+    },
+    {
+      "pregunta": "¿A qué cuenta debo hacer mi pago/transferencia? ¿A qué cuenta debo hacer mi apartado?",
+      "respuesta": "Innovia: BANAMEX\nCLABE: 002760702155214688\nCUENTA: 5521468\nSUCURSAL: 7021\nPersona Física: Olga Alicia Acosta Dingfelder",
+      "categoria": "Pagos"
+    },
+    {
+      "pregunta": "Soy gordita, soy curvy, soy talla grande ¿hay vestidos talla grande?",
+      "respuesta": "Todos nuestros vestidos se mandan a confeccionar a la talla de la novia, por lo que nos adaptamos a cualquier silueta.",
+      "categoria": "Vestidos"
+    },
+    {
+      "pregunta": "¿Tienen vestidos para civil?",
+      "respuesta": "Nuestros vestidos rectos y corte sirena son ideales para bodas civil. ¿Quisieras agendar una cita?",
+      "categoria": "Vestidos"
+    },
+    {
+      "pregunta": "¿Rentan vestidos?",
+      "respuesta": "Nuestra colección es para venta únicamente.",
+      "categoria": "Vestidos"
+    },
+    {
+      "pregunta": "¿Cuáles son los precios? ¿Cuánto cuestan los vestidos?",
+      "respuesta": "Los precios por modelo únicamente se dan en tienda. Nos encantará recibirte y presentarte nuestra colección, así como nuestras promociones. ¿Quisieras agendar una cita?",
+      "categoria": "Precios"
+    }
+  ],
+
   "flujo_conversacion": {
     "saludo_inicial": "Cuando alguien pide info sin contexto previo, preguntar nombre y fecha del evento antes de continuar.",
     "objetivo_principal": "Convertir cada conversación en una cita agendada en el showroom.",

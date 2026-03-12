@@ -127,6 +127,13 @@ function getPaymentInfo() {
 }
 
 /**
+ * Get FAQs
+ */
+function getFAQs() {
+  return config.faqs || [];
+}
+
+/**
  * Get conversation flow configuration
  */
 function getConversationFlow() {
@@ -328,6 +335,9 @@ module.exports = {
   // Payment
   getPaymentInfo,
   
+  // FAQs
+  getFAQs,
+
   // Conversation flow
   getConversationFlow,
   

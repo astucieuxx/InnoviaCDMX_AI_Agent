@@ -13,7 +13,8 @@ const {
   getBusinessInfo,
   getBusinessHours,
   getCatalogInfo,
-  getPricingInfo
+  getPricingInfo,
+  getFAQs
 } = require('../config');
 const {
   getAvailableSlots,
@@ -144,6 +145,7 @@ function buildSystemPrompt(session, phone) {
   const hours = getBusinessHours();
   const catalog = getCatalogInfo();
   const pricing = getPricingInfo();
+  const faqs = getFAQs();
   const clientName = getClientName(session);
 
   const today = new Date().toLocaleDateString('es-MX', {
@@ -198,7 +200,10 @@ Hoy es ${today}.
 9. **Tono:** cálido, emocionante, personal. Como una amiga experta en bodas. Usa emojis con moderación (👰‍♀️ ✨ 💐 🤍).
 10. **Nunca** des precios exactos por modelo (solo el precio base), ni confirmes disponibilidad sin verificar con herramientas.
 11. **Responde siempre en español.**
-12. **Mensajes concisos:** WhatsApp no es email; evita respuestas largas o con demasiados párrafos.`;
+12. **Mensajes concisos:** WhatsApp no es email; evita respuestas largas o con demasiados párrafos.
+
+## Preguntas frecuentes — responde estas directamente sin rodeos
+${faqs.map(f => `- **${f.pregunta}** → ${f.respuesta}`).join('\n')}`;
 }
 
 // ---------------------------------------------------------------------------
