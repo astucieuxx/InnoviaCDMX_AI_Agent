@@ -210,21 +210,26 @@ function getDefaultResponse() {
  * @returns {string} Confirmation message
  */
 function getAppointmentConfirmationMessage(appointmentData) {
-  const { name, date, time, calendarLink } = appointmentData;
-  
-  let message = `✅ ¡Cita confirmada!\n\n👰 ${name}\n📅 Fecha: ${date}\n🕐 Hora: ${time}\n\n📍 Te esperamos en ${getBusinessName()}`;
-  
-  if (getBusinessAddress()) {
-    message += `\n📍 ${getBusinessAddress()}`;
+  const { name, date, time } = appointmentData;
+
+  // Format date as "Viernes, 15 de marzo 2026"
+  let formattedDate = date;
+  if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    const [year, month, day] = date.split('-').map(Number);
+    const d = new Date(year, month - 1, day);
+    formattedDate = d.toLocaleDateString('es-MX', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+    // Capitalize first letter
+    formattedDate = formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1);
   }
-  
-  if (calendarLink) {
-    message += `\n📅 Ver en Google Calendar: ${calendarLink}`;
-  }
-  
-  message += `\n📞 Si necesitas cambiar, responde este mensaje\n\n¡Gracias!`;
-  
-  return message;
+
+  const address = getBusinessAddress();
+
+  return `✅ ¡Cita confirmada! 👰‍♀️\n\n👤 *Nombre:* ${name}\n📅 *Fecha:* ${formattedDate}\n🕐 *Hora:* ${time}\n📍 *Ubicación:* ${address}\n\nSi necesitas cambiar o cancelar tu cita, solo responde este mensaje 💐`;
 }
 
 /**
