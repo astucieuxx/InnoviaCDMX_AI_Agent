@@ -302,6 +302,10 @@ async function executeTool(toolName, toolArgs, calendarDeps, session, phone) {
       const { event_id, nueva_hora_inicio } = toolArgs;
       console.log(`🔧 Agent tool: reagendar_cita(${event_id} → ${nueva_hora_inicio})`);
 
+      // CRITICAL: Get the existing event BEFORE updating to know the old slot time
+      const existingEvent = await getCalendarEventService(event_id, calendarClient, authClient, calendarId);
+      const oldStartIso = existingEvent?.start?.dateTime || existingEvent?.start?.date || null;
+
       const clientName = getClientName(session) || 'Cliente';
       const event = await updateCalendarEventService(
         event_id,
@@ -316,6 +320,25 @@ async function executeTool(toolName, toolArgs, calendarDeps, session, phone) {
       );
 
       if (event) {
+        // CRITICAL: Restore the blue event at the OLD slot (it's now available again)
+        if (oldStartIso && innoviaCDMXCalendarId) {
+          console.log(`🔵 Restaurando slot azul en Innovia CDMX para hora anterior: ${oldStartIso}`);
+          await restoreBlueEventService(oldStartIso, calendarClient, authClient, innoviaCDMXCalendarId);
+        } else {
+          console.warn(`⚠️  No se pudo restaurar slot azul: oldStartIso=${oldStartIso}, innoviaCDMXCalendarId=${innoviaCDMXCalendarId}`);
+        }
+
+        // CRITICAL: Delete the blue event at the NEW slot (it's now occupied)
+        const storedSlots = session.slots_disponibles || [];
+        const appointmentTime = new Date(nueva_hora_inicio).getTime();
+        const matchingSlot = storedSlots.find(slot => Math.abs(new Date(slot.start).getTime() - appointmentTime) < 60000);
+        if (matchingSlot && matchingSlot.eventId) {
+          console.log(`🗑️  Eliminando slot azul del nuevo horario en Innovia CDMX (ID: ${matchingSlot.eventId})`);
+          await deleteCalendarEventService(matchingSlot.eventId, calendarClient, authClient, innoviaCDMXCalendarId);
+        } else {
+          console.warn(`⚠️  No se encontró slot azul coincidente para eliminar en hora: ${nueva_hora_inicio}`);
+        }
+
         return {
           exito: true,
           event_id: event.id,
