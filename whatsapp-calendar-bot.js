@@ -478,7 +478,7 @@ async function initGoogleAuth() {
       // Es cuenta de servicio - usar GoogleAuth
       authClient = new google.auth.GoogleAuth({
         credentials: credentials,
-        scopes: ['https://www.googleapis.com/auth/calendar']
+        scopes: ['https://www.googleapis.com/auth/calendar', 'https://www.googleapis.com/auth/spreadsheets']
       });
       console.log('✅ Autenticación de Google inicializada (cuenta de servicio)');
     } else {
