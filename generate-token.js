@@ -3,8 +3,7 @@
  * Uso: node generate-token.js
  */
 const { google } = require('googleapis');
-const http = require('http');
-const url = require('url');
+const readline = require('readline');
 const fs = require('fs');
 
 const SCOPES = [
@@ -23,9 +22,7 @@ if (process.env.GOOGLE_CREDENTIALS) {
 }
 
 const { client_secret, client_id, redirect_uris } = credentials.installed || credentials.web;
-
-// Usamos localhost como redirect
-const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, 'http://localhost:3333/callback');
+const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
 
 const authUrl = oAuth2Client.generateAuthUrl({
   access_type: 'offline',
@@ -33,26 +30,24 @@ const authUrl = oAuth2Client.generateAuthUrl({
   prompt: 'consent'
 });
 
-console.log('\n🔗 Abre este link en tu navegador:\n');
+console.log('\n🔗 Paso 1: Abre este link en tu navegador:\n');
 console.log(authUrl);
-console.log('\n⏳ Esperando callback en http://localhost:3333/callback ...\n');
+console.log('\n📋 Paso 2: Autoriza con Google.');
+console.log('   La página dará error de conexión — eso es normal.');
+console.log('   Copia el valor de "code" de la URL del navegador.\n');
+console.log('   Ejemplo: http://localhost/?code=4/0AX4XfWg...  ← copia solo esa parte después de code=\n');
 
-const server = http.createServer(async (req, res) => {
-  const qs = url.parse(req.url, true).query;
-  if (!qs.code) { res.end('Sin código'); return; }
-
+const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+rl.question('Pega el código aquí: ', async (code) => {
+  rl.close();
+  // Limpiar por si pegaron la URL completa
+  const clean = code.includes('code=') ? new URL(code).searchParams.get('code') : code.trim();
   try {
-    const { tokens } = await oAuth2Client.getToken(qs.code);
-    res.end('<h2>✅ Token generado. Revisa tu terminal.</h2>');
-    server.close();
-
-    console.log('\n✅ Nuevo token generado. Copia este JSON como GOOGLE_TOKEN en Railway:\n');
+    const { tokens } = await oAuth2Client.getToken(clean);
+    console.log('\n✅ Token generado. Copia este JSON como GOOGLE_TOKEN en Railway:\n');
     console.log(JSON.stringify(tokens));
     console.log('\n');
   } catch (e) {
-    res.end('Error: ' + e.message);
-    console.error('❌', e.message);
+    console.error('❌ Error:', e.message);
   }
 });
-
-server.listen(3333);
