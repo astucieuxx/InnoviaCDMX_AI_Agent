@@ -1479,6 +1479,21 @@ app.post('/webhook', async (req, res) => {
         senderPhone = body.from;
       }
       
+      // Si no hay senderPhone, verificar si es un status update (no un mensaje real)
+      if (!senderPhone && body.object === 'whatsapp_business_account' && body.entry) {
+        const isStatusUpdate = body.entry.some(entry =>
+          (entry.changes || []).some(change => {
+            const statuses = (change.value || {}).statuses;
+            return statuses && statuses.length > 0;
+          })
+        );
+        if (isStatusUpdate) {
+          // Status updates (sent/delivered/read) se ignoran silenciosamente
+          sendResponse(200, { status: 'ok' });
+          return;
+        }
+      }
+
       if (senderPhone) {
         const cleanPhone = senderPhone.replace(/\D/g, '');
         const TEST_PHONE_FULL = '525521920710';
