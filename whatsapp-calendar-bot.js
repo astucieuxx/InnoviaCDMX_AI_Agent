@@ -1798,6 +1798,31 @@ app.post('/webhook', async (req, res) => {
           console.log(`⚠️  Mensaje de texto sin senderPhone o incomingMessage. senderPhone: ${senderPhone}, incomingMessage: ${incomingMessage}`);
         }
       }
+      // Manejar imágenes (recibos de pago, fotos, etc.) → escalar a humano
+      else if (message.type === 'image') {
+        const caption = message.image?.caption || '';
+        const descripcion = caption
+          ? `Imagen recibida: "${caption}"`
+          : 'El usuario envió una imagen (posiblemente un recibo de pago u otro documento)';
+
+        console.log(`🖼️  Imagen recibida de ${senderPhone}. Caption: "${caption}". Escalando a humano.`);
+
+        // Obtener sesión para contexto
+        const imgSession = sessions.get(senderPhone) || {};
+        const clientName = imgSession.nombre_cliente || imgSession.nombre || '';
+
+        logPendingTask({
+          phone: senderPhone,
+          name: clientName,
+          message: descripcion,
+          historial: imgSession.historial || []
+        });
+
+        // Responder al usuario
+        await sendWhatsAppMessage(senderPhone,
+          'Recibí tu imagen 📎. Un miembro de nuestro equipo la revisará y se pondrá en contacto contigo a la brevedad. 🙏'
+        );
+      }
       // Manejar respuestas de botones interactivos
       else if (message.type === 'interactive' && message.interactive) {
         const interactive = message.interactive;
