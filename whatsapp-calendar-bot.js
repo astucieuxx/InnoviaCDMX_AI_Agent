@@ -1009,6 +1009,25 @@ async function createCalendarEvent(name, phone, email, dateStart, fechaBoda = nu
 // Almacenar phone_number_id del webhook para usarlo en el endpoint
 let whatsappPhoneNumberId = null;
 
+// Tracking de IDs de mensajes enviados por el bot (para detectar intervención humana)
+// Map<messageId, { phone, timestamp }>
+const botSentMessageIds = new Map();
+const BOT_MSG_ID_TTL_MS = 30 * 60 * 1000; // 30 minutos
+const HUMAN_HANDOFF_PAUSE_MS = 10 * 60 * 1000; // 10 minutos
+
+function registerBotMessage(messageId, recipientPhone) {
+  botSentMessageIds.set(messageId, { phone: recipientPhone, timestamp: Date.now() });
+  // Limpiar entradas viejas (> 30 min) para no acumular memoria
+  const cutoff = Date.now() - BOT_MSG_ID_TTL_MS;
+  for (const [id, data] of botSentMessageIds) {
+    if (data.timestamp < cutoff) botSentMessageIds.delete(id);
+  }
+}
+
+function isHumanHandoffMessage(messageId) {
+  return !botSentMessageIds.has(messageId);
+}
+
 // Función para enviar mensajes por WhatsApp usando API de Chakra
 // Función para enviar indicador de "escribiendo..."
 async function sendTypingIndicator(phoneNumber, action = 'typing_on') {
@@ -1247,7 +1266,13 @@ async function sendWhatsAppMessage(phoneNumber, message, options = {}) {
     // Detener typing indicator después de enviar el mensaje
     // (el mensaje real debería detenerlo automáticamente, pero por si acaso)
     await sendTypingIndicator(cleanPhone, 'typing_off');
-    
+
+    // Registrar el ID del mensaje enviado por el bot para detectar intervención humana
+    const sentMsgId = response.data?.messages?.[0]?.id;
+    if (sentMsgId) {
+      registerBotMessage(sentMsgId, cleanPhone);
+    }
+
     return response.data;
     
   } catch (error) {
@@ -1650,7 +1675,17 @@ app.post('/webhook', async (req, res) => {
                 const messageId = status.id;
                 
                 console.log(`📊 Estado de mensaje: ${messageStatus} para ${recipientId} (ID: ${messageId})`);
-                
+
+                // Detectar intervención humana: si llega "sent" para un ID que el bot no generó
+                if (messageStatus === 'sent' && messageId && recipientId) {
+                  if (isHumanHandoffMessage(messageId)) {
+                    const clientPhone = recipientId.replace(/\D/g, '');
+                    const pauseUntil = new Date(Date.now() + HUMAN_HANDOFF_PAUSE_MS);
+                    sessions.updateSession(clientPhone, { bot_paused_until: pauseUntil });
+                    console.log(`🙋 INTERVENCIÓN HUMANA detectada para ${clientPhone} — bot pausado 10 min hasta ${pauseUntil.toISOString()}`);
+                  }
+                }
+
                 // Si el mensaje falló, verificar si es el admin y notificar
                 if (messageStatus === 'failed' && status.errors && status.errors.length > 0) {
                   const error = status.errors[0];
