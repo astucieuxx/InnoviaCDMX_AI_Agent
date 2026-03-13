@@ -26,6 +26,18 @@ function logPendingTask({ phone, name, message, historial = [] }) {
     .map(m => `${m.role === 'user' ? 'Cliente' : 'Bot'}: ${m.content.substring(0, 80)}`)
     .join(' | ');
 
+  // Si ya existe una tarea pendiente del mismo número, actualizarla en lugar de crear una nueva
+  const existing = pendingTasks.find(t => t.telefono === phone && t.estado === 'Pendiente');
+  if (existing) {
+    existing.ultimoMensaje = message;
+    existing.contexto = contexto;
+    existing.hora = now.toLocaleTimeString('es-MX', { timeZone: tz, hour: '2-digit', minute: '2-digit' });
+    existing.fecha = now.toLocaleDateString('es-MX', { timeZone: tz });
+    if (name) existing.nombre = name;
+    console.log(`📋 Tarea pendiente #${existing.id} actualizada: ${name || phone} — "${message.substring(0, 50)}"`);
+    return;
+  }
+
   const task = {
     id: nextId++,
     fecha: now.toLocaleDateString('es-MX', { timeZone: tz }),
