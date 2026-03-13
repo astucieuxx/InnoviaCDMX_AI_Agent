@@ -1808,7 +1808,7 @@ app.post('/webhook', async (req, res) => {
         console.log(`🖼️  Imagen recibida de ${senderPhone}. Caption: "${caption}". Escalando a humano.`);
 
         // Obtener sesión para contexto
-        const imgSession = sessions.get(senderPhone) || {};
+        const imgSession = sessions.getSession(senderPhone) || {};
         const clientName = imgSession.nombre_cliente || imgSession.nombre || '';
 
         logPendingTask({
