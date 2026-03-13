@@ -1386,6 +1386,52 @@ app.get('/dashboard', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// ─── Human Handoff: pausar/reanudar bot por agente humano ───────────────────
+
+// Pausa el bot para una conversación (el agente humano toma el control)
+app.post('/admin/pause-bot', (req, res) => {
+  const { phone, minutes = 10 } = req.body;
+
+  if (!phone) {
+    return res.status(400).json({ error: 'Se requiere el campo "phone"' });
+  }
+
+  const pauseUntil = new Date(Date.now() + minutes * 60 * 1000);
+  sessions.updateSession(phone, { bot_paused_until: pauseUntil.toISOString() });
+
+  console.log(`⏸️  Bot pausado para ${phone} hasta ${pauseUntil.toISOString()} (${minutes} min)`);
+  res.json({ ok: true, phone, paused_until: pauseUntil.toISOString(), minutes });
+});
+
+// Reanuda el bot manualmente antes de que expire el tiempo
+app.post('/admin/resume-bot', (req, res) => {
+  const { phone } = req.body;
+
+  if (!phone) {
+    return res.status(400).json({ error: 'Se requiere el campo "phone"' });
+  }
+
+  sessions.updateSession(phone, { bot_paused_until: null });
+
+  console.log(`▶️  Bot reanudado manualmente para ${phone}`);
+  res.json({ ok: true, phone });
+});
+
+// Consulta el estado de pausa de una conversación
+app.get('/admin/pause-status/:phone', (req, res) => {
+  const phone = req.params.phone;
+  const session = sessions.getSession(phone);
+
+  const paused = session.bot_paused_until && new Date(session.bot_paused_until) > new Date();
+  res.json({
+    phone,
+    paused: !!paused,
+    paused_until: session.bot_paused_until || null
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+
 // Verificación del webhook (GET) - Chakra puede requerir esto
 app.get('/webhook', (req, res) => {
   const mode = req.query['hub.mode'];

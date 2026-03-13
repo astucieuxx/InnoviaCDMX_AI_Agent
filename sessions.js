@@ -41,7 +41,8 @@ function getSession(phone) {
       historial: [],
       ultima_actividad: new Date().toISOString(),
       slots_disponibles: null,
-      fecha_cita_solicitada: null
+      fecha_cita_solicitada: null,
+      bot_paused_until: null
     };
     sessions.set(cleanPhone, newSession);
     console.log(`📝 Nueva sesión creada para: ${cleanPhone}`);
