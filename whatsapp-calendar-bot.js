@@ -21,7 +21,7 @@ const { getAIResponse, extractConversationData } = require('./openai-client');
 const { extractAppointmentDate, parseDateFromText } = require('./date-parser');
 
 // Import new intent-based architecture
-const { logPendingTask } = require('./bot/sheets-service');
+const { logPendingTask, getPendingTasks, resolvePendingTask } = require('./bot/sheets-service');
 const { classifyIntent } = require('./bot/classifier');
 const { extractBrideProfile } = require('./bot/profile-extractor');
 const { handlers } = require('./bot/handlers');
@@ -4622,6 +4622,32 @@ app.get('/api/appointments', async (req, res) => {
     res.json({ appointments });
   } catch (error) {
     console.error('Error en /api/appointments:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/pending-tasks — Tareas pendientes desde Google Sheets
+app.get('/api/pending-tasks', async (req, res) => {
+  try {
+    const tasks = await getPendingTasks();
+    res.json({ tasks });
+  } catch (error) {
+    console.error('Error en /api/pending-tasks:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE /api/pending-tasks/:rowIndex — Marcar tarea como resuelta
+app.delete('/api/pending-tasks/:rowIndex', async (req, res) => {
+  try {
+    const rowIndex = parseInt(req.params.rowIndex, 10);
+    if (isNaN(rowIndex) || rowIndex < 2) {
+      return res.status(400).json({ error: 'rowIndex inválido' });
+    }
+    await resolvePendingTask(rowIndex);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error resolviendo tarea pendiente:', error);
     res.status(500).json({ error: error.message });
   }
 });

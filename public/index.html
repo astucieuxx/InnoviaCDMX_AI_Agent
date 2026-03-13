@@ -33,6 +33,7 @@
             <button class="tab-btn active" data-tab="analytics">📊 Analytics</button>
             <button class="tab-btn" data-tab="conversations">💬 Conversaciones</button>
             <button class="tab-btn" data-tab="appointments">📅 Citas</button>
+            <button class="tab-btn" data-tab="pending-tasks">🚨 Tareas Pendientes</button>
             <button class="tab-btn" data-tab="messages">❓ Help Center Info</button>
             <button class="tab-btn" data-tab="logs">📋 Logs</button>
             <button class="tab-btn" data-tab="config">⚙️ Configuración</button>
@@ -177,6 +178,20 @@
                 <h2>Citas Agendadas</h2>
                 <div id="appointments-list" class="appointments-list">
                     <p class="loading-text">Cargando...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Tareas Pendientes -->
+        <div id="pending-tasks" class="tab-content">
+            <div class="section">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <h2>🚨 Tareas Pendientes</h2>
+                    <button onclick="loadPendingTasks()" class="btn-primary" style="padding:8px 16px;">🔄 Actualizar</button>
+                </div>
+                <p class="section-description" style="margin-bottom:20px;">Conversaciones que requieren atención de un agente humano. Haz clic en <strong>Resolver</strong> una vez atendida.</p>
+                <div id="pending-tasks-list">
+                    <p class="loading-text">Cargando tareas...</p>
                 </div>
             </div>
         </div>

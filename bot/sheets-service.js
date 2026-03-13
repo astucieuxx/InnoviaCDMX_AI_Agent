@@ -143,4 +143,62 @@ async function logPendingTask({ phone, name, message, historial = [] }) {
   }
 }
 
-module.exports = { logPendingTask };
+/**
+ * Fetch all pending tasks from Google Sheets (Estado !== 'Resuelto').
+ * Returns an array of task objects with rowIndex for later resolution.
+ */
+async function getPendingTasks() {
+  const spreadsheetId = process.env.GOOGLE_SHEETS_PENDING_TASKS_ID;
+  if (!spreadsheetId) return [];
+
+  try {
+    const sheets = await getSheetsClient();
+    await ensureHeaders(sheets, spreadsheetId);
+
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${SHEET_NAME}!A:G`
+    });
+
+    const rows = res.data.values || [];
+    if (rows.length <= 1) return [];
+
+    return rows.slice(1)
+      .map((row, index) => ({
+        rowIndex: index + 2, // 1-based; row 1 is header
+        fecha: row[0] || '',
+        hora: row[1] || '',
+        nombre: row[2] || '',
+        telefono: row[3] || '',
+        ultimoMensaje: row[4] || '',
+        contexto: row[5] || '',
+        estado: row[6] || 'Pendiente'
+      }))
+      .filter(t => t.estado !== 'Resuelto')
+      .reverse(); // newest first
+  } catch (error) {
+    console.error('❌ Error leyendo tareas pendientes de Sheets:', error.message);
+    return [];
+  }
+}
+
+/**
+ * Mark a pending task as resolved by updating its Estado cell.
+ * @param {number} rowIndex - 1-based row number in the sheet (as returned by getPendingTasks)
+ */
+async function resolvePendingTask(rowIndex) {
+  const spreadsheetId = process.env.GOOGLE_SHEETS_PENDING_TASKS_ID;
+  if (!spreadsheetId) throw new Error('GOOGLE_SHEETS_PENDING_TASKS_ID no configurado');
+
+  const sheets = await getSheetsClient();
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `${SHEET_NAME}!G${rowIndex}`,
+    valueInputOption: 'RAW',
+    requestBody: { values: [['Resuelto']] }
+  });
+
+  console.log(`✅ Tarea pendiente en fila ${rowIndex} marcada como resuelta`);
+}
+
+module.exports = { logPendingTask, getPendingTasks, resolvePendingTask };

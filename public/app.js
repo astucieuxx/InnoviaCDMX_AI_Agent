@@ -24,6 +24,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } else if (activeTab === 'appointments') {
             loadAppointments();
+        } else if (activeTab === 'pending-tasks') {
+            loadPendingTasks();
         }
     }, 10000);
 });
@@ -55,6 +57,8 @@ function initTabs() {
                 loadConversations();
             } else if (targetTab === 'appointments') {
                 loadAppointments();
+            } else if (targetTab === 'pending-tasks') {
+                loadPendingTasks();
             } else if (targetTab === 'messages') {
                 loadFAQs();
             } else if (targetTab === 'logs') {
@@ -1126,6 +1130,64 @@ async function loadAppointments() {
         `).join('');
     } catch (error) {
         console.error('Error cargando citas:', error);
+    }
+}
+
+// Cargar tareas pendientes
+async function loadPendingTasks() {
+    const container = document.getElementById('pending-tasks-list');
+    if (!container) return;
+    container.innerHTML = '<p class="loading-text">Cargando tareas...</p>';
+
+    try {
+        const response = await fetch('/api/pending-tasks');
+        const data = await response.json();
+
+        if (!data.tasks || data.tasks.length === 0) {
+            container.innerHTML = '<p class="loading-text" style="color:#28a745;">✅ No hay tareas pendientes</p>';
+            return;
+        }
+
+        container.innerHTML = data.tasks.map(task => `
+            <div class="appointment-card" id="task-row-${task.rowIndex}" style="border-left: 4px solid #dc3545;">
+                <div class="appointment-info" style="flex:1;">
+                    <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;">
+                        <span style="font-weight:700; font-size:15px;">${escapeHtml(task.nombre || 'Sin nombre')}</span>
+                        <span style="font-size:12px; color:#6c757d; background:#f8f9fa; padding:2px 8px; border-radius:12px;">📞 ${escapeHtml(task.telefono)}</span>
+                    </div>
+                    <p style="margin:0 0 6px 0; font-size:14px; color:var(--text-primary);">💬 <strong>Último mensaje:</strong> ${escapeHtml(task.ultimoMensaje)}</p>
+                    ${task.contexto ? `<p style="margin:0 0 6px 0; font-size:12px; color:var(--text-secondary); background:var(--bg-secondary); padding:6px 10px; border-radius:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%;" title="${escapeHtml(task.contexto)}">🗂 ${escapeHtml(task.contexto.substring(0, 150))}${task.contexto.length > 150 ? '…' : ''}</p>` : ''}
+                    <p style="margin:0; font-size:12px; color:var(--text-light);">🕐 ${escapeHtml(task.fecha)} a las ${escapeHtml(task.hora)}</p>
+                </div>
+                <div style="display:flex; align-items:center; padding-left:16px;">
+                    <button onclick="resolvePendingTask(${task.rowIndex})" style="padding:8px 16px; background:#28a745; color:#fff; border:none; border-radius:8px; cursor:pointer; font-size:13px; font-weight:600; white-space:nowrap;">
+                        ✅ Resolver
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    } catch (error) {
+        console.error('Error cargando tareas pendientes:', error);
+        container.innerHTML = '<p class="loading-text" style="color:#dc3545;">Error al cargar tareas pendientes</p>';
+    }
+}
+
+async function resolvePendingTask(rowIndex) {
+    const card = document.getElementById(`task-row-${rowIndex}`);
+    if (card) {
+        card.style.opacity = '0.5';
+        card.style.pointerEvents = 'none';
+    }
+
+    try {
+        const response = await fetch(`/api/pending-tasks/${rowIndex}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error('Error del servidor');
+        // Reload to reflect changes
+        await loadPendingTasks();
+    } catch (error) {
+        console.error('Error resolviendo tarea:', error);
+        if (card) { card.style.opacity = '1'; card.style.pointerEvents = ''; }
+        alert('Error al resolver la tarea. Intenta de nuevo.');
     }
 }
 
