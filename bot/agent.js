@@ -552,9 +552,8 @@ async function runAgent(phone, session, message, calendarDeps, isButtonClick = f
     // If the reply mentions escalation to a human but escalar_a_humano was
     // never called during this loop, log it to Sheets automatically.
     const escalationPhrases = [
-      'agente', 'staff', 'asesora', 'pondrá en contacto', 'se comunicará',
-      'humano', 'personal', 'registrado', 'tomamos nota', 'hemos tomado nota',
-      'seguimiento', 'te contactar', 'llamar', 'llamamos'
+      'pondrá en contacto', 'se comunicará contigo', 'un agente te', 'una asesora te',
+      'hemos tomado nota', 'tomamos nota', 'te contactaremos', 'nos pondremos en contacto'
     ];
     const escalationToolWasCalled = messages.some(
       m => m.role === 'tool' &&
