@@ -133,6 +133,8 @@ IMPORTANTE:
 
 El bot acaba de preguntar al usuario por la fecha completa de su boda (día, mes y año).
 
+FECHA ACTUAL: ${new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Mexico_City' })} (año actual: ${new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Mexico_City' })).getFullYear()})
+
 Analiza la respuesta del usuario y determina qué está haciendo:
 
 1. PROPORCIONANDO FECHA: El usuario está dando una fecha de boda (ej: "10 de julio 2026", "el 24 de febrero 2026", "15/03/2026")
@@ -148,7 +150,10 @@ Responde SOLO con un objeto JSON válido en este formato:
 }
 
 IMPORTANTE:
-- Si el usuario proporciona una fecha, extrae la fecha en formato YYYY-MM-DD (asume año 2026 si no se especifica)
+- Si el usuario proporciona una fecha, extrae la fecha en formato YYYY-MM-DD
+- "este año", "este año 2026", "en este año" significa el año actual indicado arriba
+- Si el usuario no especifica el año, asume el año actual indicado arriba
+- Si la fecha ya pasó este año, considera si el usuario pudo haber querido decir el año siguiente
 - Si el usuario declina, action debe ser "decline_date"
 - Si no está claro, usa "other"
 - NO inventes fechas si el usuario no las proporciona

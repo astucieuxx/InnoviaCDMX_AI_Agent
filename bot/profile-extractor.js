@@ -39,7 +39,12 @@ async function extractBrideProfile(conversationHistory) {
       return { nombre_novia: null, fecha_boda: null };
     }
 
+    const currentYear = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Mexico_City' })).getFullYear();
+    const currentDate = new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Mexico_City' });
+
     const systemPrompt = `Eres un extractor de información específica de conversaciones.
+
+FECHA ACTUAL: ${currentDate} (año actual: ${currentYear})
 
 Tu tarea es extraer SOLO dos campos del perfil del cliente:
 1. nombre_cliente: El nombre completo (nombre y apellido) del cliente
@@ -51,8 +56,10 @@ IMPORTANTE:
 - NO extraigas información sobre precios o modelos
 - Si el nombre o fecha no están mencionados, devuelve null para ese campo
 - La fecha_boda debe ser la fecha del evento de boda, NO la fecha para visitar el showroom
-- Si encuentras una fecha en español (ej: "10 julio 2026", "24 de febrero 2026"), conviértela a formato YYYY-MM-DD (ej: "2026-07-10", "2026-02-24")
+- Si encuentras una fecha en español (ej: "10 julio ${currentYear}", "24 de febrero ${currentYear}"), conviértela a formato YYYY-MM-DD (ej: "${currentYear}-07-10", "${currentYear}-02-24")
 - Si la fecha mencionada es para visitar el showroom o agendar una cita, NO la extraigas como fecha_boda
+- "este año", "en este año" significa el año ${currentYear} (el año actual indicado arriba)
+- Si no se especifica el año, asume ${currentYear}
 
 Responde SOLO con un objeto JSON válido en este formato:
 {
