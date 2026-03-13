@@ -1149,7 +1149,7 @@ async function loadPendingTasks() {
         }
 
         container.innerHTML = data.tasks.map(task => `
-            <div class="appointment-card" id="task-row-${task.rowIndex}" style="border-left: 4px solid #dc3545;">
+            <div class="appointment-card" id="task-row-${task.id}" style="border-left: 4px solid #dc3545;">
                 <div class="appointment-info" style="flex:1;">
                     <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;">
                         <span style="font-weight:700; font-size:15px;">${escapeHtml(task.nombre || 'Sin nombre')}</span>
@@ -1160,7 +1160,7 @@ async function loadPendingTasks() {
                     <p style="margin:0; font-size:12px; color:var(--text-light);">🕐 ${escapeHtml(task.fecha)} a las ${escapeHtml(task.hora)}</p>
                 </div>
                 <div style="display:flex; align-items:center; padding-left:16px;">
-                    <button onclick="resolvePendingTask(${task.rowIndex})" style="padding:8px 16px; background:#28a745; color:#fff; border:none; border-radius:8px; cursor:pointer; font-size:13px; font-weight:600; white-space:nowrap;">
+                    <button onclick="resolvePendingTask(${task.id})" style="padding:8px 16px; background:#28a745; color:#fff; border:none; border-radius:8px; cursor:pointer; font-size:13px; font-weight:600; white-space:nowrap;">
                         ✅ Resolver
                     </button>
                 </div>
@@ -1172,17 +1172,16 @@ async function loadPendingTasks() {
     }
 }
 
-async function resolvePendingTask(rowIndex) {
-    const card = document.getElementById(`task-row-${rowIndex}`);
+async function resolvePendingTask(id) {
+    const card = document.getElementById(`task-row-${id}`);
     if (card) {
         card.style.opacity = '0.5';
         card.style.pointerEvents = 'none';
     }
 
     try {
-        const response = await fetch(`/api/pending-tasks/${rowIndex}`, { method: 'DELETE' });
+        const response = await fetch(`/api/pending-tasks/${id}`, { method: 'DELETE' });
         if (!response.ok) throw new Error('Error del servidor');
-        // Reload to reflect changes
         await loadPendingTasks();
     } catch (error) {
         console.error('Error resolviendo tarea:', error);

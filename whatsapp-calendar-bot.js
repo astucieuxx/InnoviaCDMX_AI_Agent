@@ -4626,10 +4626,10 @@ app.get('/api/appointments', async (req, res) => {
   }
 });
 
-// GET /api/pending-tasks — Tareas pendientes desde Google Sheets
-app.get('/api/pending-tasks', async (req, res) => {
+// GET /api/pending-tasks — Tareas pendientes (in-memory)
+app.get('/api/pending-tasks', (req, res) => {
   try {
-    const tasks = await getPendingTasks();
+    const tasks = getPendingTasks();
     res.json({ tasks });
   } catch (error) {
     console.error('Error en /api/pending-tasks:', error);
@@ -4637,14 +4637,14 @@ app.get('/api/pending-tasks', async (req, res) => {
   }
 });
 
-// DELETE /api/pending-tasks/:rowIndex — Marcar tarea como resuelta
-app.delete('/api/pending-tasks/:rowIndex', async (req, res) => {
+// DELETE /api/pending-tasks/:id — Marcar tarea como resuelta
+app.delete('/api/pending-tasks/:id', (req, res) => {
   try {
-    const rowIndex = parseInt(req.params.rowIndex, 10);
-    if (isNaN(rowIndex) || rowIndex < 2) {
-      return res.status(400).json({ error: 'rowIndex inválido' });
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id) || id < 1) {
+      return res.status(400).json({ error: 'id inválido' });
     }
-    await resolvePendingTask(rowIndex);
+    resolvePendingTask(id);
     res.json({ success: true });
   } catch (error) {
     console.error('Error resolviendo tarea pendiente:', error);

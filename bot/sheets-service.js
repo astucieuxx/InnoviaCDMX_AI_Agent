@@ -1,204 +1,71 @@
 /**
- * Google Sheets Service - Pending Tasks Logger
+ * Pending Tasks Store (in-memory)
  *
- * Appends a row to a Google Spreadsheet every time a task requires
- * human follow-up (escalation / OTRO intent).
- *
- * Required env var:
- *   GOOGLE_SHEETS_PENDING_TASKS_ID  — the spreadsheet ID (from the URL)
- *   GOOGLE_CREDENTIALS              — same service account / OAuth used for Calendar
- *   GOOGLE_TOKEN                    — (only needed for OAuth flow)
+ * Manages escalation tasks entirely within the server — no external services needed.
+ * Tasks are stored in a simple in-memory array, visible and manageable via the dashboard.
  */
 
-const { google } = require('googleapis');
-const fs = require('fs');
-
-const SHEET_NAME = 'Tareas Pendientes';
-const HEADERS = ['Fecha', 'Hora', 'Nombre', 'Teléfono', 'Último Mensaje', 'Contexto', 'Estado'];
-
-let _sheetsClient = null;
-let _authClient = null;
-
-// ─── Auth (reuses same logic as main bot) ────────────────────────────────────
-
-async function getAuth() {
-  if (_authClient) return _authClient;
-
-  let credentials = null;
-
-  if (process.env.GOOGLE_CREDENTIALS) {
-    credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
-  } else if (fs.existsSync('./credentials.json')) {
-    credentials = JSON.parse(fs.readFileSync('./credentials.json', 'utf8'));
-  } else {
-    const files = fs.readdirSync('.').filter(f => f.startsWith('client_secret_') && f.endsWith('.json'));
-    if (files.length > 0) {
-      credentials = JSON.parse(fs.readFileSync(files[0], 'utf8'));
-    }
-  }
-
-  if (!credentials) throw new Error('No se encontraron credenciales de Google para Sheets');
-
-  if (credentials.type === 'service_account') {
-    _authClient = new google.auth.GoogleAuth({
-      credentials,
-      scopes: [
-        'https://www.googleapis.com/auth/spreadsheets',
-        'https://www.googleapis.com/auth/calendar'
-      ]
-    });
-  } else {
-    // OAuth2
-    const { client_secret, client_id, redirect_uris } = credentials.installed || credentials.web;
-    const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
-
-    let token = null;
-    if (process.env.GOOGLE_TOKEN) {
-      token = JSON.parse(process.env.GOOGLE_TOKEN);
-    } else if (fs.existsSync('./token.json')) {
-      token = JSON.parse(fs.readFileSync('./token.json', 'utf8'));
-    }
-
-    if (!token) throw new Error('No se encontró token de Google para Sheets');
-    oAuth2Client.setCredentials(token);
-    _authClient = oAuth2Client;
-  }
-
-  return _authClient;
-}
-
-async function getSheetsClient() {
-  if (_sheetsClient) return _sheetsClient;
-  const auth = await getAuth();
-  _sheetsClient = google.sheets({ version: 'v4', auth });
-  return _sheetsClient;
-}
-
-// ─── Ensure headers exist ────────────────────────────────────────────────────
-
-async function ensureHeaders(sheets, spreadsheetId) {
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: `${SHEET_NAME}!A1:G1`
-  });
-
-  const firstRow = res.data.values?.[0];
-  if (!firstRow || firstRow.length === 0) {
-    await sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: `${SHEET_NAME}!A1`,
-      valueInputOption: 'RAW',
-      requestBody: { values: [HEADERS] }
-    });
-  }
-}
-
-// ─── Public API ──────────────────────────────────────────────────────────────
+const pendingTasks = [];
+let nextId = 1;
 
 /**
- * Log a pending task row to Google Sheets.
+ * Log a pending task when a conversation is escalated to a human agent.
  *
  * @param {Object} task
- * @param {string} task.phone       - Cleaned phone number (e.g. "525512345678")
- * @param {string} task.name        - Client name (or empty string)
- * @param {string} task.message     - The user's message that triggered escalation
- * @param {Array}  task.historial   - Session history array (last messages for context)
+ * @param {string} task.phone     - Client phone number
+ * @param {string} task.name      - Client name (or empty string)
+ * @param {string} task.message   - The message that triggered the escalation
+ * @param {Array}  task.historial - Session history (last messages for context)
  */
-async function logPendingTask({ phone, name, message, historial = [] }) {
-  const spreadsheetId = process.env.GOOGLE_SHEETS_PENDING_TASKS_ID;
-  if (!spreadsheetId) {
-    console.warn('⚠️  GOOGLE_SHEETS_PENDING_TASKS_ID no configurado, omitiendo log de tarea pendiente');
-    return;
-  }
+function logPendingTask({ phone, name, message, historial = [] }) {
+  const now = new Date();
+  const tz = 'America/Mexico_City';
 
-  try {
-    const sheets = await getSheetsClient();
-    await ensureHeaders(sheets, spreadsheetId);
+  const contexto = historial
+    .slice(-4)
+    .map(m => `${m.role === 'user' ? 'Cliente' : 'Bot'}: ${m.content.substring(0, 80)}`)
+    .join(' | ');
 
-    const now = new Date();
-    const tz = 'America/Mexico_City';
-    const fecha = now.toLocaleDateString('es-MX', { timeZone: tz });
-    const hora = now.toLocaleTimeString('es-MX', { timeZone: tz, hour: '2-digit', minute: '2-digit' });
+  const task = {
+    id: nextId++,
+    fecha: now.toLocaleDateString('es-MX', { timeZone: tz }),
+    hora: now.toLocaleTimeString('es-MX', { timeZone: tz, hour: '2-digit', minute: '2-digit' }),
+    nombre: name || '',
+    telefono: phone,
+    ultimoMensaje: message,
+    contexto,
+    estado: 'Pendiente',
+    createdAt: now.toISOString()
+  };
 
-    // Build a short context summary from the last 4 messages
-    const contexto = historial
-      .slice(-4)
-      .map(m => `${m.role === 'user' ? 'Cliente' : 'Bot'}: ${m.content.substring(0, 80)}`)
-      .join(' | ');
+  pendingTasks.push(task);
 
-    const row = [fecha, hora, name || '', phone, message, contexto, 'Pendiente'];
+  // Keep only the last 500 tasks to avoid unbounded memory growth
+  if (pendingTasks.length > 500) pendingTasks.shift();
 
-    await sheets.spreadsheets.values.append({
-      spreadsheetId,
-      range: `${SHEET_NAME}!A:G`,
-      valueInputOption: 'RAW',
-      insertDataOption: 'INSERT_ROWS',
-      requestBody: { values: [row] }
-    });
-
-    console.log(`📋 Tarea pendiente registrada en Sheets: ${name || phone} — "${message.substring(0, 50)}"`);
-  } catch (error) {
-    // Never crash the bot because of a Sheets error
-    console.error('❌ Error registrando tarea en Google Sheets:', error.message);
-  }
+  console.log(`📋 Tarea pendiente #${task.id}: ${name || phone} — "${message.substring(0, 50)}"`);
 }
 
 /**
- * Fetch all pending tasks from Google Sheets (Estado !== 'Resuelto').
- * Returns an array of task objects with rowIndex for later resolution.
+ * Get all pending tasks (Estado = Pendiente), newest first.
  */
-async function getPendingTasks() {
-  const spreadsheetId = process.env.GOOGLE_SHEETS_PENDING_TASKS_ID;
-  if (!spreadsheetId) return [];
-
-  try {
-    const sheets = await getSheetsClient();
-    await ensureHeaders(sheets, spreadsheetId);
-
-    const res = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: `${SHEET_NAME}!A:G`
-    });
-
-    const rows = res.data.values || [];
-    if (rows.length <= 1) return [];
-
-    return rows.slice(1)
-      .map((row, index) => ({
-        rowIndex: index + 2, // 1-based; row 1 is header
-        fecha: row[0] || '',
-        hora: row[1] || '',
-        nombre: row[2] || '',
-        telefono: row[3] || '',
-        ultimoMensaje: row[4] || '',
-        contexto: row[5] || '',
-        estado: row[6] || 'Pendiente'
-      }))
-      .filter(t => t.estado !== 'Resuelto')
-      .reverse(); // newest first
-  } catch (error) {
-    console.error('❌ Error leyendo tareas pendientes de Sheets:', error.message);
-    return [];
-  }
+function getPendingTasks() {
+  return pendingTasks
+    .filter(t => t.estado !== 'Resuelto')
+    .slice()
+    .reverse();
 }
 
 /**
- * Mark a pending task as resolved by updating its Estado cell.
- * @param {number} rowIndex - 1-based row number in the sheet (as returned by getPendingTasks)
+ * Mark a task as resolved by its id.
+ * @param {number} id
  */
-async function resolvePendingTask(rowIndex) {
-  const spreadsheetId = process.env.GOOGLE_SHEETS_PENDING_TASKS_ID;
-  if (!spreadsheetId) throw new Error('GOOGLE_SHEETS_PENDING_TASKS_ID no configurado');
-
-  const sheets = await getSheetsClient();
-  await sheets.spreadsheets.values.update({
-    spreadsheetId,
-    range: `${SHEET_NAME}!G${rowIndex}`,
-    valueInputOption: 'RAW',
-    requestBody: { values: [['Resuelto']] }
-  });
-
-  console.log(`✅ Tarea pendiente en fila ${rowIndex} marcada como resuelta`);
+function resolvePendingTask(id) {
+  const task = pendingTasks.find(t => t.id === id);
+  if (!task) throw new Error(`Tarea #${id} no encontrada`);
+  task.estado = 'Resuelto';
+  task.resolvedAt = new Date().toISOString();
+  console.log(`✅ Tarea pendiente #${id} marcada como resuelta`);
 }
 
 module.exports = { logPendingTask, getPendingTasks, resolvePendingTask };
