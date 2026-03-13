@@ -301,7 +301,6 @@ async function executeTool(toolName, toolArgs, calendarDeps, session, phone) {
         return {
           exito: true,
           event_id: event.id,
-          calendar_link: event.htmlLink || null,
           mensaje: `Cita creada exitosamente. ID: ${event.id}`
         };
       }
