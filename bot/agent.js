@@ -405,7 +405,7 @@ async function executeTool(toolName, toolArgs, calendarDeps, session, phone) {
       console.log(`🔧 Agent tool: escalar_a_humano("${descripcion_solicitud}")`);
 
       const clientName = getClientName(session) || '';
-      await logPendingTask({
+      logPendingTask({
         phone,
         name: clientName,
         message: descripcion_solicitud,
@@ -576,7 +576,7 @@ async function runAgent(phone, session, message, calendarDeps, isButtonClick = f
         name: clientName,
         message: lastUserMsg,
         historial: session.historial || []
-      }).catch(err => console.error('❌ [ESCALATION NET] Error guardando en Sheets:', err.message));
+      });
     }
 
     return { reply, sessionUpdates };
