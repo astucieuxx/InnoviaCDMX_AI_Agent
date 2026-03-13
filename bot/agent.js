@@ -547,6 +547,38 @@ async function runAgent(phone, session, message, calendarDeps, isButtonClick = f
     // ---- Final response --------------------------------------------------
     const reply = choice.message.content || '';
     console.log(`🤖 Agent reply (${reply.length} chars)`);
+
+    // ---- Escalation safety net -------------------------------------------
+    // If the reply mentions escalation to a human but escalar_a_humano was
+    // never called during this loop, log it to Sheets automatically.
+    const escalationPhrases = [
+      'agente', 'staff', 'asesora', 'pondrá en contacto', 'se comunicará',
+      'humano', 'personal', 'registrado', 'tomamos nota', 'hemos tomado nota',
+      'seguimiento', 'te contactar', 'llamar', 'llamamos'
+    ];
+    const escalationToolWasCalled = messages.some(
+      m => m.role === 'tool' &&
+      messages.some(
+        a => a.role === 'assistant' &&
+        a.tool_calls &&
+        a.tool_calls.some(tc => tc.function.name === 'escalar_a_humano')
+      )
+    );
+    const replyLower = reply.toLowerCase();
+    const replyMentionsEscalation = escalationPhrases.some(p => replyLower.includes(p));
+
+    if (replyMentionsEscalation && !escalationToolWasCalled) {
+      console.log('⚠️  [ESCALATION NET] El reply menciona escalamiento pero el tool no fue llamado — guardando en Sheets');
+      const clientName = getClientName(session) || '';
+      const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')?.content || '';
+      logPendingTask({
+        phone,
+        name: clientName,
+        message: lastUserMsg,
+        historial: session.historial || []
+      }).catch(err => console.error('❌ [ESCALATION NET] Error guardando en Sheets:', err.message));
+    }
+
     return { reply, sessionUpdates };
   }
 
