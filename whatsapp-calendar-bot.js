@@ -1312,7 +1312,9 @@ async function sendWhatsAppMessage(phoneNumber, message, options = {}) {
     botLastSentAt.set(cleanPhone, Date.now());
 
     // Registrar el ID del mensaje enviado por el bot para detectar intervención humana
-    const sentMsgId = response.data?.messages?.[0]?.id;
+    // Chakra puede retornar el ID en distintos campos según la versión de la API
+    const sentMsgId = response.data?.messages?.[0]?.id
+      || response.data?._data?.whatsappMessageId;
     if (sentMsgId) {
       registerBotMessage(sentMsgId, cleanPhone);
       console.log(`📝 [BOT MSG ID] Registrado ID: ${sentMsgId} para ${cleanPhone}`);
