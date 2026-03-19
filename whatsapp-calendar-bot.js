@@ -1016,6 +1016,10 @@ const BOT_MSG_ID_TTL_MS = 30 * 60 * 1000; // 30 minutos
 const HUMAN_HANDOFF_PAUSE_MS = 10 * 60 * 1000; // 10 minutos
 const BOT_MSG_IDS_PATH = path.join(__dirname, 'bot_sent_messages.json');
 
+// Rastrea cuándo el bot envió por última vez a cada teléfono (para evitar race condition)
+const botLastSentAt = new Map();
+const RACE_CONDITION_WINDOW_MS = 60 * 1000; // 60 segundos de ventana de gracia
+
 // Carga los IDs persistidos al arrancar (sobrevive reinicios de servidor)
 function loadBotSentMessages() {
   try {
@@ -1303,6 +1307,9 @@ async function sendWhatsAppMessage(phoneNumber, message, options = {}) {
     // Detener typing indicator después de enviar el mensaje
     // (el mensaje real debería detenerlo automáticamente, pero por si acaso)
     await sendTypingIndicator(cleanPhone, 'typing_off');
+
+    // Registrar cuándo el bot envió a este teléfono (para ventana de gracia anti race-condition)
+    botLastSentAt.set(cleanPhone, Date.now());
 
     // Registrar el ID del mensaje enviado por el bot para detectar intervención humana
     const sentMsgId = response.data?.messages?.[0]?.id;
@@ -1720,9 +1727,17 @@ app.post('/webhook', async (req, res) => {
                 if (messageStatus === 'sent' && messageId && recipientId) {
                   if (isHumanHandoffMessage(messageId)) {
                     const clientPhone = recipientId.replace(/\D/g, '');
-                    const pauseUntil = new Date(Date.now() + HUMAN_HANDOFF_PAUSE_MS);
-                    sessions.updateSession(clientPhone, { bot_paused_until: pauseUntil });
-                    console.log(`🙋 INTERVENCIÓN HUMANA detectada para ${clientPhone} — bot pausado 10 min hasta ${pauseUntil.toISOString()}`);
+                    const lastBotSent = botLastSentAt.get(clientPhone) || 0;
+                    const timeSinceLastSend = Date.now() - lastBotSent;
+
+                    if (timeSinceLastSend > RACE_CONDITION_WINDOW_MS) {
+                      // El bot no ha enviado nada reciente → es intervención humana real
+                      const pauseUntil = new Date(Date.now() + HUMAN_HANDOFF_PAUSE_MS);
+                      sessions.updateSession(clientPhone, { bot_paused_until: pauseUntil });
+                      console.log(`🙋 INTERVENCIÓN HUMANA detectada para ${clientPhone} — bot pausado 10 min hasta ${pauseUntil.toISOString()}`);
+                    } else {
+                      console.log(`⚡ [RACE CONDITION] Status 'sent' para ID desconocido ignorado — bot envió hace ${Math.round(timeSinceLastSend / 1000)}s (ventana: ${RACE_CONDITION_WINDOW_MS / 1000}s)`);
+                    }
                   }
                 }
 
