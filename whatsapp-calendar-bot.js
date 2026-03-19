@@ -1308,6 +1308,9 @@ async function sendWhatsAppMessage(phoneNumber, message, options = {}) {
     const sentMsgId = response.data?.messages?.[0]?.id;
     if (sentMsgId) {
       registerBotMessage(sentMsgId, cleanPhone);
+      console.log(`📝 [BOT MSG ID] Registrado ID: ${sentMsgId} para ${cleanPhone}`);
+    } else {
+      console.warn(`⚠️  [BOT MSG ID] No se pudo extraer ID del mensaje. response.data keys: ${Object.keys(response.data || {}).join(', ')} | data: ${JSON.stringify(response.data).slice(0, 200)}`);
     }
 
     return response.data;
