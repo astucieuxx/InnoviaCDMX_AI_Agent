@@ -1014,6 +1014,39 @@ let whatsappPhoneNumberId = null;
 const botSentMessageIds = new Map();
 const BOT_MSG_ID_TTL_MS = 30 * 60 * 1000; // 30 minutos
 const HUMAN_HANDOFF_PAUSE_MS = 10 * 60 * 1000; // 10 minutos
+const BOT_MSG_IDS_PATH = path.join(__dirname, 'bot_sent_messages.json');
+
+// Carga los IDs persistidos al arrancar (sobrevive reinicios de servidor)
+function loadBotSentMessages() {
+  try {
+    if (fs.existsSync(BOT_MSG_IDS_PATH)) {
+      const raw = JSON.parse(fs.readFileSync(BOT_MSG_IDS_PATH, 'utf8'));
+      const cutoff = Date.now() - BOT_MSG_ID_TTL_MS;
+      let loaded = 0;
+      for (const [id, data] of Object.entries(raw)) {
+        if (data.timestamp > cutoff) {
+          botSentMessageIds.set(id, data);
+          loaded++;
+        }
+      }
+      console.log(`📂 [BOT MSG IDS] Cargados ${loaded} IDs de mensajes del bot desde archivo`);
+    }
+  } catch (e) {
+    console.log(`⚠️  [BOT MSG IDS] No se pudo cargar bot_sent_messages.json: ${e.message}`);
+  }
+}
+
+function saveBotSentMessages() {
+  try {
+    const obj = {};
+    for (const [id, data] of botSentMessageIds) {
+      obj[id] = data;
+    }
+    fs.writeFileSync(BOT_MSG_IDS_PATH, JSON.stringify(obj, null, 2));
+  } catch (e) {
+    console.log(`⚠️  [BOT MSG IDS] No se pudo guardar bot_sent_messages.json: ${e.message}`);
+  }
+}
 
 function registerBotMessage(messageId, recipientPhone) {
   botSentMessageIds.set(messageId, { phone: recipientPhone, timestamp: Date.now() });
@@ -1022,11 +1055,15 @@ function registerBotMessage(messageId, recipientPhone) {
   for (const [id, data] of botSentMessageIds) {
     if (data.timestamp < cutoff) botSentMessageIds.delete(id);
   }
+  saveBotSentMessages();
 }
 
 function isHumanHandoffMessage(messageId) {
   return !botSentMessageIds.has(messageId);
 }
+
+// Cargar IDs persistidos al inicio
+loadBotSentMessages();
 
 // Función para enviar mensajes por WhatsApp usando API de Chakra
 // Función para enviar indicador de "escribiendo..."
