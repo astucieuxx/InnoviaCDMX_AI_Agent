@@ -9,7 +9,9 @@ const {
   getBusinessName,
   getBusinessAddress,
   getBusinessMapsLink,
-  getBusinessHours
+  getBusinessHours,
+  getCatalogLink,
+  getCatalogName
 } = require('../../config');
 const { getClientName, getClientFirstName } = require('../utils/name-utils');
 
@@ -24,6 +26,8 @@ async function execute(session, message) {
   const direccion = getBusinessAddress();
   const mapsLink = getBusinessMapsLink();
   const horarios = getBusinessHours();
+  const catalogoLink = getCatalogLink();
+  const catalogoNombre = getCatalogName();
 
   const nombreCliente = getClientName(session);
   const nombrePrimero = getClientFirstName(session);
@@ -33,7 +37,12 @@ async function execute(session, message) {
   
   // Build location message (no greeting)
   let reply = '';
-  
+
+  // Catalog section
+  if (catalogoLink) {
+    reply += `📖 *Nuestro catálogo ${catalogoNombre}:*\n${catalogoLink}\n\n`;
+  }
+
   reply += `¡Claro! Estamos en 📍${direccion}, en un showroom pensado para que vivas tu elección con calma y estilo ✨\n\n`;
   
   // Add maps link if available
