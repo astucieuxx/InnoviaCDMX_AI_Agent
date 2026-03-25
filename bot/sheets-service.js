@@ -80,4 +80,19 @@ function resolvePendingTask(id) {
   console.log(`✅ Tarea pendiente #${id} marcada como resuelta`);
 }
 
-module.exports = { logPendingTask, getPendingTasks, resolvePendingTask };
+/**
+ * Mark multiple tasks as resolved by their ids.
+ * @param {number[]} ids
+ */
+function resolveMultipleTasks(ids) {
+  ids.forEach(id => {
+    const task = pendingTasks.find(t => t.id === id);
+    if (task) {
+      task.estado = 'Resuelto';
+      task.resolvedAt = new Date().toISOString();
+    }
+  });
+  console.log(`✅ Tareas pendientes resueltas: ${ids.join(', ')}`);
+}
+
+module.exports = { logPendingTask, getPendingTasks, resolvePendingTask, resolveMultipleTasks };

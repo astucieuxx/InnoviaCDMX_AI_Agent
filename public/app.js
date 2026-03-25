@@ -1133,9 +1133,13 @@ async function loadAppointments() {
     }
 }
 
+// Almacén de tareas cargadas (para descarga Excel sin re-fetch)
+let _pendingTasksData = [];
+
 // Cargar tareas pendientes
 async function loadPendingTasks() {
     const container = document.getElementById('pending-tasks-list');
+    const toolbar = document.getElementById('tasks-toolbar');
     if (!container) return;
     container.innerHTML = '<p class="loading-text">Cargando tareas...</p>';
 
@@ -1143,13 +1147,26 @@ async function loadPendingTasks() {
         const response = await fetch('/api/pending-tasks');
         const data = await response.json();
 
-        if (!data.tasks || data.tasks.length === 0) {
+        _pendingTasksData = data.tasks || [];
+
+        if (_pendingTasksData.length === 0) {
+            if (toolbar) toolbar.style.display = 'none';
             container.innerHTML = '<p class="loading-text" style="color:#28a745;">✅ No hay tareas pendientes</p>';
             return;
         }
 
-        container.innerHTML = data.tasks.map(task => `
+        if (toolbar) toolbar.style.display = 'flex';
+
+        // Reset select-all checkbox
+        const selectAll = document.getElementById('select-all-tasks');
+        if (selectAll) selectAll.checked = false;
+        _updateTasksSelectedCount();
+
+        container.innerHTML = _pendingTasksData.map(task => `
             <div class="appointment-card" id="task-row-${task.id}" style="border-left: 4px solid #dc3545;">
+                <div style="display:flex; align-items:center; padding-right:12px;">
+                    <input type="checkbox" class="task-checkbox" data-id="${task.id}" onchange="_updateTasksSelectedCount()" style="width:16px; height:16px; cursor:pointer;">
+                </div>
                 <div class="appointment-info" style="flex:1;">
                     <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;">
                         <span style="font-weight:700; font-size:15px;">${escapeHtml(task.nombre || 'Sin nombre')}</span>
@@ -1169,6 +1186,90 @@ async function loadPendingTasks() {
     } catch (error) {
         console.error('Error cargando tareas pendientes:', error);
         container.innerHTML = '<p class="loading-text" style="color:#dc3545;">Error al cargar tareas pendientes</p>';
+    }
+}
+
+function _updateTasksSelectedCount() {
+    const checkboxes = document.querySelectorAll('.task-checkbox');
+    const checked = document.querySelectorAll('.task-checkbox:checked');
+    const countEl = document.getElementById('tasks-selected-count');
+    const selectAll = document.getElementById('select-all-tasks');
+    const btnDelete = document.getElementById('btn-delete-selected');
+
+    if (countEl) {
+        countEl.textContent = checked.length > 0 ? `${checked.length} de ${checkboxes.length} seleccionadas` : '';
+    }
+    if (selectAll) {
+        selectAll.checked = checkboxes.length > 0 && checked.length === checkboxes.length;
+        selectAll.indeterminate = checked.length > 0 && checked.length < checkboxes.length;
+    }
+    if (btnDelete) {
+        btnDelete.disabled = checked.length === 0;
+        btnDelete.style.opacity = checked.length === 0 ? '0.5' : '1';
+    }
+}
+
+function toggleSelectAllTasks(checked) {
+    document.querySelectorAll('.task-checkbox').forEach(cb => { cb.checked = checked; });
+    _updateTasksSelectedCount();
+}
+
+function downloadTasksExcel() {
+    if (_pendingTasksData.length === 0) return;
+
+    const headers = ['ID', 'Fecha', 'Hora', 'Nombre', 'Teléfono', 'Último Mensaje', 'Contexto', 'Estado'];
+    const rows = _pendingTasksData.map(t => [
+        t.id,
+        t.fecha,
+        t.hora,
+        t.nombre || '',
+        t.telefono,
+        t.ultimoMensaje,
+        t.contexto || '',
+        t.estado
+    ]);
+
+    const csvContent = [headers, ...rows]
+        .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+        .join('\r\n');
+
+    // BOM para que Excel abra UTF-8 correctamente
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const fecha = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `tareas-pendientes-${fecha}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+async function deleteSelectedTasks() {
+    const checked = document.querySelectorAll('.task-checkbox:checked');
+    if (checked.length === 0) return;
+
+    const ids = Array.from(checked).map(cb => parseInt(cb.dataset.id));
+    const confirmMsg = ids.length === _pendingTasksData.length
+        ? `¿Eliminar todas las ${ids.length} tareas pendientes?`
+        : `¿Eliminar las ${ids.length} tareas seleccionadas?`;
+
+    if (!confirm(confirmMsg)) return;
+
+    const btnDelete = document.getElementById('btn-delete-selected');
+    if (btnDelete) { btnDelete.disabled = true; btnDelete.textContent = 'Eliminando...'; }
+
+    try {
+        const response = await fetch('/api/pending-tasks', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids })
+        });
+        if (!response.ok) throw new Error('Error del servidor');
+        await loadPendingTasks();
+    } catch (error) {
+        console.error('Error eliminando tareas:', error);
+        alert('Error al eliminar las tareas. Intenta de nuevo.');
+        if (btnDelete) { btnDelete.disabled = false; btnDelete.textContent = '🗑 Eliminar seleccionadas'; }
     }
 }
 

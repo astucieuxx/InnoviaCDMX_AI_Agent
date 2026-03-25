@@ -189,7 +189,21 @@
                     <h2>🚨 Tareas Pendientes</h2>
                     <button onclick="loadPendingTasks()" class="btn-primary" style="padding:8px 16px;">🔄 Actualizar</button>
                 </div>
-                <p class="section-description" style="margin-bottom:20px;">Conversaciones que requieren atención de un agente humano. Haz clic en <strong>Resolver</strong> una vez atendida.</p>
+                <p class="section-description" style="margin-bottom:16px;">Conversaciones que requieren atención de un agente humano. Descarga el listado, luego elimínalas para comenzar desde cero.</p>
+                <!-- Toolbar de acciones -->
+                <div id="tasks-toolbar" style="display:none; align-items:center; gap:12px; flex-wrap:wrap; padding:12px 16px; background:var(--bg-secondary); border-radius:10px; margin-bottom:16px;">
+                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:14px; font-weight:600; user-select:none;">
+                        <input type="checkbox" id="select-all-tasks" onchange="toggleSelectAllTasks(this.checked)" style="width:16px; height:16px; cursor:pointer;">
+                        Seleccionar todas
+                    </label>
+                    <span id="tasks-selected-count" style="font-size:13px; color:var(--text-secondary); margin-right:auto;"></span>
+                    <button onclick="downloadTasksExcel()" style="padding:8px 16px; background:#217346; color:#fff; border:none; border-radius:8px; cursor:pointer; font-size:13px; font-weight:600;">
+                        📥 Descargar Excel
+                    </button>
+                    <button onclick="deleteSelectedTasks()" id="btn-delete-selected" style="padding:8px 16px; background:#dc3545; color:#fff; border:none; border-radius:8px; cursor:pointer; font-size:13px; font-weight:600;">
+                        🗑 Eliminar seleccionadas
+                    </button>
+                </div>
                 <div id="pending-tasks-list">
                     <p class="loading-text">Cargando tareas...</p>
                 </div>

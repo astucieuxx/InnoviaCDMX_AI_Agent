@@ -21,7 +21,7 @@ const { getAIResponse, extractConversationData } = require('./openai-client');
 const { extractAppointmentDate, parseDateFromText } = require('./date-parser');
 
 // Import new intent-based architecture
-const { logPendingTask, getPendingTasks, resolvePendingTask } = require('./bot/sheets-service');
+const { logPendingTask, getPendingTasks, resolvePendingTask, resolveMultipleTasks } = require('./bot/sheets-service');
 const { classifyIntent } = require('./bot/classifier');
 const { extractBrideProfile } = require('./bot/profile-extractor');
 const { handlers } = require('./bot/handlers');
@@ -4809,6 +4809,20 @@ app.delete('/api/pending-tasks/:id', (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error('Error resolviendo tarea pendiente:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE /api/pending-tasks — Marcar múltiples tareas como resueltas
+// Body: { ids: [1, 2, 3] }  (si no se envían ids, resuelve todas)
+app.delete('/api/pending-tasks', express.json(), (req, res) => {
+  try {
+    const tasks = getPendingTasks();
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(Number).filter(Boolean) : tasks.map(t => t.id);
+    resolveMultipleTasks(ids);
+    res.json({ success: true, resolved: ids.length });
+  } catch (error) {
+    console.error('Error resolviendo tareas pendientes en bulk:', error);
     res.status(500).json({ error: error.message });
   }
 });
