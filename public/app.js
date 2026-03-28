@@ -4,6 +4,19 @@ let refreshInterval = null;
 let charts = {};
 let selectedPeriod = '30d'; // Período por defecto
 
+// Rastreo de conversaciones leídas (persistido en localStorage)
+let seenConversations = JSON.parse(localStorage.getItem('seenConversations') || '{}');
+
+function markConversationAsRead(phone, messageCount) {
+    seenConversations[phone] = messageCount;
+    localStorage.setItem('seenConversations', JSON.stringify(seenConversations));
+}
+
+function isConversationUnread(phone, messageCount) {
+    const seen = seenConversations[phone];
+    return seen === undefined || messageCount > seen;
+}
+
 // Inicialización
 document.addEventListener('DOMContentLoaded', () => {
     initTabs();
@@ -1042,24 +1055,37 @@ async function loadConversations() {
     try {
         const response = await fetch('/api/conversations');
         const data = await response.json();
-        
+
         const container = document.getElementById('conversations-list');
-        
+
         if (data.conversations.length === 0) {
             container.innerHTML = '<p class="loading-text">No hay conversaciones</p>';
             return;
         }
-        
-        container.innerHTML = data.conversations.map(conv => `
-            <div class="conversation-item ${conv.phone === currentConversation ? 'active' : ''}" 
-                 data-phone="${conv.phone}"
-                 onclick="selectConversation('${conv.phone}')">
-                <div class="conversation-phone">${formatPhone(conv.phone)}</div>
-                ${conv.nombre ? `<div style="font-weight: 600; color: #667eea;">${escapeHtml(conv.nombre)}</div>` : ''}
-                <div class="conversation-preview">${escapeHtml(conv.lastMessage?.message || 'Sin mensajes')}</div>
-                <small style="color: #adb5bd; font-size: 11px;">${formatDate(conv.lastActivity)}</small>
-            </div>
-        `).join('');
+
+        // Preservar posición de scroll para que no salte al hacer refresh
+        const scrollTop = container.scrollTop;
+
+        container.innerHTML = data.conversations.map(conv => {
+            const isActive = conv.phone === currentConversation;
+            const unread = !isActive && isConversationUnread(conv.phone, conv.messageCount);
+            return `
+                <div class="conversation-item ${isActive ? 'active' : ''}"
+                     data-phone="${conv.phone}"
+                     onclick="selectConversation('${conv.phone}')">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div class="conversation-phone">${formatPhone(conv.phone)}</div>
+                        ${unread ? '<span class="unread-dot" title="Mensajes sin leer"></span>' : ''}
+                    </div>
+                    ${conv.nombre ? `<div style="font-weight: 600; color: #667eea;">${escapeHtml(conv.nombre)}</div>` : ''}
+                    <div class="conversation-preview">${escapeHtml(conv.lastMessage?.message || 'Sin mensajes')}</div>
+                    <small style="color: #adb5bd; font-size: 11px;">${formatDate(conv.lastActivity)}</small>
+                </div>
+            `;
+        }).join('');
+
+        // Restaurar posición de scroll
+        container.scrollTop = scrollTop;
     } catch (error) {
         console.error('Error cargando conversaciones:', error);
     }
@@ -1068,7 +1094,17 @@ async function loadConversations() {
 // Seleccionar conversación
 async function selectConversation(phone) {
     currentConversation = phone;
-    loadConversations(); // Refrescar para mostrar active
+
+    // Actualizar clase active en el DOM sin re-renderizar toda la lista
+    document.querySelectorAll('.conversation-item').forEach(item => {
+        const isSelected = item.dataset.phone === phone;
+        item.classList.toggle('active', isSelected);
+        // Quitar el indicador de no leído al seleccionar
+        if (isSelected) {
+            item.querySelector('.unread-dot')?.remove();
+        }
+    });
+
     loadConversationMessages(phone);
 }
 
@@ -1077,24 +1113,27 @@ async function loadConversationMessages(phone) {
     try {
         const response = await fetch(`/api/conversations/${phone}`);
         const data = await response.json();
-        
+
+        // Marcar conversación como leída
+        markConversationAsRead(phone, data.messages.length);
+
         const header = document.getElementById('conversation-header');
         const messagesContainer = document.getElementById('conversation-messages');
-        
+
         header.innerHTML = `<h3>Conversación con ${formatPhone(phone)}</h3><p>${data.messages.length} mensajes</p>`;
-        
+
         if (data.messages.length === 0) {
             messagesContainer.innerHTML = '<p class="loading-text">No hay mensajes en esta conversación</p>';
             return;
         }
-        
+
         messagesContainer.innerHTML = data.messages.map(msg => `
             <div class="conversation-message ${msg.direction}">
                 <div>${escapeHtml(msg.message)}</div>
                 <div class="message-time">${formatDate(msg.timestamp)}</div>
             </div>
         `).join('');
-        
+
         // Scroll al final
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
     } catch (error) {

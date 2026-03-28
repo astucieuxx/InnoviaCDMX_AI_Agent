@@ -4377,13 +4377,14 @@ app.get('/api/conversations', (req, res) => {
           timestamp: lastMessage.timestamp
         } : null,
         lastActivity: session.ultima_actividad,
+        firstActivity: session.historial?.[0]?.timestamp || session.ultima_actividad,
         messageCount: session.historial?.length || 0,
         hasAppointment: session.etapa === 'cita_agendada' || !!session.calendar_event_id
       };
     });
-    
-    // Ordenar por última actividad (más reciente primero)
-    conversations.sort((a, b) => new Date(b.lastActivity) - new Date(a.lastActivity));
+
+    // Ordenar por inicio de conversación (más antigua primero = orden cronológico estable)
+    conversations.sort((a, b) => new Date(a.firstActivity) - new Date(b.firstActivity));
     
     res.json({ conversations });
   } catch (error) {
