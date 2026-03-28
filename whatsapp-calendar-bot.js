@@ -1020,6 +1020,37 @@ const BOT_MSG_IDS_PATH = path.join(__dirname, 'bot_sent_messages.json');
 const botLastSentAt = new Map();
 const RACE_CONDITION_WINDOW_MS = 60 * 1000; // 60 segundos de ventana de gracia
 
+// Debounce de mensajes de texto: acumula mensajes rápidos del mismo número
+// antes de procesarlos, para evitar respuestas duplicadas cuando el usuario
+// envía varios mensajes o fotos en ráfaga.
+const pendingTextMessages = new Map(); // phone → { messages: string[], timer: NodeJS.Timeout }
+const MESSAGE_DEBOUNCE_MS = 3000; // 3 segundos de ventana
+
+function scheduleTextMessage(phone, message, options) {
+  if (pendingTextMessages.has(phone)) {
+    clearTimeout(pendingTextMessages.get(phone).timer);
+    pendingTextMessages.get(phone).messages.push(message);
+  } else {
+    pendingTextMessages.set(phone, { messages: [message], timer: null });
+  }
+
+  const timer = setTimeout(() => {
+    const queued = pendingTextMessages.get(phone);
+    pendingTextMessages.delete(phone);
+    const combined = queued.messages.join('\n');
+    console.log(`⏱️  [DEBOUNCE] Procesando ${queued.messages.length} mensaje(s) agrupado(s) de ${phone}: "${combined}"`);
+    processIncomingMessage(phone, combined, options).catch(err => {
+      if (err.message === 'BOT_INACTIVE_BLOCKED' || err.message === 'BOT_TEST_MODE_BLOCKED' || err.message === 'BOT_INVALID_MODE_BLOCKED') {
+        console.log(`⏸️  Mensaje bloqueado correctamente — ${err.message}`);
+        return;
+      }
+      console.error('❌ Error procesando mensaje (debounce):', err);
+    });
+  }, MESSAGE_DEBOUNCE_MS);
+
+  pendingTextMessages.get(phone).timer = timer;
+}
+
 // Carga los IDs persistidos al arrancar (sobrevive reinicios de servidor)
 function loadBotSentMessages() {
   try {
@@ -1837,18 +1868,11 @@ app.post('/webhook', async (req, res) => {
             continue; // Saltar este mensaje y continuar con el siguiente (si hay)
           }
           
-          console.log(`✅ [WEBHOOK CHECK] Bot no está inactive, continuando con processIncomingMessage...\n`);
-          
-          // Procesar el mensaje (no esperar para responder rápido al webhook)
-          processIncomingMessage(senderPhone, incomingMessage, {}).catch(error => {
-            // Si el error es porque el bot está inactivo, no es un error real
-            if (error.message === 'BOT_INACTIVE_BLOCKED' || error.message === 'BOT_TEST_MODE_BLOCKED' || error.message === 'BOT_INVALID_MODE_BLOCKED') {
-              console.log(`⏸️  Mensaje bloqueado correctamente - ${error.message}`);
-              return; // No loguear como error
-            }
-            console.error('❌ Error procesando mensaje:', error);
-            console.error('   Stack:', error.stack);
-          });
+          console.log(`✅ [WEBHOOK CHECK] Bot no está inactive, continuando con scheduleTextMessage...\n`);
+
+          // Usar debounce para agrupar mensajes rápidos del mismo número
+          // (evita respuestas duplicadas cuando el usuario envía varios textos en ráfaga)
+          scheduleTextMessage(senderPhone, incomingMessage, {});
         } else {
           console.log(`⚠️  Mensaje de texto sin senderPhone o incomingMessage. senderPhone: ${senderPhone}, incomingMessage: ${incomingMessage}`);
         }
@@ -1912,6 +1936,24 @@ app.post('/webhook', async (req, res) => {
               }
               console.error('Error procesando respuesta de botón:', error);
             });
+          }
+        }
+      }
+      // Manejar mensajes tipo "button" — llegan cuando el usuario hace clic en un
+      // anuncio de Meta Ads con mensaje preescrito (CTWA / Click-To-WhatsApp).
+      // El payload tiene: message.type === 'button', message.button.text (el texto del botón)
+      else if (message.type === 'button') {
+        const buttonText = message.button?.text || '';
+        console.log(`📣 [META ADS] Mensaje tipo 'button' recibido de ${senderPhone}: "${buttonText}"`);
+
+        if (senderPhone && buttonText) {
+          const botMode = getBotMode();
+          const isInactive = String(botMode).trim().toLowerCase() === 'inactive';
+          if (isInactive) {
+            console.log(`⏸️  [META ADS] Bot inactivo — mensaje de anuncio ignorado`);
+          } else {
+            // Tratar como mensaje de texto normal (con debounce)
+            scheduleTextMessage(senderPhone, buttonText, {});
           }
         }
       }
