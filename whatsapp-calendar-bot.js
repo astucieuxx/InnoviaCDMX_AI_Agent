@@ -1026,6 +1026,48 @@ const RACE_CONDITION_WINDOW_MS = 60 * 1000; // 60 segundos de ventana de gracia
 const pendingTextMessages = new Map(); // phone → { messages: string[], timer: NodeJS.Timeout }
 const MESSAGE_DEBOUNCE_MS = 3000; // 3 segundos de ventana
 
+// Debounce de imágenes: igual que texto, acumula imágenes enviadas en ráfaga
+// para responder una sola vez con el conteo total.
+const pendingImageMessages = new Map(); // phone → { images: string[], sessionData, timer }
+
+function scheduleImageMessage(phone, descripcion, sessionData) {
+  if (pendingImageMessages.has(phone)) {
+    clearTimeout(pendingImageMessages.get(phone).timer);
+    pendingImageMessages.get(phone).images.push(descripcion);
+  } else {
+    pendingImageMessages.set(phone, { images: [descripcion], sessionData, timer: null });
+  }
+
+  const timer = setTimeout(async () => {
+    const queued = pendingImageMessages.get(phone);
+    pendingImageMessages.delete(phone);
+    const count = queued.images.length;
+
+    console.log(`⏱️  [DEBOUNCE IMG] Procesando ${count} imagen(es) agrupada(s) de ${phone}`);
+
+    // Un solo pending task con todas las imágenes
+    const combinedDesc = count === 1
+      ? queued.images[0]
+      : `${count} imágenes recibidas:\n${queued.images.map((d, i) => `${i + 1}. ${d}`).join('\n')}`;
+
+    logPendingTask({
+      phone,
+      name: queued.sessionData.clientName,
+      message: combinedDesc,
+      historial: queued.sessionData.historial
+    });
+
+    // Una sola respuesta al usuario
+    const reply = count === 1
+      ? 'Recibí tu imagen 📎. Un miembro de nuestro equipo la revisará y se pondrá en contacto contigo a la brevedad. 🙏'
+      : `Recibí tus ${count} imágenes 📎. Un miembro de nuestro equipo las revisará y se pondrá en contacto contigo a la brevedad. 🙏`;
+
+    await sendWhatsAppMessage(phone, reply);
+  }, MESSAGE_DEBOUNCE_MS);
+
+  pendingImageMessages.get(phone).timer = timer;
+}
+
 function scheduleTextMessage(phone, message, options) {
   if (pendingTextMessages.has(phone)) {
     clearTimeout(pendingTextMessages.get(phone).timer);
@@ -1884,23 +1926,18 @@ app.post('/webhook', async (req, res) => {
           ? `Imagen recibida: "${caption}"`
           : 'El usuario envió una imagen (posiblemente un recibo de pago u otro documento)';
 
-        console.log(`🖼️  Imagen recibida de ${senderPhone}. Caption: "${caption}". Escalando a humano.`);
+        console.log(`🖼️  Imagen recibida de ${senderPhone}. Caption: "${caption}". Agrupando con debounce...`);
 
         // Obtener sesión para contexto
         const imgSession = sessions.getSession(senderPhone) || {};
         const clientName = imgSession.nombre_cliente || imgSession.nombre || '';
 
-        logPendingTask({
-          phone: senderPhone,
-          name: clientName,
-          message: descripcion,
+        // Agrupar con debounce igual que los mensajes de texto:
+        // si el usuario manda varias imágenes seguidas, se responde una sola vez.
+        scheduleImageMessage(senderPhone, descripcion, {
+          clientName,
           historial: imgSession.historial || []
         });
-
-        // Responder al usuario
-        await sendWhatsAppMessage(senderPhone,
-          'Recibí tu imagen 📎. Un miembro de nuestro equipo la revisará y se pondrá en contacto contigo a la brevedad. 🙏'
-        );
       }
       // Manejar respuestas de botones interactivos
       else if (message.type === 'interactive' && message.interactive) {
