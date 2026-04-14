@@ -1896,3 +1896,21 @@ function updateStatus(connected) {
 
 // Exponer función globalmente para onclick
 window.selectConversation = selectConversation;
+
+async function downloadSnapshot() {
+    try {
+        const res = await fetch('/api/export-snapshot');
+        if (!res.ok) throw new Error('Error al exportar');
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const fecha = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
+        a.href = url;
+        a.download = `snapshot-${fecha}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    } catch (err) {
+        alert('No se pudo descargar el snapshot: ' + err.message);
+    }
+}
+window.downloadSnapshot = downloadSnapshot;

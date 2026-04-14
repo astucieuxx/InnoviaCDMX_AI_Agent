@@ -4907,6 +4907,23 @@ app.delete('/api/pending-tasks', express.json(), (req, res) => {
   }
 });
 
+// Exportar snapshot de toda la data en memoria (sesiones + tareas pendientes)
+app.get('/api/export-snapshot', (req, res) => {
+  const { getAllSessions } = require('./sessions');
+  const allSessions = getAllSessions ? getAllSessions() : [];
+  const tasks = getPendingTasks();
+
+  const snapshot = {
+    exportedAt: new Date().toISOString(),
+    sessions: allSessions,
+    pendingTasks: tasks
+  };
+
+  res.setHeader('Content-Disposition', `attachment; filename="snapshot-${Date.now()}.json"`);
+  res.setHeader('Content-Type', 'application/json');
+  res.json(snapshot);
+});
+
 // Iniciar servidor
 const PORT = process.env.PORT || 3000;
 
