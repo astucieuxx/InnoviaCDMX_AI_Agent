@@ -1018,12 +1018,16 @@ const BOT_MSG_IDS_PATH = path.join(__dirname, 'bot_sent_messages.json');
 
 // Rastrea cuándo el bot envió por última vez a cada teléfono (para evitar race condition)
 const botLastSentAt = new Map();
-const RACE_CONDITION_WINDOW_MS = 60 * 1000; // 60 segundos de ventana de gracia
+const RACE_CONDITION_WINDOW_MS = 2 * 1000; // 2 segundos — mínimo buffer de timing de red. Los IDs de mensajes ya están persistidos, así que la ventana real es casi innecesaria.
 
 // Debounce de mensajes de texto: acumula mensajes rápidos del mismo número
 // antes de procesarlos, para evitar respuestas duplicadas cuando el usuario
 // envía varios mensajes o fotos en ráfaga.
 const pendingTextMessages = new Map(); // phone → { messages: string[], timer: NodeJS.Timeout }
+
+// Lock para evitar creación concurrente de citas para el mismo teléfono.
+// Si dos webhooks llegan casi al mismo tiempo, el segundo es descartado.
+const appointmentCreationLocks = new Set(); // Set<phone>
 const MESSAGE_DEBOUNCE_MS = 3000; // 3 segundos de ventana
 
 // Debounce de imágenes: igual que texto, acumula imágenes enviadas en ráfaga
@@ -1068,6 +1072,21 @@ function scheduleImageMessage(phone, descripcion, sessionData) {
   pendingImageMessages.get(phone).timer = timer;
 }
 
+// Cancela todos los timers pendientes de texto e imagen para un teléfono dado.
+// Se llama cuando se detecta intervención humana para evitar que el bot responda.
+function cancelPendingMessages(phone) {
+  if (pendingTextMessages.has(phone)) {
+    clearTimeout(pendingTextMessages.get(phone).timer);
+    pendingTextMessages.delete(phone);
+    console.log(`🚫 [HANDOFF] Timers de texto cancelados para ${phone}`);
+  }
+  if (pendingImageMessages.has(phone)) {
+    clearTimeout(pendingImageMessages.get(phone).timer);
+    pendingImageMessages.delete(phone);
+    console.log(`🚫 [HANDOFF] Timers de imagen cancelados para ${phone}`);
+  }
+}
+
 function scheduleTextMessage(phone, message, options) {
   if (pendingTextMessages.has(phone)) {
     clearTimeout(pendingTextMessages.get(phone).timer);
@@ -1080,6 +1099,15 @@ function scheduleTextMessage(phone, message, options) {
     const queued = pendingTextMessages.get(phone);
     pendingTextMessages.delete(phone);
     const combined = queued.messages.join('\n');
+
+    // Re-verificar si el bot fue pausado durante la ventana de debounce
+    const currentSession = sessions.getSession(phone);
+    if (currentSession.bot_paused_until && new Date(currentSession.bot_paused_until) > new Date()) {
+      console.log(`⏸️  [DEBOUNCE] Bot pausado por intervención humana — mensaje descartado para ${phone}`);
+      sessions.addToHistory(phone, 'user', combined);
+      return;
+    }
+
     console.log(`⏱️  [DEBOUNCE] Procesando ${queued.messages.length} mensaje(s) agrupado(s) de ${phone}: "${combined}"`);
     processIncomingMessage(phone, combined, options).catch(err => {
       if (err.message === 'BOT_INACTIVE_BLOCKED' || err.message === 'BOT_TEST_MODE_BLOCKED' || err.message === 'BOT_INVALID_MODE_BLOCKED') {
@@ -1543,6 +1571,7 @@ app.post('/admin/pause-bot', (req, res) => {
 
   const pauseUntil = new Date(Date.now() + minutes * 60 * 1000);
   sessions.updateSession(phone, { bot_paused_until: pauseUntil.toISOString() });
+  cancelPendingMessages(phone);
 
   console.log(`⏸️  Bot pausado para ${phone} hasta ${pauseUntil.toISOString()} (${minutes} min)`);
   res.json({ ok: true, phone, paused_until: pauseUntil.toISOString(), minutes });
@@ -1807,6 +1836,8 @@ app.post('/webhook', async (req, res) => {
                       // El bot no ha enviado nada reciente → es intervención humana real
                       const pauseUntil = new Date(Date.now() + HUMAN_HANDOFF_PAUSE_MS);
                       sessions.updateSession(clientPhone, { bot_paused_until: pauseUntil });
+                      // Cancelar cualquier timer pendiente para que el bot no responda
+                      cancelPendingMessages(clientPhone);
                       console.log(`🙋 INTERVENCIÓN HUMANA detectada para ${clientPhone} — bot pausado 10 min hasta ${pauseUntil.toISOString()}`);
                     } else {
                       console.log(`⚡ [RACE CONDITION] Status 'sent' para ID desconocido ignorado — bot envió hace ${Math.round(timeSinceLastSend / 1000)}s (ventana: ${RACE_CONDITION_WINDOW_MS / 1000}s)`);
@@ -2348,10 +2379,119 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
     // Agregar mensaje del usuario al historial (usar el título del botón si es un clic)
     const messageForHistory = options.buttonTitle || incomingMessage;
     sessions.addToHistory(cleanPhone, 'user', messageForHistory);
-    
+
     // Actualizar sesión después de agregar al historial
     session = sessions.getSession(cleanPhone);
-    
+
+    // ── FAST PATH: Confirmar asistencia ──────────────────────────────────────
+    // Si la clienta confirma que va a su cita existente, responder con agradecimiento
+    // y escalar al humano. No pasar por el clasificador ni por LLM para evitar que
+    // el bot diga "no tengo ninguna cita registrada" o intente crear una nueva.
+    {
+      const msgLower = incomingMessage.toLowerCase().trim();
+      const confirmaPatterns = [
+        'confirmo mi asistencia',
+        'confirmo asistencia',
+        'confirmo mi cita',
+        'confirmo que voy',
+        'confirmo que asistire',
+        'confirmo que asistiré',
+        'ahí estaré',
+        'ahi estare',
+        'allí estaré',
+        'alli estare',
+        'si voy a ir',
+        'sí voy a ir',
+        'si asistiré',
+        'sí asistiré',
+        'si asistire',
+        'sí asistire',
+      ];
+      // "confirmo" solo (sin más contexto) es ambiguo, lo detectamos SOLO si ya hay cita
+      const hasAppointment = session.etapa === 'cita_agendada' || !!session.calendar_event_id;
+      const isConfirmacion =
+        confirmaPatterns.some(p => msgLower.includes(p)) ||
+        (hasAppointment && (msgLower === 'confirmo' || msgLower === 'confirmo.' || msgLower === 'confirmo!'));
+
+      if (isConfirmacion) {
+        console.log(`✅ [CONFIRMAR ASISTENCIA] Detectado para ${cleanPhone} — respondiendo y escalando a humano`);
+        const reply = '¡Gracias! 🤍 Te esperamos. Si necesitas algo antes de tu visita, aquí estamos.';
+        await sendWhatsAppMessage(cleanPhone, reply);
+        sessions.addToHistory(cleanPhone, 'assistant', reply);
+
+        // Escalar al equipo para que sepan que la novia confirmó
+        try {
+          logPendingTask({
+            phone: cleanPhone,
+            name: session.nombre_cliente || session.nombre_novia || 'Clienta',
+            message: `[CONFIRMÓ ASISTENCIA] "${incomingMessage}"`,
+            historial: session.historial
+          });
+        } catch (e) {
+          console.warn('⚠️  No se pudo loguear confirmación de asistencia:', e.message);
+        }
+
+        // Pausar bot 15 min para que el equipo vea la confirmación sin interferencia
+        const pauseUntil = new Date(Date.now() + 15 * 60 * 1000);
+        sessions.updateSession(cleanPhone, { bot_paused_until: pauseUntil.toISOString() });
+        return;
+      }
+    }
+    // ── FAST PATH: Ajustes / Entrega / Folio ─────────────────────────────────
+    // Clientes existentes que ya compraron y quieren gestionar ajustes, entrega
+    // o referir su folio. El bot no tiene acceso a registros de compra, por lo
+    // que escala inmediatamente al equipo.
+    // NOTA: solo captura señales de alta confianza. Las preguntas generales como
+    // "¿cuándo se hacen los ajustes?" son respondidas por el LLM con FAQs.
+    {
+      const msgLower = incomingMessage.toLowerCase().trim();
+      const ajusteEscalarPatterns = [
+        'folio',
+        'número de folio',
+        'numero de folio',
+        'cita de ajuste',
+        'cita de ajustes',
+        'prueba de ajuste',
+        'prueba de ajustes',
+        'mi ajuste',
+        'mis ajustes',
+        'mi entrega',
+        'fecha de entrega',
+        'cuándo es mi entrega',
+        'cuando es mi entrega',
+        'mi vestido ya está',
+        'mi vestido ya esta',
+        'ya está mi vestido',
+        'ya esta mi vestido',
+      ];
+      const isAjusteOEntrega = ajusteEscalarPatterns.some(p => msgLower.includes(p));
+
+      if (isAjusteOEntrega) {
+        console.log(`👗 [AJUSTE/ENTREGA/FOLIO] Detectado para ${cleanPhone} — escalando a humano directamente`);
+        const reply = 'Hola 😊 Para gestiones de ajustes, entregas o información de tu folio necesito conectarte con una de nuestras asesoras. ¡Ya quedó registrada tu solicitud y en breve se pondrán en contacto contigo! 🤍';
+        await sendWhatsAppMessage(cleanPhone, reply);
+        sessions.addToHistory(cleanPhone, 'user', incomingMessage);
+        sessions.addToHistory(cleanPhone, 'assistant', reply);
+
+        try {
+          logPendingTask({
+            phone: cleanPhone,
+            name: session.nombre_cliente || session.nombre_novia || 'Clienta',
+            message: `[AJUSTE/ENTREGA/FOLIO] "${incomingMessage}"`,
+            historial: session.historial
+          });
+        } catch (e) {
+          console.warn('⚠️  No se pudo loguear solicitud de ajuste/entrega:', e.message);
+        }
+
+        // Pausar bot 30 min para que el equipo gestione sin interferencia
+        const pauseUntil = new Date(Date.now() + 30 * 60 * 1000);
+        sessions.updateSession(cleanPhone, { bot_paused_until: pauseUntil.toISOString() });
+        return;
+      }
+    }
+    // ── FIN FAST PATH ─────────────────────────────────────────────────────────
+
     // STEP 1: Profile extraction (OPTIMIZED - only if missing info)
     // Only run LLM extraction if we don't have nombre_cliente/nombre_novia or fecha_boda
     // Skip extraction for button clicks to avoid confusion
@@ -2901,6 +3041,21 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
             console.error(`❌ No se pudo reagendar el evento en Google Calendar`);
           }
         } else {
+          // ── GUARD: evitar citas duplicadas ──────────────────────────────────
+          // Verificar de nuevo la sesión (puede haber cambiado si otro hilo ya creó la cita)
+          const freshSession = sessions.getSession(cleanPhone);
+          if (freshSession.calendar_event_id) {
+            console.warn(`⚠️  [DUPLICATE GUARD] ${cleanPhone} ya tiene calendar_event_id (${freshSession.calendar_event_id}). Cita duplicada bloqueada.`);
+            return;
+          }
+          // Lock: si ya hay una creación en progreso para este teléfono, salir
+          if (appointmentCreationLocks.has(cleanPhone)) {
+            console.warn(`⚠️  [DUPLICATE LOCK] Creación de cita ya en progreso para ${cleanPhone}. Solicitud duplicada bloqueada.`);
+            return;
+          }
+          appointmentCreationLocks.add(cleanPhone);
+          // ── FIN GUARD ────────────────────────────────────────────────────────
+
           console.log(`📅 Creando nuevo evento en calendario: ${targetCalendarId}`);
           console.log(`   citasNuevasCalendarId: ${citasNuevasCalendarId || 'null'}`);
           console.log(`   CALENDAR_ID env: ${process.env.CALENDAR_ID || 'no configurado'}`);
@@ -2913,7 +3068,7 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
           console.log(`📅 Fecha/Hora: ${selectedSlot.start}`);
           console.log(`📅 Fecha de boda: ${sessionData.fecha_boda || 'No especificada'}`);
           console.log(`📅 ============================================`);
-          
+
           calendarEvent = await createCalendarEventService(
             getClientName(sessionData) || 'Cliente',
             cleanPhone,
@@ -2924,7 +3079,10 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
             authClient,
             targetCalendarId
           );
-          
+
+          // Liberar lock independientemente del resultado
+          appointmentCreationLocks.delete(cleanPhone);
+
           if (calendarEvent) {
             console.log(`📅 ============================================`);
             console.log(`📅 ✅ EVENTO CREADO CONFIRMADO`);
@@ -3824,6 +3982,12 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
     console.error('❌ Error procesando mensaje:', error.message || error);
     if (error.stack) {
       console.error('   Stack:', error.stack.split('\n').slice(0, 3).join('\n'));
+    }
+    // Liberar lock de creación de cita si quedó bloqueado por una excepción inesperada
+    const cleanPhoneForCleanup = senderPhone ? senderPhone.replace(/\D/g, '') : null;
+    if (cleanPhoneForCleanup && appointmentCreationLocks.has(cleanPhoneForCleanup)) {
+      appointmentCreationLocks.delete(cleanPhoneForCleanup);
+      console.warn(`⚠️  [LOCK CLEANUP] Lock de creación de cita liberado para ${cleanPhoneForCleanup} tras error.`);
     }
     // No intentar enviar mensaje de error si ya falló el envío
     // (evitar loops infinitos de errores)

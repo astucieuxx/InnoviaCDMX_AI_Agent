@@ -21,7 +21,7 @@
   "precios": {
     "precio_base": 29000,
     "moneda": "MXN",
-    "nota": "El precio varía según modelo, forma de pago, fecha de compra, promociones y personalizaciones. Las asesoras pueden ofrecer descuentos exclusivos en showroom."
+    "nota": "El precio varía según modelo, forma de pago, fecha de compra, promociones y personalizaciones. No existen precios fijos por modelo — el precio final se define en el showroom según todos estos factores."
   },
 
   "pagos": {

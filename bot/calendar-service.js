@@ -1562,6 +1562,106 @@ async function getCalendarEvent(eventId, calendarClient, authClient, calendarId)
   }
 }
 
+/**
+ * Search for a client's upcoming appointment by phone number.
+ * Looks in the event description for "TELEFONO: <phone>" written by the bot or staff.
+ * Falls back to name search if no phone match is found.
+ *
+ * @param {string} phone - Client phone (digits only or with country code)
+ * @param {string|null} clientName - Optional: client name to fall back to
+ * @param {Object} calendarClient
+ * @param {Object} authClient
+ * @param {string} calendarId - CITAS NUEVAS calendar ID
+ * @returns {Promise<Object|null>} Event object or null
+ */
+async function findEventByPhone(phone, clientName, calendarClient, authClient, calendarId) {
+  try {
+    if (!authClient || !phone) return null;
+
+    let auth;
+    if (authClient && typeof authClient.getClient === 'function') {
+      auth = await authClient.getClient();
+    } else {
+      auth = authClient;
+    }
+
+    const now = new Date();
+    // Look 7 days in the past (appointment may have been set for today/yesterday)
+    // and 6 months into the future
+    const pastWindow = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const futureWindow = new Date(now.getTime() + 6 * 30 * 24 * 60 * 60 * 1000);
+
+    // Normalize phone: strip non-digits, try last 10 digits (Mexico mobile)
+    const digitsOnly = phone.replace(/\D/g, '');
+    const last10 = digitsOnly.slice(-10);
+
+    // Attempt 1: search by last 10 digits of phone (stored in description)
+    for (const query of [last10, digitsOnly]) {
+      if (!query) continue;
+      console.log(`🔍 findEventByPhone: buscando en calendar con query "${query}"`);
+      const res = await calendarClient.events.list({
+        auth,
+        calendarId,
+        timeMin: pastWindow.toISOString(),
+        timeMax: futureWindow.toISOString(),
+        maxResults: 10,
+        singleEvents: true,
+        orderBy: 'startTime',
+        q: query,
+        timeZone: 'America/Mexico_City'
+      });
+
+      const items = res.data.items || [];
+      // Filter: must contain the phone digits in the description
+      const match = items.find(ev => {
+        const desc = (ev.description || '').replace(/\D/g, '');
+        return desc.includes(last10);
+      });
+
+      if (match) {
+        console.log(`✅ findEventByPhone: cita encontrada por teléfono (ID: ${match.id})`);
+        return formatEventResult(match);
+      }
+    }
+
+    // Attempt 2: fall back to name search if provided
+    if (clientName) {
+      console.log(`🔍 findEventByPhone: sin resultados por teléfono, intentando por nombre "${clientName}"`);
+      const byName = await findEventsByName(clientName, calendarClient, authClient, calendarId, 5);
+      if (byName && byName.length > 0) {
+        console.log(`✅ findEventByPhone: cita encontrada por nombre`);
+        return byName[0]; // Most recent upcoming
+      }
+    }
+
+    console.log(`⚠️  findEventByPhone: no se encontró ninguna cita para ${phone}`);
+    return null;
+  } catch (err) {
+    console.error('❌ Error en findEventByPhone:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Format a Google Calendar event into a clean summary object.
+ */
+function formatEventResult(event) {
+  const { formatDateCDMX, formatTimeCDMX } = require('./utils/date-formatter');
+  const startRaw = event.start.dateTime || event.start.date;
+  const startDate = event.start.dateTime
+    ? new Date(event.start.dateTime)
+    : new Date(event.start.date + 'T00:00:00');
+  return {
+    id: event.id,
+    summary: event.summary,
+    start: startRaw,
+    startDate,
+    formattedDate: formatDateCDMX(startDate),
+    formattedTime: formatTimeCDMX(startDate),
+    description: event.description || '',
+  };
+}
+
 module.exports = {
   getAvailableSlots,
   isDayOpen,
@@ -1571,6 +1671,7 @@ module.exports = {
   updateCalendarEvent,
   deleteCalendarEvent,
   findEventsByName,
+  findEventByPhone,
   restoreBlueEvent,
   getCalendarEvent
 };

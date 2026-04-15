@@ -22,7 +22,8 @@ const {
   deleteCalendarEvent: deleteCalendarEventService,
   updateCalendarEvent: updateCalendarEventService,
   restoreBlueEvent: restoreBlueEventService,
-  getCalendarEvent: getCalendarEventService
+  getCalendarEvent: getCalendarEventService,
+  findEventByPhone: findEventByPhoneService
 } = require('./calendar-service');
 const { getClientName } = require('./utils/name-utils');
 const { logPendingTask } = require('./sheets-service');
@@ -137,6 +138,21 @@ const TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'buscar_cita_cliente',
+      description:
+        'Busca en Google Calendar si la clienta tiene una cita agendada, incluso si fue creada manualmente por el staff. ' +
+        'Úsala cuando la clienta pregunte por su cita y no haya un ID de cita registrado en el contexto, ' +
+        'o cuando quieras confirmar si existe una cita antes de reagendar o cancelar.',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: []
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'reagendar_cita',
       description:
         'Mueve una cita existente a una nueva fecha y hora en Google Calendar.',
@@ -210,17 +226,21 @@ Hoy es ${today}.
 3. **Usa el nombre de la clienta** en cuanto lo tengas.
 4. **Objetivo principal:** convertir cada conversación en una cita agendada en el showroom.
 5. **Recopila datos gradualmente:** primero el nombre completo (nombre y apellido), luego la fecha de boda, después propón agendar. Al pedir el nombre, especifica siempre que necesitas nombre *y* apellido, por ejemplo: "¿Me compartes tu nombre completo (nombre y apellido)? 😊".
-6. **Para agendar una cita:**
+6. **Para agendar una cita — PRIMER PASO (antes de pedir nombre o fecha):** Cuando la clienta expresa por primera vez que quiere agendar o visitar el showroom y el contexto NO deja claro que es una clienta nueva buscando vestido (es decir, no ha dicho "quiero ver vestidos", "soy novia y quiero conocer", etc.), pregunta primero: "¡Con gusto! 😊 ¿Es tu primera visita al showroom o ya eres clienta y vienes por ajustes o entrega?" — luego según la respuesta:
+   - **Primera visita / nueva clienta:** continúa con el flujo normal (pedir nombre, fecha de boda, buscar slots).
+   - **Clienta existente (ajustes / entrega / cualquier gestión posterior a la compra):** NO intentes agendar — escala a humano con \`escalar_a_humano\` indicando que la clienta es existente y necesita gestión de ajustes o entrega. Dile: "Perfecto, te voy a conectar con una de nuestras asesoras para que te ayuden con eso 🤍 Ya quedó registrada tu solicitud."
+   - **Si el contexto ya es claro** (la clienta dice "quiero ver vestidos", "soy novia y quiero una cita", "quiero conocer el showroom", etc.) omite la pregunta y ve directo al flujo de nueva clienta.
    - Pide la fecha que prefiere la clienta.
    - Llama a \`buscar_slots_disponibles\` para ver disponibilidad.
    - Muestra los horarios disponibles de forma clara y amigable.
    - **ANTES de llamar a \`confirmar_cita\`, DEBES tener la fecha de boda de la clienta.** Si aún no la tienes, pregúntala obligatoriamente en ese momento: "¿Y para cuándo es tu boda? 💍" (o variación natural). No puedes confirmar la cita sin este dato.
-   - Cuando la clienta confirme un horario específico Y ya tengas su fecha de boda, llama a \`confirmar_cita\`.
-7. **Para cancelar:** ANTES de llamar a \`cancelar_cita\`, DEBES mostrarle a la clienta los detalles de la cita que encontraste (fecha, hora) y preguntarle si está segura de que quiere cancelar. Ejemplo: "Encontré tu cita: está programada para el [día] a las [hora]. ¿Estás segura de que deseas cancelarla? 🤍". Solo llama a \`cancelar_cita\` cuando la clienta confirme explícitamente que sí quiere cancelar. El event_id lo tienes disponible en el contexto de la clienta.
-8. **Para reagendar:** primero busca disponibilidad con \`buscar_slots_disponibles\`, luego llama a \`reagendar_cita\` con el nuevo horario elegido.
-9. **Para preguntas generales sobre vestidos, catálogo, modelos, precios o información del negocio:** responde directamente E incluye SIEMPRE el link del catálogo (${catalog.link || ''}) e invita a agendar una cita. Nunca respondas con solo texto vago sin el catálogo cuando se trate de preguntas sobre la colección o vestidos.
+   - **PASO OBLIGATORIO ANTES DE \`confirmar_cita\`:** Cuando ya tengas horario elegido Y fecha de boda, muestra un resumen y pide confirmación explícita. Ejemplo: "Perfecto 🤍 Entonces agendaría tu cita para el **[día completo]** a las **[hora]**. ¿Te confirmo?" — solo llama a \`confirmar_cita\` cuando la clienta responda afirmativamente ("sí", "confirma", "de acuerdo", "perfecto", "adelante", etc.). **Proporcionar la fecha de boda NO cuenta como confirmación de la cita.**
+7. **Para consultar cita existente:** Si la clienta pregunta por su cita ("¿tengo una cita?", "¿cuándo es mi cita?", "¿me puedes dar mis datos de cita?") y la "Cita agendada (ID en calendario)" es "Ninguna", llama PRIMERO a \`buscar_cita_cliente\`. Esta herramienta busca en Google Calendar por número de teléfono y puede encontrar citas creadas manualmente por el staff. Si la encuentra, úsala también para reagendar o cancelar (el ID quedará registrado). Si no la encuentra, informa amablemente que no hay cita próxima y ofrece agendar una.
+7b. **Para cancelar:** ANTES de llamar a \`cancelar_cita\`, DEBES mostrarle a la clienta los detalles de la cita que encontraste (fecha, hora) y preguntarle si está segura de que quiere cancelar. Ejemplo: "Encontré tu cita: está programada para el [día] a las [hora]. ¿Estás segura de que deseas cancelarla? 🤍". Solo llama a \`cancelar_cita\` cuando la clienta confirme explícitamente que sí quiere cancelar. El event_id lo tienes disponible en el contexto de la clienta.
+8. **Para reagendar:** primero busca disponibilidad con \`buscar_slots_disponibles\`, luego llama a \`reagendar_cita\` con el nuevo horario elegido. **NUNCA llames a \`confirmar_cita\` si la clienta ya tiene una cita agendada (es decir, si "Cita agendada (ID en calendario)" NO es "Ninguna") — en ese caso usa SIEMPRE \`reagendar_cita\`.**
+9. **Catálogo — regla absoluta:** En cualquier respuesta que trate sobre la boutique, los vestidos, modelos, precios, información general del negocio, o cuando la clienta pida "información" sin especificar, SIEMPRE incluye el link del catálogo (${catalog.link || ''}) en ese mismo mensaje. No lo dejes para después. Ejemplos donde DEBES incluirlo: "quiero información", "¿qué ofrecen?", "¿cómo son sus vestidos?", "¿cuánto cuestan?", "¿dónde están?", "quiero ver opciones". Excepción: si la conversación ya avanzó y el catálogo ya fue compartido antes, no es necesario repetirlo.
 10. **Tono:** cálido, emocionante, personal. Como una amiga experta en bodas. Usa emojis con moderación (👰‍♀️ ✨ 💐 🤍).
-11. **Nunca** des precios exactos por modelo (solo el precio base), ni confirmes disponibilidad sin verificar con herramientas.
+11. **Precios:** El precio base ($${(pricing.precio_base || 25000).toLocaleString()} MXN) es el precio **desde el que inician** los vestidos — NO el precio de ningún modelo específico. Siempre di "nuestros vestidos inician desde $${(pricing.precio_base || 25000).toLocaleString()} MXN", nunca "$X es el precio". No existen precios fijos por modelo ni las asesoras tienen una lista de precios por modelo — el precio final depende del modelo, forma de pago, fecha de compra, promociones y personalizaciones, y se define en el showroom. **Nunca digas que "la asesora puede darte el precio por modelo"** — no existe ese precio. Nunca confirmes disponibilidad sin verificar con herramientas.
 12. **Responde siempre en español.**
 13. **Mensajes concisos:** WhatsApp no es email; evita respuestas largas o con demasiados párrafos.
 13b. **Nunca incluyas links de Google Calendar ni ningún otro link en los mensajes de confirmación de cita.** Confirma la cita con los datos relevantes (nombre, fecha, hora, dirección) pero sin URLs.
@@ -232,6 +252,7 @@ Hoy es ${today}.
    - La clienta tiene una queja, solicitud especial o necesita seguimiento personalizado
    - La clienta menciona recibos, comprobantes, pagos, abonos, depósitos, transferencias o cualquier trámite administrativo
    - La clienta quiere enviar o compartir documentos, fotos, archivos o evidencias de cualquier tipo
+   - **La clienta menciona "ajustes", "cita de ajustes", "prueba de ajuste", "entrega", "fecha de entrega", "folio", "número de folio", "número de pedido", o cualquier término relacionado con un pedido ya realizado.** Estas son gestiones de clientes existentes que requieren acceso a registros de compra que tú no tienes. No intentes agendar esto como una cita nueva — escala inmediatamente. (Nota: la pregunta general "¿cuándo se hacen los ajustes?" sí la puedes responder con las FAQs, pero cualquier gestión concreta de ajuste/entrega/folio de una clienta específica → escala.)
    - Cualquier pregunta que no puedas responder con certeza desde las FAQs
    Después de llamar a la herramienta, confirma a la clienta que su solicitud quedó registrada y que en breve uno de nuestros agentes del staff se pondrá en contacto. **Nunca digas que "intentarás" — confirma que ya quedó registrado.**
 
@@ -273,10 +294,63 @@ async function executeTool(toolName, toolArgs, calendarDeps, session, phone) {
       };
     }
 
+    // ---- buscar_cita_cliente --------------------------------------------
+    if (toolName === 'buscar_cita_cliente') {
+      console.log(`🔧 Agent tool: buscar_cita_cliente(phone=${phone})`);
+
+      const clientName = getClientName(session) || null;
+      const event = await findEventByPhoneService(
+        phone,
+        clientName,
+        calendarClient,
+        authClient,
+        calendarId
+      );
+
+      if (event) {
+        // Persist to session so future tools (reagendar, cancelar) have the ID
+        const sessions = require('../sessions');
+        sessions.updateSession(phone, { calendar_event_id: event.id });
+
+        return {
+          encontrada: true,
+          event_id: event.id,
+          resumen: event.summary,
+          fecha: event.formattedDate,
+          hora: event.formattedTime,
+          mensaje: `Cita encontrada: "${event.summary}" — ${event.formattedDate} a las ${event.formattedTime}. ID: ${event.id}`
+        };
+      }
+
+      return {
+        encontrada: false,
+        mensaje: 'No se encontró ninguna cita próxima para esta clienta en el calendario.'
+      };
+    }
+
     // ---- confirmar_cita --------------------------------------------------
     if (toolName === 'confirmar_cita') {
       const { hora_inicio, nombre_cliente, telefono, fecha_boda } = toolArgs;
       console.log(`🔧 Agent tool: confirmar_cita(${nombre_cliente}, ${hora_inicio})`);
+
+      // SAFETY GUARD: If the session already has an appointment, delete it before creating
+      // a new one. This handles cases where the agent mistakenly calls confirmar_cita
+      // instead of reagendar_cita when the client already has a scheduled appointment.
+      if (session.calendar_event_id) {
+        console.warn(`⚠️  confirmar_cita llamado con calendar_event_id existente (${session.calendar_event_id}). Eliminando cita anterior para evitar duplicados.`);
+        try {
+          const oldEvent = await getCalendarEventService(session.calendar_event_id, calendarClient, authClient, calendarId);
+          const oldStartIso = oldEvent?.start?.dateTime || oldEvent?.start?.date || null;
+          await deleteCalendarEventService(session.calendar_event_id, calendarClient, authClient, calendarId);
+          if (oldStartIso) {
+            console.log(`🔵 Restaurando slot azul de cita anterior en Innovia CDMX: ${oldStartIso}`);
+            await restoreBlueEventService(oldStartIso, calendarClient, authClient, innoviaCDMXCalendarId);
+          }
+        } catch (guardErr) {
+          console.error(`❌ Error eliminando cita anterior en guard de confirmar_cita: ${guardErr.message}`);
+          // Continue to create new event even if old deletion fails
+        }
+      }
 
       const event = await createCalendarEventService(
         nombre_cliente,
