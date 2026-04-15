@@ -2253,26 +2253,44 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
     if (isAdmin) {
       const msg = incomingMessage.trim().toLowerCase();
 
-      // Comando: /takeover <phone>  o  pausa <phone> [minutos]
-      const pausaMatch = msg.match(/^(?:\/takeover|pausa)\s+(\d+)(?:\s+(\d+))?$/);
+      // Comando: pausa <dígitos>  (últimos 4+ dígitos del teléfono de la clienta)
+      // Ejemplos: "pausa 0710"  "pausa 5521920710"  "pausa 5215521920710"
+      const pausaMatch = msg.match(/^pausa\s+(\d{4,})(?:\s+(\d+))?$/);
       if (pausaMatch) {
-        const targetPhone = pausaMatch[1];
+        const suffix = pausaMatch[1];
         const minutes = parseInt(pausaMatch[2] || '10', 10);
+
+        // Buscar el teléfono completo entre todas las sesiones activas
+        const allSessions = sessions.getAllSessions();
+        const matchingPhone = Object.keys(allSessions).find(p => p.endsWith(suffix));
+
+        if (!matchingPhone) {
+          await sendWhatsAppMessage(senderClean, `⚠️ No encontré ninguna conversación activa que termine en *${suffix}*.\nVerifica los últimos dígitos e intenta de nuevo.`);
+          return;
+        }
+
         const pauseUntil = new Date(Date.now() + minutes * 60 * 1000);
-        sessions.updateSession(targetPhone, { bot_paused_until: pauseUntil.toISOString() });
-        cancelPendingMessages(targetPhone);
-        console.log(`🙋 [ADMIN CMD] Bot pausado para ${targetPhone} por ${minutes} min`);
-        await sendWhatsAppMessage(senderClean, `✅ Bot pausado para ${targetPhone} durante ${minutes} min.\nReanuda automáticamente a las ${pauseUntil.toLocaleTimeString('es-MX', { timeZone: 'America/Mexico_City', hour: '2-digit', minute: '2-digit' })}.`);
+        sessions.updateSession(matchingPhone, { bot_paused_until: pauseUntil.toISOString() });
+        cancelPendingMessages(matchingPhone);
+        const hora = pauseUntil.toLocaleTimeString('es-MX', { timeZone: 'America/Mexico_City', hour: '2-digit', minute: '2-digit' });
+        console.log(`🙋 [ADMIN CMD] Bot pausado para ${matchingPhone} por ${minutes} min`);
+        await sendWhatsAppMessage(senderClean, `✅ Bot pausado para ...${suffix} (${matchingPhone}) durante ${minutes} min.\nReanuda automáticamente a las ${hora}.`);
         return;
       }
 
-      // Comando: reanudar <phone>
-      const reanudarMatch = msg.match(/^reanudar\s+(\d+)$/);
+      // Comando: reanudar <dígitos>
+      const reanudarMatch = msg.match(/^reanudar\s+(\d{4,})$/);
       if (reanudarMatch) {
-        const targetPhone = reanudarMatch[1];
-        sessions.updateSession(targetPhone, { bot_paused_until: null });
-        console.log(`▶️  [ADMIN CMD] Bot reanudado para ${targetPhone}`);
-        await sendWhatsAppMessage(senderClean, `✅ Bot reanudado para ${targetPhone}.`);
+        const suffix = reanudarMatch[1];
+        const allSessions = sessions.getAllSessions();
+        const matchingPhone = Object.keys(allSessions).find(p => p.endsWith(suffix));
+        if (!matchingPhone) {
+          await sendWhatsAppMessage(senderClean, `⚠️ No encontré ninguna conversación activa que termine en *${suffix}*.`);
+          return;
+        }
+        sessions.updateSession(matchingPhone, { bot_paused_until: null });
+        console.log(`▶️  [ADMIN CMD] Bot reanudado para ${matchingPhone}`);
+        await sendWhatsAppMessage(senderClean, `✅ Bot reanudado para ...${suffix} (${matchingPhone}).`);
         return;
       }
 
@@ -2280,14 +2298,12 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
       if (msg === 'pausa?' || msg === 'ayuda' || msg === 'help' || msg === 'comandos') {
         await sendWhatsAppMessage(senderClean,
           `🤖 *Comandos de control del bot:*\n\n` +
-          `*/takeover <número>*\n` +
-          `Pausa el bot 10 min para ese número.\n` +
-          `Ej: /takeover 5215512345678\n\n` +
-          `*pausa <número> [minutos]*\n` +
-          `Igual que /takeover pero con duración personalizada.\n\n` +
-          `*reanudar <número>*\n` +
-          `Reanuda el bot inmediatamente.\n\n` +
-          `El número debe ser el teléfono de la clienta (solo dígitos).`
+          `*pausa <últimos 4 dígitos>*\n` +
+          `Pausa el bot 10 min. Ej: pausa 0710\n\n` +
+          `*pausa <últimos 4 dígitos> <minutos>*\n` +
+          `Con duración personalizada. Ej: pausa 0710 30\n\n` +
+          `*reanudar <últimos 4 dígitos>*\n` +
+          `Reanuda el bot de inmediato. Ej: reanudar 0710`
         );
         return;
       }
