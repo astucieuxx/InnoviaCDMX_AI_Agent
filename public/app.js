@@ -916,9 +916,10 @@ async function loadConversations() {
             const isActive = conv.phone === currentConversation;
             const unread   = !isActive && isConversationUnread(conv.phone, conv.messageCount);
             const paused   = conv.botPaused;
-            const pauseLabel = paused ? '▶ Reanudar' : '⏸ Pausar';
             const pauseBg    = paused ? '#2d6a4f' : '#ff6b35';
             const pauseTitle = paused ? 'Bot pausado — clic para reanudar' : 'Pausar bot 10 min';
+            const btnId      = `pause-btn-${conv.phone.replace(/\D/g,'')}`;
+            const pausedUntilAttr = paused && conv.pausedUntil ? `data-paused-until="${conv.pausedUntil}"` : '';
             return `
                 <div class="conversation-item ${isActive ? 'active' : ''}"
                      data-phone="${conv.phone}"
@@ -931,10 +932,10 @@ async function loadConversations() {
                             </div>
                             ${conv.nombre ? `<div style="font-weight:600;color:#667eea;font-size:12px;">${escapeHtml(conv.nombre)}</div>` : ''}
                         </div>
-                        <button title="${pauseTitle}"
+                        <button id="${btnId}" title="${pauseTitle}" ${pausedUntilAttr}
                             onclick="event.stopPropagation();togglePauseConversation('${conv.phone}',${paused})"
                             style="flex-shrink:0;padding:4px 8px;background:${pauseBg};color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap;">
-                            ${pauseLabel}
+                            ${paused ? '▶ Reanudar' : '⏸ Pausar'}
                         </button>
                     </div>
                     <div class="conversation-preview">${escapeHtml(conv.lastMessage?.message || 'Sin mensajes')}</div>
@@ -963,9 +964,31 @@ async function loadConversations() {
 
         // Restaurar posición de scroll
         container.scrollTop = scrollTop;
+
+        // Iniciar countdown en botones pausados
+        startPauseCountdowns();
     } catch (error) {
         console.error('Error cargando conversaciones:', error);
     }
+}
+
+// Countdown en botones de pausa
+let _pauseCountdownInterval = null;
+function startPauseCountdowns() {
+    if (_pauseCountdownInterval) clearInterval(_pauseCountdownInterval);
+    function tick() {
+        const btns = document.querySelectorAll('[data-paused-until]');
+        if (btns.length === 0) { clearInterval(_pauseCountdownInterval); _pauseCountdownInterval = null; return; }
+        btns.forEach(btn => {
+            const until = new Date(btn.dataset.pausedUntil);
+            const secsLeft = Math.max(0, Math.floor((until - Date.now()) / 1000));
+            const mm = String(Math.floor(secsLeft / 60)).padStart(2, '0');
+            const ss = String(secsLeft % 60).padStart(2, '0');
+            btn.textContent = secsLeft > 0 ? `▶ Reanudar (${mm}:${ss})` : '▶ Reanudar';
+        });
+    }
+    tick();
+    _pauseCountdownInterval = setInterval(tick, 1000);
 }
 
 // Actualizar flecha de grupo colapsable al hacer toggle
