@@ -887,18 +887,43 @@ async function loadConversations() {
         // Preservar posición de scroll para que no salte al hacer refresh
         const scrollTop = container.scrollTop;
 
-        container.innerHTML = data.conversations.map(conv => {
+        // Agrupar conversaciones por día
+        const todayStr   = new Date().toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City' });
+        const yesterday  = new Date(Date.now() - 864e5).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City' });
+
+        const groups = {};
+        data.conversations.forEach(conv => {
+            const d = conv.lastActivity
+                ? new Date(conv.lastActivity).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City' })
+                : 'Sin fecha';
+            if (!groups[d]) groups[d] = [];
+            groups[d].push(conv);
+        });
+
+        const dayLabel = d => {
+            if (d === todayStr)  return 'Hoy';
+            if (d === yesterday) return 'Ayer';
+            // Format: "lunes 14 de abril"
+            const parts = d.split('/'); // d/m/yyyy
+            if (parts.length === 3) {
+                const dt = new Date(+parts[2], +parts[1]-1, +parts[0]);
+                return dt.toLocaleDateString('es-MX', { weekday:'long', day:'numeric', month:'long', timeZone:'America/Mexico_City' });
+            }
+            return d;
+        };
+
+        const renderConvItem = conv => {
             const isActive = conv.phone === currentConversation;
-            const unread = !isActive && isConversationUnread(conv.phone, conv.messageCount);
-            const paused = conv.botPaused;
+            const unread   = !isActive && isConversationUnread(conv.phone, conv.messageCount);
+            const paused   = conv.botPaused;
             const pauseLabel = paused ? '▶ Reanudar' : '⏸ Pausar';
-            const pauseBg = paused ? '#2d6a4f' : '#ff6b35';
-            const pauseTitle = paused ? 'Bot pausado — clic para reanudar' : 'Pausar bot 10 min para esta conversación';
+            const pauseBg    = paused ? '#2d6a4f' : '#ff6b35';
+            const pauseTitle = paused ? 'Bot pausado — clic para reanudar' : 'Pausar bot 10 min';
             return `
                 <div class="conversation-item ${isActive ? 'active' : ''}"
                      data-phone="${conv.phone}"
                      onclick="selectConversation('${conv.phone}')">
-                    <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;">
                         <div style="min-width:0;">
                             <div style="display:flex;align-items:center;gap:6px;">
                                 <div class="conversation-phone">${formatPhone(conv.phone)}</div>
@@ -906,17 +931,34 @@ async function loadConversations() {
                             </div>
                             ${conv.nombre ? `<div style="font-weight:600;color:#667eea;font-size:12px;">${escapeHtml(conv.nombre)}</div>` : ''}
                         </div>
-                        <button
-                            title="${pauseTitle}"
-                            onclick="event.stopPropagation(); togglePauseConversation('${conv.phone}', ${paused})"
+                        <button title="${pauseTitle}"
+                            onclick="event.stopPropagation();togglePauseConversation('${conv.phone}',${paused})"
                             style="flex-shrink:0;padding:4px 8px;background:${pauseBg};color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap;">
                             ${pauseLabel}
                         </button>
                     </div>
                     <div class="conversation-preview">${escapeHtml(conv.lastMessage?.message || 'Sin mensajes')}</div>
-                    <small style="color:#adb5bd;font-size:11px;">${formatDate(conv.lastActivity)}</small>
-                </div>
-            `;
+                </div>`;
+        };
+
+        container.innerHTML = Object.entries(groups).map(([day, convs], idx) => {
+            const label    = dayLabel(day);
+            const isToday  = day === todayStr;
+            const groupId  = `conv-group-${idx}`;
+            const open     = isToday ? 'open' : '';
+            const arrow    = isToday ? '▾' : '▸';
+            return `
+                <details class="conv-day-group" ${open} id="${groupId}">
+                    <summary onclick="toggleDayArrow('${groupId}')"
+                        style="list-style:none;display:flex;justify-content:space-between;align-items:center;
+                               padding:7px 10px;cursor:pointer;user-select:none;
+                               background:rgba(255,255,255,0.04);border-radius:8px;margin-bottom:2px;
+                               font-size:12px;font-weight:600;color:#94a3b8;letter-spacing:.3px;">
+                        <span><span class="day-arrow" style="margin-right:5px;">${arrow}</span>${label}</span>
+                        <span style="background:rgba(255,255,255,0.08);border-radius:10px;padding:1px 7px;font-size:11px;">${convs.length}</span>
+                    </summary>
+                    ${convs.map(renderConvItem).join('')}
+                </details>`;
         }).join('');
 
         // Restaurar posición de scroll
@@ -924,6 +966,16 @@ async function loadConversations() {
     } catch (error) {
         console.error('Error cargando conversaciones:', error);
     }
+}
+
+// Actualizar flecha de grupo colapsable al hacer toggle
+function toggleDayArrow(groupId) {
+    const details = document.getElementById(groupId);
+    if (!details) return;
+    const arrow = details.querySelector('.day-arrow');
+    if (!arrow) return;
+    // El estado open aún NO cambió en el momento del onclick, así que invertimos
+    arrow.textContent = details.open ? '▸' : '▾';
 }
 
 // Seleccionar conversación
