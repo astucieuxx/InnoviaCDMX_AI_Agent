@@ -4698,8 +4698,8 @@ app.get('/api/conversations', (req, res) => {
       };
     });
 
-    // Ordenar por inicio de conversación (más antigua primero = orden cronológico estable)
-    conversations.sort((a, b) => new Date(a.firstActivity) - new Date(b.firstActivity));
+    // Ordenar por actividad más reciente primero
+    conversations.sort((a, b) => new Date(b.lastActivity) - new Date(a.lastActivity));
     
     res.json({ conversations });
   } catch (error) {
