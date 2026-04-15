@@ -4692,7 +4692,9 @@ app.get('/api/conversations', (req, res) => {
         lastActivity: session.ultima_actividad,
         firstActivity: session.historial?.[0]?.timestamp || session.ultima_actividad,
         messageCount: session.historial?.length || 0,
-        hasAppointment: session.etapa === 'cita_agendada' || !!session.calendar_event_id
+        hasAppointment: session.etapa === 'cita_agendada' || !!session.calendar_event_id,
+        botPaused: !!(session.bot_paused_until && new Date(session.bot_paused_until) > new Date()),
+        pausedUntil: session.bot_paused_until || null
       };
     });
 

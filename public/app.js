@@ -890,17 +890,31 @@ async function loadConversations() {
         container.innerHTML = data.conversations.map(conv => {
             const isActive = conv.phone === currentConversation;
             const unread = !isActive && isConversationUnread(conv.phone, conv.messageCount);
+            const paused = conv.botPaused;
+            const pauseLabel = paused ? '▶ Reanudar' : '⏸ Pausar';
+            const pauseBg = paused ? '#2d6a4f' : '#ff6b35';
+            const pauseTitle = paused ? 'Bot pausado — clic para reanudar' : 'Pausar bot 10 min para esta conversación';
             return `
                 <div class="conversation-item ${isActive ? 'active' : ''}"
                      data-phone="${conv.phone}"
                      onclick="selectConversation('${conv.phone}')">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <div class="conversation-phone">${formatPhone(conv.phone)}</div>
-                        ${unread ? '<span class="unread-dot" title="Mensajes sin leer"></span>' : ''}
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
+                        <div style="min-width:0;">
+                            <div style="display:flex;align-items:center;gap:6px;">
+                                <div class="conversation-phone">${formatPhone(conv.phone)}</div>
+                                ${unread ? '<span class="unread-dot" title="Mensajes sin leer"></span>' : ''}
+                            </div>
+                            ${conv.nombre ? `<div style="font-weight:600;color:#667eea;font-size:12px;">${escapeHtml(conv.nombre)}</div>` : ''}
+                        </div>
+                        <button
+                            title="${pauseTitle}"
+                            onclick="event.stopPropagation(); togglePauseConversation('${conv.phone}', ${paused})"
+                            style="flex-shrink:0;padding:4px 8px;background:${pauseBg};color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap;">
+                            ${pauseLabel}
+                        </button>
                     </div>
-                    ${conv.nombre ? `<div style="font-weight: 600; color: #667eea;">${escapeHtml(conv.nombre)}</div>` : ''}
                     <div class="conversation-preview">${escapeHtml(conv.lastMessage?.message || 'Sin mensajes')}</div>
-                    <small style="color: #adb5bd; font-size: 11px;">${formatDate(conv.lastActivity)}</small>
+                    <small style="color:#adb5bd;font-size:11px;">${formatDate(conv.lastActivity)}</small>
                 </div>
             `;
         }).join('');
@@ -959,6 +973,29 @@ async function loadConversationMessages(phone) {
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
     } catch (error) {
         console.error('Error cargando mensajes:', error);
+    }
+}
+
+// Pausar / reanudar bot para una conversación específica
+async function togglePauseConversation(phone, currentlyPaused) {
+    try {
+        if (currentlyPaused) {
+            await fetch('/admin/resume-bot', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone })
+            });
+        } else {
+            await fetch('/admin/pause-bot', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone, minutes: 10 })
+            });
+        }
+        // Refrescar la lista para reflejar el nuevo estado
+        loadConversations();
+    } catch (err) {
+        console.error('Error al cambiar pausa:', err);
     }
 }
 
