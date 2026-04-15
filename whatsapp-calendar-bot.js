@@ -1006,8 +1006,9 @@ async function createCalendarEvent(name, phone, email, dateStart, fechaBoda = nu
 // Sessions are now managed by sessions.js module
 // Removed: const conversations = {};
 
-// Almacenar phone_number_id del webhook para usarlo en el endpoint
+// Almacenar phone_number_id y display_phone_number del webhook
 let whatsappPhoneNumberId = null;
+let businessDisplayPhone = null; // número de teléfono real del negocio (ej: 5215533999185)
 
 // Tracking de IDs de mensajes enviados por el bot (para detectar intervención humana)
 // Map<messageId, { phone, timestamp }>
@@ -1809,7 +1810,10 @@ app.post('/webhook', async (req, res) => {
             // Extraer phone_number_id del webhook para usarlo en el endpoint
             if (change.value.metadata && change.value.metadata.phone_number_id) {
               whatsappPhoneNumberId = change.value.metadata.phone_number_id;
-              console.log(`📱 Phone Number ID extraído: ${whatsappPhoneNumberId}`);
+              if (change.value.metadata.display_phone_number) {
+                businessDisplayPhone = change.value.metadata.display_phone_number.replace(/\D/g, '');
+              }
+              console.log(`📱 Phone Number ID extraído: ${whatsappPhoneNumberId}, business phone: ${businessDisplayPhone}`);
             }
             
             if (change.value.messages) {
@@ -1835,7 +1839,7 @@ app.post('/webhook', async (req, res) => {
                     if (timeSinceLastSend > RACE_CONDITION_WINDOW_MS) {
                       // El bot no ha enviado nada reciente → es intervención humana real
                       const pauseUntil = new Date(Date.now() + HUMAN_HANDOFF_PAUSE_MS);
-                      sessions.updateSession(clientPhone, { bot_paused_until: pauseUntil });
+                      sessions.updateSession(clientPhone, { bot_paused_until: pauseUntil.toISOString() });
                       // Cancelar cualquier timer pendiente para que el bot no responda
                       cancelPendingMessages(clientPhone);
                       console.log(`🙋 INTERVENCIÓN HUMANA detectada para ${clientPhone} — bot pausado 10 min hasta ${pauseUntil.toISOString()}`);
@@ -1942,6 +1946,33 @@ app.post('/webhook', async (req, res) => {
           }
           
           console.log(`✅ [WEBHOOK CHECK] Bot no está inactive, continuando con scheduleTextMessage...\n`);
+
+          // ── Detectar /takeover desde WhatsApp Web / Business App ──────────────
+          // Cuando el staff escribe "/takeover" en la conversación con una clienta
+          // desde WhatsApp Web, Chakra reenvía ese mensaje como echo al webhook
+          // con message.from == número del negocio.
+          // Esto pausa el bot para esa conversación específica durante 10 min.
+          const senderClean = senderPhone.replace(/\D/g, '');
+          const isBizEcho = businessDisplayPhone && senderClean === businessDisplayPhone;
+
+          if (isBizEcho) {
+            const echoText = (incomingMessage || '').trim().toLowerCase();
+            const recipientPhone = (message.to || '').replace(/\D/g, '');
+
+            if (echoText === '/takeover') {
+              // Comando explícito de toma de control
+              console.log(`🙋 [TAKEOVER] Staff usó /takeover para ${recipientPhone} — pausando bot 10 min`);
+              if (recipientPhone) {
+                const pauseUntil = new Date(Date.now() + HUMAN_HANDOFF_PAUSE_MS);
+                sessions.updateSession(recipientPhone, { bot_paused_until: pauseUntil.toISOString() });
+                cancelPendingMessages(recipientPhone);
+              }
+            } else {
+              console.log(`📤 [ECHO] Mensaje saliente del negocio a ${recipientPhone} — sin /takeover, bot no pausado`);
+            }
+            continue; // Nunca procesar echoes como mensajes de cliente
+          }
+          // ── fin detección echo / takeover ─────────────────────────────────
 
           // Usar debounce para agrupar mensajes rápidos del mismo número
           // (evita respuestas duplicadas cuando el usuario envía varios textos en ráfaga)
@@ -2204,6 +2235,71 @@ function setTestModeStatus(active) {
 
 // Función para procesar mensajes entrantes (NUEVA ARQUITECTURA BASADA EN INTENTS)
 async function processIncomingMessage(senderPhone, incomingMessage, options = {}) {
+  // ── COMANDOS DE STAFF (admin) ─────────────────────────────────────────────
+  // Si el mensaje viene del teléfono admin, interceptarlo como comando de control.
+  // El staff puede escribir desde su teléfono al número del bot:
+  //   pausa 5215512345678        → pausa esa conversación 30 min
+  //   pausa 5215512345678 60     → pausa esa conversación N min
+  //   reanudar 5215512345678     → reanuda esa conversación inmediatamente
+  //   pausa?                     → muestra ayuda de comandos
+  {
+    const adminPhoneClean = ADMIN_PHONE.replace(/\D/g, '');
+    const senderClean = senderPhone ? senderPhone.replace(/\D/g, '') : '';
+    const isAdmin = adminPhoneClean && (
+      senderClean === adminPhoneClean ||
+      senderClean.endsWith(adminPhoneClean.slice(-10))
+    );
+
+    if (isAdmin) {
+      const msg = incomingMessage.trim().toLowerCase();
+
+      // Comando: /takeover <phone>  o  pausa <phone> [minutos]
+      const pausaMatch = msg.match(/^(?:\/takeover|pausa)\s+(\d+)(?:\s+(\d+))?$/);
+      if (pausaMatch) {
+        const targetPhone = pausaMatch[1];
+        const minutes = parseInt(pausaMatch[2] || '10', 10);
+        const pauseUntil = new Date(Date.now() + minutes * 60 * 1000);
+        sessions.updateSession(targetPhone, { bot_paused_until: pauseUntil.toISOString() });
+        cancelPendingMessages(targetPhone);
+        console.log(`🙋 [ADMIN CMD] Bot pausado para ${targetPhone} por ${minutes} min`);
+        await sendWhatsAppMessage(senderClean, `✅ Bot pausado para ${targetPhone} durante ${minutes} min.\nReanuda automáticamente a las ${pauseUntil.toLocaleTimeString('es-MX', { timeZone: 'America/Mexico_City', hour: '2-digit', minute: '2-digit' })}.`);
+        return;
+      }
+
+      // Comando: reanudar <phone>
+      const reanudarMatch = msg.match(/^reanudar\s+(\d+)$/);
+      if (reanudarMatch) {
+        const targetPhone = reanudarMatch[1];
+        sessions.updateSession(targetPhone, { bot_paused_until: null });
+        console.log(`▶️  [ADMIN CMD] Bot reanudado para ${targetPhone}`);
+        await sendWhatsAppMessage(senderClean, `✅ Bot reanudado para ${targetPhone}.`);
+        return;
+      }
+
+      // Comando de ayuda
+      if (msg === 'pausa?' || msg === 'ayuda' || msg === 'help' || msg === 'comandos') {
+        await sendWhatsAppMessage(senderClean,
+          `🤖 *Comandos de control del bot:*\n\n` +
+          `*/takeover <número>*\n` +
+          `Pausa el bot 10 min para ese número.\n` +
+          `Ej: /takeover 5215512345678\n\n` +
+          `*pausa <número> [minutos]*\n` +
+          `Igual que /takeover pero con duración personalizada.\n\n` +
+          `*reanudar <número>*\n` +
+          `Reanuda el bot inmediatamente.\n\n` +
+          `El número debe ser el teléfono de la clienta (solo dígitos).`
+        );
+        return;
+      }
+
+      // Si el admin envía cualquier otro mensaje, no lo procesar como mensaje de cliente
+      // (evita que el bot le responda al admin como si fuera una clienta)
+      console.log(`📨 [ADMIN] Mensaje del admin ignorado (no es un comando reconocido): "${incomingMessage}"`);
+      return;
+    }
+  }
+  // ── FIN COMANDOS DE STAFF ─────────────────────────────────────────────────
+
   // CRITICAL: Verificar estado del bot ANTES de cualquier logging o procesamiento
   // Esto debe ser lo ABSOLUTAMENTE PRIMERO
   console.log(`\n🔒 ============================================`);
