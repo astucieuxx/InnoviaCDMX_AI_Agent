@@ -88,7 +88,7 @@
                 </div>
             </div>
 
-            <!-- Usage + Intents -->
+            <!-- Conversaciones + Tipo de conversación -->
             <div class="charts-grid" style="margin-bottom: 24px;">
                 <div class="chart-card">
                     <h3>Conversaciones Nuevas</h3>
@@ -96,53 +96,9 @@
                     <canvas id="conversations-day-chart"></canvas>
                 </div>
                 <div class="chart-card">
-                    <h3>Intents más usados</h3>
-                    <p class="chart-subtitle">Top 5 este mes</p>
-                    <canvas id="intents-chart"></canvas>
-                </div>
-            </div>
-
-            <!-- Performance + Funnel -->
-            <div class="charts-grid" style="margin-bottom: 24px;">
-                <div class="chart-card">
-                    <h3>Rendimiento del AI Agent</h3>
-                    <p class="chart-subtitle">Tasa de éxito en tareas clave</p>
-                    <div class="performance-metrics-list">
-                        <div class="performance-metric">
-                            <div class="performance-metric-header">
-                                <span class="performance-label">FCR (FIRST CONTACT RESOLUTION)</span>
-                                <span class="performance-value" id="fcr-rate-display">81%</span>
-                            </div>
-                            <div class="performance-subtitle">vs 74% mes pasado</div>
-                        </div>
-                        <div class="performance-metric">
-                            <div class="performance-metric-header">
-                                <span class="performance-label">ESCALAMIENTO HUMANO</span>
-                                <span class="performance-value" id="escalation-rate-display">19%</span>
-                            </div>
-                            <div class="performance-subtitle" id="escalation-rate-change">-</div>
-                        </div>
-                        <div class="performance-metric">
-                            <div class="performance-metric-header">
-                                <span class="performance-label">TIEMPO RESP. PROMEDIO</span>
-                                <span class="performance-value" id="avg-response-time-display">1.2s</span>
-                            </div>
-                            <div class="performance-subtitle" id="response-time-change">-</div>
-                        </div>
-                        <div class="performance-metric">
-                            <div class="performance-metric-header">
-                                <span class="performance-label">DURACIÓN CONVERSACIÓN</span>
-                                <span class="performance-value" id="avg-conversation-duration-display">3m 42s</span>
-                            </div>
-                            <div class="performance-subtitle">end-to-end</div>
-                        </div>
-                    </div>
-                    <canvas id="task-success-chart"></canvas>
-                </div>
-                <div class="chart-card">
-                    <h3>Funnel de Conversión</h3>
-                    <p class="chart-subtitle">Conversación → Cita → Confirmación</p>
-                    <canvas id="conversion-funnel-chart"></canvas>
+                    <h3>Tipo de Conversación</h3>
+                    <p class="chart-subtitle">Distribución de intenciones este mes</p>
+                    <canvas id="conversation-type-chart"></canvas>
                 </div>
             </div>
 

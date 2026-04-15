@@ -223,8 +223,8 @@ function updateUsageMetrics(usage) {
     // Gráfico de conversaciones por día (solo nuevas)
     updateConversationsDayChart(usage.newConversationsByDay || usage.conversationsByDay || []);
     
-    // Gráfico de intents
-    updateIntentsChart(usage.topIntents || []);
+    // Gráfico de tipo de conversación
+    updateConversationTypeChart(usage.topIntents || []);
 }
 
 // Actualizar métricas de rendimiento
@@ -335,8 +335,7 @@ function updateConversionMetrics(conversion) {
     const confirmedEl = document.getElementById('confirmed-appointments-kpi');
     if (confirmedEl) confirmedEl.textContent = conversion.confirmedAppointments || 0;
     
-    // Gráfico de funnel
-    updateConversionFunnelChart(conversion);
+    // (funnel removido — ver AI Insights para tasa de agendado)
 }
 
 // Actualizar métricas de negocio
@@ -445,242 +444,84 @@ function updateConversationsDayChart(data) {
 }
 
 // Gráfico de intents
-function updateIntentsChart(intents) {
-    const ctx = document.getElementById('intents-chart');
+// Gráfico de tipo de conversación (doughnut)
+function updateConversationTypeChart(intents) {
+    const ctx = document.getElementById('conversation-type-chart');
     if (!ctx) return;
-    
-    // Top 5 intents
-    const top5 = intents.slice(0, 5);
-    const labels = top5.map(i => {
-        // Traducir nombres de intents
-        const intentNames = {
-            'AGENDAR_NUEVA': 'Agendar cita',
-            'INFO': 'Preguntar precios',
-            'HORARIO': 'Horarios / Ubicación',
-            'CAMBIAR_CITA': 'Reprogramar cita',
-            'CANCELAR_CITA': 'Cancelar cita'
-        };
-        return intentNames[i.intent] || i.intent;
+
+    // Agrupar intents en 5 categorías de negocio
+    const groups = {
+        'Agendar cita':       ['AGENDAR_NUEVA', 'AGENDAR', 'SALUDO'],
+        'Información':        ['INFO', 'INFORMACION', 'HORARIO', 'UBICACION', 'CATALOGO'],
+        'Precios':            ['PRECIOS', 'PRECIO'],
+        'Reagendar / Cancel': ['CAMBIAR_CITA', 'CANCELAR_CITA', 'REAGENDAR'],
+        'Escalación humana':  ['ESCALAR_HUMANO', 'ESCALAR', 'HUMANO'],
+    };
+
+    const totals = { 'Agendar cita': 0, 'Información': 0, 'Precios': 0, 'Reagendar / Cancel': 0, 'Escalación humana': 0 };
+
+    intents.forEach(({ intent, count }) => {
+        const key = intent?.toUpperCase() || '';
+        for (const [label, keys] of Object.entries(groups)) {
+            if (keys.includes(key)) {
+                totals[label] += count;
+                break;
+            }
+        }
     });
-    const values = top5.map(i => i.count);
-    
-    // Colores para cada barra
-    const colors = ['#00f5ff', '#ff6b35', '#00ff88', '#8b5cf6', '#ff4444'];
-    
-    if (charts.intents) {
-        charts.intents.destroy();
+
+    const labels = Object.keys(totals);
+    const values = Object.values(totals);
+    const total  = values.reduce((a, b) => a + b, 0);
+
+    // Si no hay datos reales, mostrar ceros de forma visual
+    const displayValues = total === 0 ? [1, 1, 1, 1, 1] : values;
+
+    const colors = ['#00f5ff', '#00ff88', '#ff6b35', '#8b5cf6', '#ff4444'];
+
+    if (charts.conversationType) {
+        charts.conversationType.destroy();
     }
-    
-    charts.intents = new Chart(ctx, {
-        type: 'bar',
+
+    charts.conversationType = new Chart(ctx, {
+        type: 'doughnut',
         data: {
-            labels: labels,
+            labels,
             datasets: [{
-                label: 'Frecuencia',
-                data: values,
+                data: displayValues,
                 backgroundColor: colors,
-                borderColor: colors,
+                borderColor: 'rgba(0,0,0,0)',
                 borderWidth: 0,
-                borderRadius: 4
+                hoverOffset: 6
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: true,
-            indexAxis: 'y',
+            cutout: '62%',
             plugins: {
                 legend: {
-                    display: false
-                }
-            },
-            scales: {
-                x: {
-                    beginAtZero: true,
-                    grid: {
-                        color: 'rgba(255, 255, 255, 0.05)'
-                    },
-                    ticks: {
-                        color: '#a0aec0',
-                        stepSize: 50
+                    position: 'bottom',
+                    labels: {
+                        color: '#94a3b8',
+                        font: { size: 11 },
+                        padding: 14,
+                        boxWidth: 12,
+                        boxHeight: 12
                     }
                 },
-                y: {
-                    grid: {
-                        display: false
-                    },
-                    ticks: {
-                        color: '#94a3b8'
-                    }
-                }
-            }
-        }
-    });
-}
-
-// Gráfico de éxito en tareas
-function updateTaskSuccessChart(taskSuccess) {
-    const ctx = document.getElementById('task-success-chart');
-    if (!ctx) return;
-    
-    if (charts.taskSuccess) {
-        charts.taskSuccess.destroy();
-    }
-    
-    charts.taskSuccess = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: ['Citas agendadas', 'Citas reprogramadas', 'Info entregada', 'Resolución automática'],
-            datasets: [{
-                label: '% de Éxito',
-                data: [
-                    parseFloat(taskSuccess.appointments || 0),
-                    parseFloat(taskSuccess.reschedules || 0),
-                    parseFloat(taskSuccess.infoDelivery || 0),
-                    parseFloat(taskSuccess.fcr || 0)
-                ],
-                backgroundColor: [
-                    '#00f5ff',
-                    '#ff6b35',
-                    '#00ff88',
-                    '#8b5cf6'
-                ],
-                borderColor: [
-                    '#00f5ff',
-                    '#ff6b35',
-                    '#00ff88',
-                    '#8b5cf6'
-                ],
-                borderWidth: 0,
-                borderRadius: 4
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            layout: {
-                padding: {
-                    top: 8,
-                    bottom: 8,
-                    left: 8,
-                    right: 8
-                }
-            },
-            plugins: {
-                legend: {
-                    display: false
-                }
-            },
-            scales: {
-                x: {
-                    grid: {
-                        color: 'rgba(255, 255, 255, 0.05)',
-                        display: false
-                    },
-                    ticks: {
-                        color: '#a0aec0',
-                        font: {
-                            size: 9
-                        }
-                    }
-                },
-                y: {
-                    beginAtZero: true,
-                    max: 100,
-                    grid: {
-                        color: 'rgba(255, 255, 255, 0.05)'
-                    },
-                    ticks: {
-                        color: '#a0aec0',
-                        font: {
-                            size: 9
-                        },
-                        stepSize: 25,
-                        callback: function(value) {
-                            return value + '%';
+                tooltip: {
+                    callbacks: {
+                        label: function(ctx) {
+                            if (total === 0) return ' Sin datos aún';
+                            const pct = ((ctx.parsed / total) * 100).toFixed(1);
+                            return ` ${ctx.label}: ${ctx.parsed} (${pct}%)`;
                         }
                     }
                 }
             }
         }
     });
-}
-
-// Gráfico de funnel de conversión
-function updateConversionFunnelChart(conversion) {
-    const ctx = document.getElementById('conversion-funnel-chart');
-    if (!ctx) return;
-    
-    // Obtener total de conversaciones desde el endpoint de stats
-    fetch('/api/stats')
-        .then(res => res.json())
-        .then(stats => {
-            const totalConversations = stats.totalConversations || 0;
-            const withAppointment = conversion.conversationsWithAppointment || 0;
-            const confirmed = conversion.confirmedAppointments || 0;
-            
-            if (charts.conversionFunnel) {
-                charts.conversionFunnel.destroy();
-            }
-            
-            charts.conversionFunnel = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: ['Conversaciones', 'Cita agendada', 'Cita confirmada'],
-                    datasets: [{
-                        label: 'Cantidad',
-                        data: [totalConversations, withAppointment, confirmed],
-                        backgroundColor: '#00f5ff',
-                        borderColor: '#00f5ff',
-                        borderWidth: 0,
-                        borderRadius: 4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    layout: {
-                        padding: {
-                            top: 8,
-                            bottom: 8,
-                            left: 8,
-                            right: 8
-                        }
-                    },
-                    plugins: {
-                        legend: {
-                            display: false
-                        }
-                    },
-                    scales: {
-                        x: {
-                            grid: {
-                                display: false
-                            },
-                            ticks: {
-                                color: '#a0aec0',
-                                font: {
-                                    size: 9
-                                }
-                            }
-                        },
-                        y: {
-                            beginAtZero: true,
-                            grid: {
-                                color: 'rgba(255, 255, 255, 0.05)'
-                            },
-                            ticks: {
-                                color: '#a0aec0',
-                                font: {
-                                    size: 9
-                                },
-                                stepSize: 50
-                            }
-                        }
-                    }
-                }
-            });
-        })
-        .catch(err => console.error('Error cargando stats para funnel:', err));
 }
 
 // Gráfico de citas por día
@@ -981,70 +822,50 @@ function updateActivityHeatmap(business) {
 // Generar AI Insights
 function generateAIInsights(data) {
     const insights = [];
-    
-    // Insight 1: FCR
-    if (data.performance.fcrRate > 70) {
+
+    // Insight 1: Tasa de agendado (conversaciones → cita)
+    const convRate = data.conversion?.conversionRate || 0;
+    let agendadoIcon = '📅';
+    let agendadoTitle = 'Tasa de Agendado';
+    let agendadoText;
+    if (convRate >= 30) {
+        agendadoIcon = '🎯';
+        agendadoTitle = 'Tasa de Agendado — Excelente';
+        agendadoText = `${convRate}% de las conversaciones terminan en una cita agendada.`;
+    } else if (convRate >= 15) {
+        agendadoTitle = 'Tasa de Agendado';
+        agendadoText = `${convRate}% de las conversaciones terminan en una cita agendada.`;
+    } else {
+        agendadoIcon = '⚠️';
+        agendadoTitle = 'Tasa de Agendado — Baja';
+        agendadoText = `Solo ${convRate}% de conversaciones resultan en cita. Revisa el flujo de agendamiento.`;
+    }
+    insights.push({ icon: agendadoIcon, title: agendadoTitle, text: agendadoText });
+
+    // Insight 2: Horario con mayor tráfico
+    if (data.usage?.peakHour) {
+        const hourRaw = data.usage.peakHour.time || '';
+        const hour = hourRaw.includes('-') ? hourRaw.split('-')[1] : hourRaw;
+        const count = data.usage.peakHour.count || 0;
         insights.push({
-            title: 'Excelente Resolución Automática',
-            text: `El AI Agent está resolviendo ${data.performance.fcrRate}% de las conversaciones sin escalamiento humano, lo cual es excelente.`
-        });
-    } else if (data.performance.fcrRate < 50) {
-        insights.push({
-            title: 'Oportunidad de Mejora',
-            text: `La tasa de resolución automática es ${data.performance.fcrRate}%. Considera mejorar las respuestas del AI Agent para reducir escalamientos.`
+            icon: '🕐',
+            title: 'Horario con Mayor Tráfico',
+            text: `El pico de actividad ocurre a las ${hour}:00 hrs con ${count} mensajes. Asegúrate de tener cobertura en ese horario.`
         });
     }
-    
-    // Insight 2: Conversión
-    if (data.conversion.conversionRate > 30) {
-        insights.push({
-            title: 'Alta Tasa de Conversión',
-            text: `${data.conversion.conversionRate}% de las conversaciones resultan en citas. El AI Agent está generando valor real para el negocio.`
-        });
-    } else if (data.conversion.conversionRate < 15) {
-        insights.push({
-            title: 'Baja Conversión',
-            text: `Solo ${data.conversion.conversionRate}% de conversaciones terminan en citas. Revisa el flujo de agendamiento.`
-        });
-    }
-    
-    // Insight 3: Tiempo de respuesta
-    if (data.performance.avgResponseTime < 5) {
-        insights.push({
-            title: 'Respuestas Rápidas',
-            text: `El AI Agent responde en promedio ${data.performance.avgResponseTime}s, proporcionando una experiencia ágil.`
-        });
-    }
-    
-    // Insight 4: Pico de uso
-    if (data.usage.peakHour) {
-        insights.push({
-            title: 'Horario Pico Identificado',
-            text: `El mayor tráfico ocurre a las ${data.usage.peakHour.time.split('-')[1] || data.usage.peakHour.time}:00 con ${data.usage.peakHour.count} mensajes.`
-        });
-    }
-    
-    // Insight 5: Cancelaciones
-    if (data.business.appointmentsCancelled > 0) {
-        const cancelRate = (data.business.appointmentsCancelled / data.business.totalAppointmentsGenerated * 100).toFixed(1);
-        if (cancelRate > 20) {
-            insights.push({
-                title: 'Alta Tasa de Cancelaciones',
-                text: `${cancelRate}% de las citas se cancelan. Considera implementar recordatorios automáticos.`
-            });
-        }
-    }
-    
+
     // Mostrar insights
     const container = document.getElementById('ai-insights');
+    if (!container) return;
+
     if (insights.length === 0) {
         container.innerHTML = '<p class="loading-text">No hay insights disponibles aún</p>';
         return;
     }
-    
+
     container.innerHTML = insights.map(insight => `
         <div class="insight-card">
-            <div class="insight-title">${insight.title}</div>
+            <div class="insight-title">${insight.icon} ${insight.title}</div>
             <div class="insight-text">${insight.text}</div>
         </div>
     `).join('');
