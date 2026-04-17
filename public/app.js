@@ -821,33 +821,49 @@ function generateAIInsights(data) {
     const insights = [];
 
     // Insight 1: Tasa de agendado (conversaciones → cita)
+    // Umbrales calibrados para boutique de vestidos de novia:
+    //   >= 20% → Excelente   (1 de cada 5 convs resulta en cita)
+    //   >= 8%  → Normal/esperado (industria promedio)
+    //   < 8%   → Bajo — vale la pena revisar el flujo
     const convRate = data.conversion?.conversionRate || 0;
-    let agendadoIcon = '📅';
-    let agendadoTitle = 'Tasa de Agendado';
-    let agendadoText;
-    if (convRate >= 30) {
-        agendadoIcon = '🎯';
+    let agendadoIcon, agendadoTitle, agendadoText;
+    if (convRate >= 20) {
+        agendadoIcon  = '🎯';
         agendadoTitle = 'Tasa de Agendado — Excelente';
-        agendadoText = `${convRate}% de las conversaciones terminan en una cita agendada.`;
-    } else if (convRate >= 15) {
-        agendadoTitle = 'Tasa de Agendado';
-        agendadoText = `${convRate}% de las conversaciones terminan en una cita agendada.`;
+        agendadoText  = `${convRate}% de las conversaciones terminan en una cita agendada. ¡Por encima del promedio!`;
+    } else if (convRate >= 8) {
+        agendadoIcon  = '📅';
+        agendadoTitle = 'Tasa de Agendado — Normal';
+        agendadoText  = `${convRate}% de las conversaciones terminan en una cita agendada. Rango esperado para el negocio.`;
     } else {
-        agendadoIcon = '⚠️';
+        agendadoIcon  = '⚠️';
         agendadoTitle = 'Tasa de Agendado — Baja';
-        agendadoText = `Solo ${convRate}% de conversaciones resultan en cita. Revisa el flujo de agendamiento.`;
+        agendadoText  = `Solo ${convRate}% de conversaciones resultan en cita. Puede valer la pena revisar el flujo de agendamiento.`;
     }
     insights.push({ icon: agendadoIcon, title: agendadoTitle, text: agendadoText });
 
     // Insight 2: Horario con mayor tráfico
+    // El hourKey del backend tiene formato "YYYY-MM-DD::HH" — extraer la parte
+    // después de "::" para obtener la hora correcta en CDMX.
     if (data.usage?.peakHour) {
         const hourRaw = data.usage.peakHour.time || '';
-        const hour = hourRaw.includes('-') ? hourRaw.split('-')[1] : hourRaw;
+        // Nuevo formato: "2026-04-17::14" → separar por "::"
+        // Formato antiguo (fallback): "2026-04-17-14" → último segmento con "-"
+        const hour = hourRaw.includes('::')
+            ? hourRaw.split('::')[1]
+            : hourRaw.split('-').pop();
         const count = data.usage.peakHour.count || 0;
+        // Formatear como hora amigable: "14" → "2:00 pm", "09" → "9:00 am"
+        const hourNum = parseInt(hour, 10);
+        const hourLabel = isNaN(hourNum) ? `${hour}:00` :
+            hourNum === 0  ? '12:00 am' :
+            hourNum < 12   ? `${hourNum}:00 am` :
+            hourNum === 12 ? '12:00 pm' :
+                             `${hourNum - 12}:00 pm`;
         insights.push({
             icon: '🕐',
             title: 'Horario con Mayor Tráfico',
-            text: `El pico de actividad ocurre a las ${hour}:00 hrs con ${count} mensajes. Asegúrate de tener cobertura en ese horario.`
+            text: `El pico de actividad ocurre a las ${hourLabel} con ${count} mensajes. Asegúrate de tener cobertura en ese horario.`
         });
     }
 

@@ -4450,12 +4450,28 @@ app.get('/api/analytics', async (req, res) => {
         }
       }
       
-      // Mensajes por hora y día
+      // Mensajes por hora y día — solo mensajes dentro del periodo actual,
+      // usando timezone de CDMX para que las horas sean locales (no UTC).
       session.historial?.forEach(msg => {
         const msgDate = new Date(msg.timestamp);
-        const hourKey = `${dayKey}-${String(msgDate.getHours()).padStart(2, '0')}`;
+        if (msgDate < periodStart || msgDate > now) return; // filtrar por periodo
+
+        // Obtener fecha y hora en CDMX para evitar el offset UTC del servidor
+        const cdmxFormatter = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'America/Mexico_City',
+          year: 'numeric', month: '2-digit', day: '2-digit'
+        });
+        const cdmxHourFormatter = new Intl.DateTimeFormat('en-US', {
+          timeZone: 'America/Mexico_City',
+          hour: 'numeric', hour12: false
+        });
+
+        const msgDayKey  = cdmxFormatter.format(msgDate);   // YYYY-MM-DD en CDMX
+        const msgHour    = cdmxHourFormatter.format(msgDate).padStart(2, '0'); // "04", "14", etc.
+        const hourKey    = `${msgDayKey}::${msgHour}`; // Separador "::" para no confundir con "-" de fecha
+
         messagesByHour[hourKey] = (messagesByHour[hourKey] || 0) + 1;
-        messagesByDay[dayKey] = (messagesByDay[dayKey] || 0) + 1;
+        messagesByDay[msgDayKey] = (messagesByDay[msgDayKey] || 0) + 1;
       });
       
       // Intents
