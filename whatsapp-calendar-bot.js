@@ -3480,7 +3480,8 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
           appointmentActions: appointmentActions,
           original_blue_event_id: selectedSlot.eventId, // Save original blue event ID
           original_blue_event_start: selectedSlot.start, // Save original blue event start time
-          original_blue_event_end: selectedSlot.end // Save original blue event end time
+          original_blue_event_end: selectedSlot.end, // Save original blue event end time
+          cita_agendada_en: new Date().toISOString() // Timestamp de cuándo se agendó (se actualiza en reagendamientos)
         });
         
         return; // Done, don't process as regular message
@@ -5153,17 +5154,13 @@ app.get('/api/appointments', async (req, res) => {
           fechaBoda: session.fecha_boda || null,
           fechaCita: session.fecha_cita || null,
           calendarEventId: session.calendar_event_id || null,
-          createdAt: session.ultima_actividad
+          agendadaEn: session.cita_agendada_en || session.ultima_actividad // cuándo se agendó
         });
       }
     }
-    
-    // Ordenar por fecha de cita
-    appointments.sort((a, b) => {
-      if (!a.fechaCita) return 1;
-      if (!b.fechaCita) return -1;
-      return new Date(a.fechaCita) - new Date(b.fechaCita);
-    });
+
+    // Ordenar por fecha en que fue agendada — más reciente primero
+    appointments.sort((a, b) => new Date(b.agendadaEn) - new Date(a.agendadaEn));
     
     res.json({ appointments });
   } catch (error) {
