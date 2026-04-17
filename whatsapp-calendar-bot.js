@@ -4609,7 +4609,16 @@ app.get('/api/analytics', async (req, res) => {
     // Encontrar días/horas con más citas
     const peakAppointmentDay = Object.entries(appointmentsByDay).sort((a, b) => b[1] - a[1])[0];
     const peakAppointmentHour = Object.entries(appointmentsByHour).sort((a, b) => b[1] - a[1])[0];
-    
+
+    // Distribución de etapas (todas las sesiones, sin filtro de periodo)
+    const etapaDistribution = { primer_contacto: 0, interesada: 0, cita_agendada: 0 };
+    sessions.getAllSessions().forEach(({ session: s }) => {
+      const etapa = s.etapa || 'primer_contacto';
+      if (etapaDistribution[etapa] !== undefined) {
+        etapaDistribution[etapa]++;
+      }
+    });
+
     // Top intents
     const topIntents = Object.entries(intentCounts)
       .sort((a, b) => b[1] - a[1])
@@ -4629,7 +4638,8 @@ app.get('/api/analytics', async (req, res) => {
         avgMessagesPerConversation: parseFloat(avgMessagesPerConversation),
         peakHour: peakHour ? { time: peakHour[0], count: peakHour[1] } : null,
         peakDay: peakDay ? { date: peakDay[0], count: peakDay[1] } : null,
-        topIntents
+        topIntents,
+        etapaDistribution
       },
       
       // 2. RENDIMIENTO DEL BOT

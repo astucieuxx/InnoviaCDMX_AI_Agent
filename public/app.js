@@ -133,53 +133,66 @@ function initDateSelector() {
 
 // Cargar Analytics Dashboard
 async function loadAnalytics() {
+    // ── 1. Fetch de datos (errores de red / servidor) ────────────────────────
+    let data;
     try {
-        // Agregar el parámetro de período a la URL
-        const url = `/api/analytics?period=${selectedPeriod}`;
+        const url      = `/api/analytics?period=${selectedPeriod}`;
         const response = await fetch(url);
-        
+
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            const body = await response.text();
+            throw new Error(`Servidor respondió ${response.status}: ${body.slice(0, 120)}`);
         }
-        
-        const data = await response.json();
-        
-        // Verificar que los datos tengan la estructura esperada
+
+        data = await response.json();
+
         if (!data.usage || !data.performance || !data.conversion || !data.business) {
-            throw new Error('Datos incompletos del servidor');
+            throw new Error('La respuesta del servidor no tiene la estructura esperada.');
         }
-        
-        // 1. MÉTRICAS DE USO
-        updateUsageMetrics(data.usage);
-        
-        // 2. RENDIMIENTO DEL BOT
-        updatePerformanceMetrics(data.performance);
-        
-        // 3. MÉTRICAS DE CONVERSIÓN
-        updateConversionMetrics(data.conversion);
-        
-        // 4. MÉTRICAS DE NEGOCIO (solo actualizar KPI principal)
-        if (data.business) {
-            const appointmentsMainEl = document.getElementById('total-appointments-generated-kpi-main');
-            if (appointmentsMainEl) appointmentsMainEl.textContent = data.business.totalAppointmentsGenerated || 0;
-        }
-        
-        // AI Insights
-        generateAIInsights(data);
-        
-        // Actualizar estado
-        updateStatus(true);
-    } catch (error) {
-        console.error('Error cargando analytics:', error);
+    } catch (networkError) {
+        console.error('Error de red al cargar analytics:', networkError);
         updateStatus(false);
-        
-        // Mostrar mensaje de error en el dashboard
+
         const insightsContainer = document.getElementById('ai-insights');
         if (insightsContainer) {
             insightsContainer.innerHTML = `
                 <div class="insight-card" style="background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.4);">
-                    <div class="insight-title">Error de Conexión</div>
-                    <div class="insight-text">No se pudo cargar los datos. Verifica que el servidor esté ejecutándose y recarga la página.</div>
+                    <div class="insight-title">⚠️ Error de Conexión</div>
+                    <div class="insight-text">No se pudo cargar los datos del servidor.<br><small style="opacity:0.7">${networkError.message}</small></div>
+                </div>
+            `;
+        }
+        return;
+    }
+
+    // ── 2. Renderizado de métricas (errores de JS en los charts, etc.) ───────
+    updateStatus(true);
+
+    try { updateUsageMetrics(data.usage); }
+    catch (e) { console.error('Error renderizando métricas de uso:', e); }
+
+    try { updatePerformanceMetrics(data.performance); }
+    catch (e) { console.error('Error renderizando métricas de rendimiento:', e); }
+
+    try { updateConversionMetrics(data.conversion); }
+    catch (e) { console.error('Error renderizando métricas de conversión:', e); }
+
+    try {
+        if (data.business) {
+            const appointmentsMainEl = document.getElementById('total-appointments-generated-kpi-main');
+            if (appointmentsMainEl) appointmentsMainEl.textContent = data.business.totalAppointmentsGenerated || 0;
+        }
+    } catch (e) { console.error('Error renderizando métricas de negocio:', e); }
+
+    try { generateAIInsights(data); }
+    catch (e) {
+        console.error('Error generando AI Insights:', e);
+        const insightsContainer = document.getElementById('ai-insights');
+        if (insightsContainer) {
+            insightsContainer.innerHTML = `
+                <div class="insight-card" style="background: rgba(234,179,8,0.15); border-color: rgba(234,179,8,0.4);">
+                    <div class="insight-title">⚠️ Insights no disponibles</div>
+                    <div class="insight-text">Hubo un error al generar los insights. Los datos se cargaron correctamente.<br><small style="opacity:0.7">${e.message}</small></div>
                 </div>
             `;
         }
@@ -223,8 +236,8 @@ function updateUsageMetrics(usage) {
     // Gráfico de conversaciones por día (solo nuevas)
     updateConversationsDayChart(usage.newConversationsByDay || usage.conversationsByDay || []);
     
-    // Gráfico de tipo de conversación
-    updateConversationTypeChart(usage.topIntents || []);
+    // Gráfico de estado de conversaciones
+    updateConversationTypeChart(usage.etapaDistribution || null);
 }
 
 // Actualizar métricas de rendimiento
@@ -443,41 +456,25 @@ function updateConversationsDayChart(data) {
     });
 }
 
-// Gráfico de intents
-// Gráfico de tipo de conversación (doughnut)
-function updateConversationTypeChart(intents) {
+// Gráfico de estado de conversaciones (doughnut)
+// etapaDistribution: { primer_contacto: N, interesada: N, cita_agendada: N }
+function updateConversationTypeChart(etapaDistribution) {
     const ctx = document.getElementById('conversation-type-chart');
     if (!ctx) return;
 
-    // Agrupar intents en 5 categorías de negocio
-    const groups = {
-        'Agendar cita':       ['AGENDAR_NUEVA', 'AGENDAR', 'SALUDO'],
-        'Información':        ['INFO', 'INFORMACION', 'HORARIO', 'UBICACION', 'CATALOGO'],
-        'Precios':            ['PRECIOS', 'PRECIO'],
-        'Reagendar / Cancel': ['CAMBIAR_CITA', 'CANCELAR_CITA', 'REAGENDAR'],
-        'Escalación humana':  ['ESCALAR_HUMANO', 'ESCALAR', 'HUMANO'],
-    };
+    const dist = etapaDistribution || { primer_contacto: 0, interesada: 0, cita_agendada: 0 };
 
-    const totals = { 'Agendar cita': 0, 'Información': 0, 'Precios': 0, 'Reagendar / Cancel': 0, 'Escalación humana': 0 };
+    const labels = ['Primer contacto', 'Interesadas', 'Cita agendada'];
+    const values = [
+        dist.primer_contacto || 0,
+        dist.interesada      || 0,
+        dist.cita_agendada   || 0
+    ];
+    const total = values.reduce((a, b) => a + b, 0);
 
-    intents.forEach(({ intent, count }) => {
-        const key = intent?.toUpperCase() || '';
-        for (const [label, keys] of Object.entries(groups)) {
-            if (keys.includes(key)) {
-                totals[label] += count;
-                break;
-            }
-        }
-    });
-
-    const labels = Object.keys(totals);
-    const values = Object.values(totals);
-    const total  = values.reduce((a, b) => a + b, 0);
-
-    // Si no hay datos reales, mostrar ceros de forma visual
-    const displayValues = total === 0 ? [1, 1, 1, 1, 1] : values;
-
-    const colors = ['#00f5ff', '#00ff88', '#ff6b35', '#8b5cf6', '#ff4444'];
+    // Si no hay sesiones todavía, mostrar placeholder visual equitativo
+    const displayValues = total === 0 ? [1, 1, 1] : values;
+    const colors = ['#00f5ff', '#ff6b35', '#00ff88'];
 
     if (charts.conversationType) {
         charts.conversationType.destroy();
@@ -512,10 +509,10 @@ function updateConversationTypeChart(intents) {
                 },
                 tooltip: {
                     callbacks: {
-                        label: function(ctx) {
-                            if (total === 0) return ' Sin datos aún';
-                            const pct = ((ctx.parsed / total) * 100).toFixed(1);
-                            return ` ${ctx.label}: ${ctx.parsed} (${pct}%)`;
+                        label: function(context) {
+                            if (total === 0) return ' Sin sesiones aún';
+                            const pct = ((context.parsed / total) * 100).toFixed(1);
+                            return ` ${context.label}: ${context.parsed} (${pct}%)`;
                         }
                     }
                 }

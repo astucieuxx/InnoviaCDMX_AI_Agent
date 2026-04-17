@@ -1,12 +1,56 @@
 /**
  * Session Management Module
- * 
+ *
  * Manages conversation state per WhatsApp phone number.
- * Uses in-memory Map for storage (can be upgraded to Redis later).
+ * Uses in-memory Map with JSON file persistence so sessions survive server restarts.
  */
+
+const fs   = require('fs');
+const path = require('path');
+
+const SESSIONS_FILE = path.join(__dirname, 'sessions_data.json');
 
 // In-memory storage for sessions
 const sessions = new Map();
+
+// ── Disk persistence ──────────────────────────────────────────────────────────
+
+/** Load sessions from disk on startup */
+function loadSessionsFromDisk() {
+  try {
+    if (fs.existsSync(SESSIONS_FILE)) {
+      const raw  = fs.readFileSync(SESSIONS_FILE, 'utf8');
+      const data = JSON.parse(raw);
+      let count  = 0;
+      for (const [phone, session] of Object.entries(data)) {
+        sessions.set(phone, session);
+        count++;
+      }
+      console.log(`📂 Sesiones restauradas desde disco: ${count}`);
+    } else {
+      console.log('📂 No hay archivo de sesiones previo — iniciando limpio.');
+    }
+  } catch (err) {
+    console.error('⚠️  Error cargando sesiones desde disco:', err.message);
+  }
+}
+
+/** Debounced save — escribe sessions_data.json máximo 1 vez por segundo */
+let _saveTimer = null;
+function saveSessionsToDisk() {
+  if (_saveTimer) clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(() => {
+    try {
+      const data = Object.fromEntries(sessions.entries());
+      fs.writeFileSync(SESSIONS_FILE, JSON.stringify(data, null, 2), 'utf8');
+    } catch (err) {
+      console.error('⚠️  Error guardando sesiones:', err.message);
+    }
+  }, 1000);
+}
+
+// Cargar al iniciar el módulo
+loadSessionsFromDisk();
 
 /**
  * Session structure:
@@ -84,8 +128,9 @@ function updateSession(phone, data) {
   
   if (hasImportantChange) {
     console.log(`📝 Sesión actualizada: ${cleanPhone} - ${Object.keys(data).join(', ')}`);
+    saveSessionsToDisk();
   }
-  
+
   return session;
 }
 
@@ -115,6 +160,7 @@ function addToHistory(phone, role, content) {
   }
   
   session.ultima_actividad = new Date().toISOString();
+  saveSessionsToDisk();
 }
 
 /**
@@ -128,9 +174,10 @@ function clearSession(phone) {
   if (sessions.has(cleanPhone)) {
     sessions.delete(cleanPhone);
     console.log(`🗑️  Sesión eliminada para: ${cleanPhone}`);
+    saveSessionsToDisk();
     return true;
   }
-  
+
   return false;
 }
 
