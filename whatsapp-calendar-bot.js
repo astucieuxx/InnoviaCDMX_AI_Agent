@@ -4101,8 +4101,19 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
       appointmentCreationLocks.delete(cleanPhoneForCleanup);
       console.warn(`⚠️  [LOCK CLEANUP] Lock de creación de cita liberado para ${cleanPhoneForCleanup} tras error.`);
     }
-    // No intentar enviar mensaje de error si ya falló el envío
-    // (evitar loops infinitos de errores)
+    // Enviar mensaje genérico al usuario para que no quede sin respuesta
+    // Si sendWhatsAppMessage también falla, simplemente lo registramos
+    if (cleanPhoneForCleanup) {
+      try {
+        await sendWhatsAppMessage(
+          cleanPhoneForCleanup,
+          'Disculpa, tuve un problema procesando tu mensaje. ¿Puedes intentarlo de nuevo? 💫'
+        );
+        sessions.addToHistory(cleanPhoneForCleanup, 'assistant', 'Error interno — mensaje de fallback enviado.');
+      } catch (sendError) {
+        console.error('❌ No se pudo enviar mensaje de fallback al usuario:', sendError.message);
+      }
+    }
   }
 }
 
@@ -4719,17 +4730,23 @@ app.get('/api/conversations', (req, res) => {
 });
 
 // GET /api/conversations/:phone - Mensajes de una conversación específica
+// Usa peekSession para NO actualizar ultima_actividad y así evitar que la
+// conversación salte al tope de la lista al abrirla desde el dashboard.
 app.get('/api/conversations/:phone', (req, res) => {
   try {
     const phone = req.params.phone.replace(/\D/g, '');
-    const session = sessions.getSession(phone);
-    
+    const session = sessions.peekSession(phone);
+
+    if (!session) {
+      return res.json({ phone, nombre: null, fechaBoda: null, etapa: 'primer_contacto', messages: [] });
+    }
+
     const messages = (session.historial || []).map(msg => ({
       message: msg.content,
       direction: msg.role === 'user' ? 'incoming' : 'outgoing',
       timestamp: msg.timestamp
     }));
-    
+
     res.json({
       phone,
       nombre: session.nombre_cliente || session.nombre_novia || null,

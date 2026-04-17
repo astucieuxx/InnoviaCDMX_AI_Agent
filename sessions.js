@@ -135,6 +135,19 @@ function updateSession(phone, data) {
 }
 
 /**
+ * Read a session WITHOUT updating ultima_actividad.
+ * Use this for read-only API endpoints so that simply viewing a conversation
+ * does not bump its position in the list (which is sorted by last activity).
+ * Returns null if the session does not exist.
+ * @param {string} phone
+ * @returns {Object|null}
+ */
+function peekSession(phone) {
+  const cleanPhone = phone.replace(/\D/g, '');
+  return sessions.get(cleanPhone) || null;
+}
+
+/**
  * Add a message to session history
  * @param {string} phone - Phone number
  * @param {string} role - Message role ('user' | 'assistant' | 'system')
@@ -241,6 +254,7 @@ function cleanupOldSessions(hours = 24) {
 
 module.exports = {
   getSession,
+  peekSession,
   updateSession,
   clearSession,
   addToHistory,
