@@ -1242,6 +1242,7 @@ function toggleSelectAllTasks(checked) {
 function downloadTasksExcel() {
     if (_pendingTasksData.length === 0) return;
 
+    // ── Datos ──────────────────────────────────────────────────────────────────
     const headers = ['ID', 'Fecha', 'Hora', 'Nombre', 'Teléfono', 'Último Mensaje', 'Contexto', 'Estado'];
     const rows = _pendingTasksData.map(t => [
         t.id,
@@ -1254,19 +1255,52 @@ function downloadTasksExcel() {
         t.estado
     ]);
 
-    const csvContent = [headers, ...rows]
-        .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-        .join('\r\n');
+    // ── Crear workbook con SheetJS ─────────────────────────────────────────────
+    const wb = XLSX.utils.book_new();
+    const wsData = [headers, ...rows];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
 
-    // BOM para que Excel abra UTF-8 correctamente
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    // Ancho de columnas (en caracteres)
+    ws['!cols'] = [
+        { wch: 5  },  // ID
+        { wch: 12 },  // Fecha
+        { wch: 8  },  // Hora
+        { wch: 22 },  // Nombre
+        { wch: 16 },  // Teléfono
+        { wch: 45 },  // Último Mensaje
+        { wch: 50 },  // Contexto
+        { wch: 12 },  // Estado
+    ];
+
+    // Estilo de encabezado (fondo oscuro, texto blanco, negrita)
+    const headerStyle = {
+        font:      { bold: true, color: { rgb: 'FFFFFF' } },
+        fill:      { fgColor: { rgb: '1E3A5F' } },
+        alignment: { horizontal: 'center', vertical: 'center', wrapText: false },
+        border: {
+            bottom: { style: 'thin', color: { rgb: 'FFFFFF' } }
+        }
+    };
+    headers.forEach((_, col) => {
+        const cellRef = XLSX.utils.encode_cell({ r: 0, c: col });
+        if (ws[cellRef]) ws[cellRef].s = headerStyle;
+    });
+
+    // Estilo de filas de datos (zebra: blanco / gris muy claro)
+    const rowStyle      = { alignment: { vertical: 'top', wrapText: true } };
+    const rowStyleAlt   = { fill: { fgColor: { rgb: 'F1F5F9' } }, alignment: { vertical: 'top', wrapText: true } };
+    rows.forEach((_, r) => {
+        headers.forEach((__, c) => {
+            const cellRef = XLSX.utils.encode_cell({ r: r + 1, c });
+            if (ws[cellRef]) ws[cellRef].s = (r % 2 === 0) ? rowStyle : rowStyleAlt;
+        });
+    });
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Tareas Pendientes');
+
+    // ── Descargar ──────────────────────────────────────────────────────────────
     const fecha = new Date().toISOString().slice(0, 10);
-    a.href = url;
-    a.download = `tareas-pendientes-${fecha}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    XLSX.writeFile(wb, `tareas-pendientes-${fecha}.xlsx`);
 }
 
 async function deleteSelectedTasks() {
