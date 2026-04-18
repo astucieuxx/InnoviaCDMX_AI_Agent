@@ -1327,12 +1327,19 @@ async function findEventsByName(clientName, calendarClient, authClient, calendar
       auth = authClient;
     }
 
-    console.log(`🔍 Buscando eventos con nombre: "${clientName}" en calendario ${calendarId}`);
-    
+    // Helper: normalize a string for accent-insensitive comparison
+    // "Rosalía Solís" → "rosalia solis", "ROSALÍA" → "rosalia"
+    const normalize = str =>
+      str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
+    const normalizedQuery = normalize(clientName);
+    console.log(`🔍 Buscando eventos con nombre: "${clientName}" (normalizado: "${normalizedQuery}") en calendario ${calendarId}`);
+
     // Search for events in the next 6 months
     const now = new Date();
     const sixMonthsLater = new Date(now.getTime() + 6 * 30 * 24 * 60 * 60 * 1000);
-    
+
+    // Use the accent-stripped version as the Google query so it hits more results
     const events = await calendarClient.events.list({
       auth: auth,
       calendarId: calendarId,
@@ -1341,18 +1348,17 @@ async function findEventsByName(clientName, calendarClient, authClient, calendar
       maxResults: maxResults,
       singleEvents: true,
       orderBy: 'startTime',
-      q: clientName, // Search query - searches in summary and description
+      q: normalizedQuery, // accent-normalized query improves Google full-text matching
       timeZone: 'America/Mexico_City'
     });
 
     const eventItems = events.data.items || [];
-    
-    // Filter events that match the name in summary (title)
+
+    // Filter events that match the name in summary (title) — accent-insensitive
     const matchingEvents = eventItems.filter(event => {
-      const summary = (event.summary || '').toLowerCase();
-      const nameLower = clientName.toLowerCase();
-      // Check if the name appears in the event title
-      return summary.includes(nameLower) || nameLower.includes(summary);
+      const summaryNorm = normalize(event.summary || '');
+      // Check if the normalized name appears in the normalized event title
+      return summaryNorm.includes(normalizedQuery) || normalizedQuery.includes(summaryNorm);
     });
 
     console.log(`   Eventos encontrados: ${matchingEvents.length}`);
