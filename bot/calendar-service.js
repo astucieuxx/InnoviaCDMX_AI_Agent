@@ -1592,17 +1592,17 @@ async function findEventByPhone(phone, clientName, calendarClient, authClient, c
     const futureWindow = new Date(now.getTime() + 6 * 30 * 24 * 60 * 60 * 1000);
 
     // Normalize phone: strip non-digits
-    // We use the last 8 digits for matching — avoids country-code and formatting
+    // We use the last 4 digits for matching — avoids country-code and formatting
     // mismatches (e.g. WhatsApp "525521920710" vs Calendar "55 219 20710")
     const digitsOnly = phone.replace(/\D/g, '');
-    const last8  = digitsOnly.slice(-8);
+    const last4  = digitsOnly.slice(-4);
     const last10 = digitsOnly.slice(-10);
 
-    // Attempt 1: fetch upcoming events and filter locally by last 8 phone digits.
+    // Attempt 1: fetch upcoming events and filter locally by last 4 phone digits.
     // We do NOT use the `q` (text search) parameter because the phone is stored
     // formatted with spaces ("55 219 20710") so a digit-only query ("5521920710")
     // won't match inside Google's full-text index.
-    console.log(`🔍 findEventByPhone: buscando eventos y filtrando por últimos 8 dígitos "${last8}"`);
+    console.log(`🔍 findEventByPhone: buscando eventos y filtrando por últimos 4 dígitos "${last4}"`);
     const res = await calendarClient.events.list({
       auth,
       calendarId,
@@ -1616,20 +1616,20 @@ async function findEventByPhone(phone, clientName, calendarClient, authClient, c
 
     const items = res.data.items || [];
     // Strip all non-digits from each event description and check if it contains
-    // the last 8 digits of the incoming phone (country-code agnostic).
+    // the last 4 digits of the incoming phone (country-code agnostic).
     const match = items.find(ev => {
       const descDigits = (ev.description || '').replace(/\D/g, '');
-      return descDigits.includes(last8);
+      return descDigits.includes(last4);
     });
 
     if (match) {
-      console.log(`✅ findEventByPhone: cita encontrada por últimos 8 dígitos del teléfono (ID: ${match.id})`);
+      console.log(`✅ findEventByPhone: cita encontrada por últimos 4 dígitos del teléfono (ID: ${match.id})`);
       return formatEventResult(match);
     }
 
     // Attempt 2: fall back to name search if provided
     if (clientName) {
-      console.log(`🔍 findEventByPhone: sin resultados por teléfono (last8="${last8}"), intentando por nombre "${clientName}"`);
+      console.log(`🔍 findEventByPhone: sin resultados por teléfono (last4="${last4}"), intentando por nombre "${clientName}"`);
       const byName = await findEventsByName(clientName, calendarClient, authClient, calendarId, 5);
       if (byName && byName.length > 0) {
         console.log(`✅ findEventByPhone: cita encontrada por nombre`);
