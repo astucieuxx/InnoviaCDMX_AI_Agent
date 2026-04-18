@@ -145,7 +145,12 @@ const TOOLS = [
         'o cuando quieras confirmar si existe una cita antes de reagendar o cancelar.',
       parameters: {
         type: 'object',
-        properties: {},
+        properties: {
+          nombre_buscado: {
+            type: 'string',
+            description: 'Nombre (y apellido si lo tienes) de la clienta a buscar en el calendario. Úsalo cuando la búsqueda por teléfono no encontró resultados y la clienta te proporcionó el nombre bajo el que está registrada su cita.'
+          }
+        },
         required: []
       }
     }
@@ -232,7 +237,13 @@ Hoy es ${today}.
    - Muestra los horarios disponibles de forma clara y amigable.
    - **ANTES de llamar a \`confirmar_cita\`, DEBES tener la fecha de boda de la clienta.** Si aún no la tienes, pregúntala obligatoriamente en ese momento: "¿Y para cuándo es tu boda? 💍" (o variación natural). No puedes confirmar la cita sin este dato.
    - **Cuando la clienta ya eligió un horario Y tienes su fecha de boda, llama a \`confirmar_cita\` de inmediato** — sin pedir una confirmación adicional. El hecho de que la clienta seleccione un horario ya es su confirmación implícita. Después de agendar, envía un mensaje confirmando los detalles (fecha, hora, dirección).
-7. **Para consultar cita existente:** Si la clienta pregunta por su cita ("¿tengo una cita?", "¿cuándo es mi cita?", "¿me puedes dar mis datos de cita?") y la "Cita agendada (ID en calendario)" es "Ninguna", llama PRIMERO a \`buscar_cita_cliente\`. Esta herramienta busca en Google Calendar por número de teléfono y puede encontrar citas creadas manualmente por el staff. Si la encuentra, úsala también para reagendar o cancelar (el ID quedará registrado). Si no la encuentra, informa amablemente que no hay cita próxima y ofrece agendar una.
+7. **Para consultar cita existente:** Si la clienta pregunta por su cita ("¿tengo una cita?", "¿cuándo es mi cita?", "¿me puedes dar mis datos de cita?") y la "Cita agendada (ID en calendario)" es "Ninguna", sigue este flujo de búsqueda en orden:
+   a. Llama a \`buscar_cita_cliente\` (sin parámetros) — busca en Google Calendar por número de teléfono.
+   b. Si regresa \`encontrada: true\` → confirma los detalles a la clienta. El ID quedará registrado para reagendar o cancelar.
+   c. Si regresa \`necesita_nombre: true\` → la búsqueda por teléfono no encontró nada. **NO digas que no hay cita.** En cambio, pregunta amablemente: "Para buscarte mejor, ¿a nombre de quién está registrada tu cita? 🤍" Espera su respuesta.
+   d. Cuando la clienta proporcione el nombre, llama de nuevo a \`buscar_cita_cliente\` con el parámetro \`nombre_buscado\` con ese nombre.
+   e. Si en este segundo intento \`encontrada: true\` → confirma los detalles normalmente.
+   f. Solo si el segundo intento también falla (regresa \`encontrada: false\` con nombre ya buscado) → informa amablemente que no encontraste ninguna cita con esos datos y ofrece agendar una nueva.
 7b. **Para cancelar:** ANTES de llamar a \`cancelar_cita\`, DEBES mostrarle a la clienta los detalles de la cita que encontraste (fecha, hora) y preguntarle si está segura de que quiere cancelar. Ejemplo: "Encontré tu cita: está programada para el [día] a las [hora]. ¿Estás segura de que deseas cancelarla? 🤍". Solo llama a \`cancelar_cita\` cuando la clienta confirme explícitamente que sí quiere cancelar. El event_id lo tienes disponible en el contexto de la clienta.
 8. **Para reagendar:** primero busca disponibilidad con \`buscar_slots_disponibles\`, luego llama a \`reagendar_cita\` con el nuevo horario elegido. **NUNCA llames a \`confirmar_cita\` si la clienta ya tiene una cita agendada (es decir, si "Cita agendada (ID en calendario)" NO es "Ninguna") — en ese caso usa SIEMPRE \`reagendar_cita\`.**
 9. **Catálogo — regla absoluta:** En cualquier respuesta que trate sobre la boutique, los vestidos, modelos, precios, información general del negocio, o cuando la clienta pida "información" sin especificar, SIEMPRE incluye el link del catálogo (${catalog.link || ''}) en ese mismo mensaje. No lo dejes para después. Ejemplos donde DEBES incluirlo: "quiero información", "¿qué ofrecen?", "¿cómo son sus vestidos?", "¿cuánto cuestan?", "¿dónde están?", "quiero ver opciones". Excepción: si la conversación ya avanzó y el catálogo ya fue compartido antes, no es necesario repetirlo.
@@ -293,9 +304,13 @@ async function executeTool(toolName, toolArgs, calendarDeps, session, phone) {
 
     // ---- buscar_cita_cliente --------------------------------------------
     if (toolName === 'buscar_cita_cliente') {
-      console.log(`🔧 Agent tool: buscar_cita_cliente(phone=${phone})`);
+      // nombre_buscado: override name provided by the agent (from client's answer)
+      const nombreOverride = (toolArgs.nombre_buscado || '').trim() || null;
+      const sessionName = getClientName(session) || null;
+      const clientName = nombreOverride || sessionName;
 
-      const clientName = getClientName(session) || null;
+      console.log(`🔧 Agent tool: buscar_cita_cliente(phone=${phone}, clientName=${clientName || 'none'})`);
+
       const event = await findEventByPhoneService(
         phone,
         clientName,
@@ -319,9 +334,20 @@ async function executeTool(toolName, toolArgs, calendarDeps, session, phone) {
         };
       }
 
+      // If we already tried a name and still nothing → truly not found
+      if (clientName) {
+        return {
+          encontrada: false,
+          nombre_buscado: clientName,
+          mensaje: `No se encontró ninguna cita próxima para esta clienta ni por teléfono (${phone}) ni por nombre ("${clientName}").`
+        };
+      }
+
+      // No name available yet — signal the agent to ask for it
       return {
         encontrada: false,
-        mensaje: 'No se encontró ninguna cita próxima para esta clienta en el calendario.'
+        necesita_nombre: true,
+        mensaje: 'No se encontró cita por número de teléfono. Es posible que esté registrada a nombre de otra persona. Pregunta a la clienta a nombre de quién está registrada la cita antes de confirmar que no existe.'
       };
     }
 
