@@ -1077,7 +1077,7 @@ async function togglePauseConversation(phone, currentlyPaused) {
             await fetch('/admin/pause-bot', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phone, minutes: 10 })
+                body: JSON.stringify({ phone, minutes: 40 })
             });
         }
         // Refrescar la lista para reflejar el nuevo estado
@@ -1380,6 +1380,7 @@ async function loadConfig() {
         document.getElementById('horarios-domingos').value = data.horarios?.domingos || '';
         document.getElementById('catalogo-link').value = data.catalogo?.link || '';
         document.getElementById('precio-base').value = data.precios?.precio_base || '';
+        document.getElementById('staff-phones').value = (data.staffPhones || []).join('\n');
     } catch (error) {
         console.error('Error cargando configuración:', error);
     }
@@ -1829,6 +1830,8 @@ document.getElementById('config-form')?.addEventListener('submit', async (e) => 
         precios: {
             precio_base: parseInt(document.getElementById('precio-base').value) || 0
         },
+        staffPhones: document.getElementById('staff-phones').value
+            .split('\n').map(s => s.trim()).filter(Boolean),
         adminPhone: document.getElementById('admin-phone').value,
         botPhone: document.getElementById('bot-phone').value
     };

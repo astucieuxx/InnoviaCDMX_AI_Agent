@@ -256,6 +256,11 @@
                         <label>Precio Base (MXN)</label>
                         <input type="number" id="precio-base" placeholder="25000">
                     </div>
+                    <div class="form-group">
+                        <label>Números del Staff (el bot ignora estos números)</label>
+                        <textarea id="staff-phones" rows="6" placeholder="9179605545&#10;5518398734&#10;4492107201" style="width:100%;font-family:monospace;font-size:13px;resize:vertical;"></textarea>
+                        <small>Un número por línea, sin código de país. El bot no responderá a estos números.</small>
+                    </div>
                     <button type="submit" class="btn-primary">💾 Guardar Configuración</button>
                     <div id="config-status" class="status-message"></div>
                 </form>

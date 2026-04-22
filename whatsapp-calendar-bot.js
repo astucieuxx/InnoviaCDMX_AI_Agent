@@ -394,6 +394,16 @@ try {
   console.warn('⚠️  No se pudo cargar phone_config.json, usando valor por defecto o variable de entorno');
 }
 
+// Números del staff — el bot no responde a estos números (matching por sufijo)
+let STAFF_PHONES = [];
+try {
+  const bizConfig = JSON.parse(fs.readFileSync(path.join(__dirname, 'business_config.json'), 'utf8'));
+  STAFF_PHONES = (bizConfig.staff_phones || []).map(p => p.replace(/\D/g, ''));
+  console.log(`✅ Staff phones cargados: ${STAFF_PHONES.length} números`);
+} catch (error) {
+  console.warn('⚠️  No se pudo cargar staff_phones desde business_config.json');
+}
+
 // Configuración de Google Calendar
 const calendar = google.calendar('v3');
 let authClient;
@@ -1104,7 +1114,7 @@ function scheduleTextMessage(phone, message, options) {
     // Re-verificar si el bot fue pausado durante la ventana de debounce
     const currentSession = sessions.getSession(phone);
     if (currentSession.bot_paused_until && new Date(currentSession.bot_paused_until) > new Date()) {
-      console.log(`⏸️  [DEBOUNCE] Bot pausado por intervención humana — mensaje descartado para ${phone}`);
+      console.log(`⏸️  [DEBOUNCE] Bot pausado (dashboard) — mensaje guardado en historial para ${phone}`);
       sessions.addToHistory(phone, 'user', combined);
       return;
     }
@@ -1564,7 +1574,7 @@ app.get('/dashboard', (req, res) => {
 
 // Pausa el bot para una conversación (el agente humano toma el control)
 app.post('/admin/pause-bot', (req, res) => {
-  const { phone, minutes = 10 } = req.body;
+  const { phone, minutes = 40 } = req.body;
 
   if (!phone) {
     return res.status(400).json({ error: 'Se requiere el campo "phone"' });
@@ -1829,26 +1839,6 @@ app.post('/webhook', async (req, res) => {
                 
                 console.log(`📊 Estado de mensaje: ${messageStatus} para ${recipientId} (ID: ${messageId})`);
 
-                // Detectar intervención humana: si llega "sent" para un ID que el bot no generó
-                if (messageStatus === 'sent' && messageId && recipientId) {
-                  if (isHumanHandoffMessage(messageId)) {
-                    const clientPhone = recipientId.replace(/\D/g, '');
-                    const lastBotSent = botLastSentAt.get(clientPhone) || 0;
-                    const timeSinceLastSend = Date.now() - lastBotSent;
-
-                    if (timeSinceLastSend > RACE_CONDITION_WINDOW_MS) {
-                      // El bot no ha enviado nada reciente → es intervención humana real
-                      const pauseUntil = new Date(Date.now() + HUMAN_HANDOFF_PAUSE_MS);
-                      sessions.updateSession(clientPhone, { bot_paused_until: pauseUntil.toISOString() });
-                      // Cancelar cualquier timer pendiente para que el bot no responda
-                      cancelPendingMessages(clientPhone);
-                      console.log(`🙋 INTERVENCIÓN HUMANA detectada para ${clientPhone} — bot pausado 10 min hasta ${pauseUntil.toISOString()}`);
-                    } else {
-                      console.log(`⚡ [RACE CONDITION] Status 'sent' para ID desconocido ignorado — bot envió hace ${Math.round(timeSinceLastSend / 1000)}s (ventana: ${RACE_CONDITION_WINDOW_MS / 1000}s)`);
-                    }
-                  }
-                }
-
                 // Si el mensaje falló, verificar si es el admin y notificar
                 if (messageStatus === 'failed' && status.errors && status.errors.length > 0) {
                   const error = status.errors[0];
@@ -1947,32 +1937,20 @@ app.post('/webhook', async (req, res) => {
           
           console.log(`✅ [WEBHOOK CHECK] Bot no está inactive, continuando con scheduleTextMessage...\n`);
 
-          // ── Detectar /takeover desde WhatsApp Web / Business App ──────────────
-          // Cuando el staff escribe "/takeover" en la conversación con una clienta
-          // desde WhatsApp Web, Chakra reenvía ese mensaje como echo al webhook
-          // con message.from == número del negocio.
-          // Esto pausa el bot para esa conversación específica durante 10 min.
+          // Ignorar echoes (mensajes salientes del negocio hacia el cliente)
           const senderClean = senderPhone.replace(/\D/g, '');
           const isBizEcho = businessDisplayPhone && senderClean === businessDisplayPhone;
-
           if (isBizEcho) {
-            const echoText = (incomingMessage || '').trim().toLowerCase();
-            const recipientPhone = (message.to || '').replace(/\D/g, '');
-
-            if (echoText === '/takeover') {
-              // Comando explícito de toma de control
-              console.log(`🙋 [TAKEOVER] Staff usó /takeover para ${recipientPhone} — pausando bot 10 min`);
-              if (recipientPhone) {
-                const pauseUntil = new Date(Date.now() + HUMAN_HANDOFF_PAUSE_MS);
-                sessions.updateSession(recipientPhone, { bot_paused_until: pauseUntil.toISOString() });
-                cancelPendingMessages(recipientPhone);
-              }
-            } else {
-              console.log(`📤 [ECHO] Mensaje saliente del negocio a ${recipientPhone} — sin /takeover, bot no pausado`);
-            }
-            continue; // Nunca procesar echoes como mensajes de cliente
+            console.log(`📤 [ECHO] Mensaje saliente del negocio ignorado — no se procesa como mensaje de cliente`);
+            continue;
           }
-          // ── fin detección echo / takeover ─────────────────────────────────
+
+          // Ignorar mensajes del staff (matching por sufijo)
+          const isStaff = STAFF_PHONES.some(suffix => senderClean.endsWith(suffix));
+          if (isStaff) {
+            console.log(`👥 [STAFF] Mensaje de número del staff ignorado: ${senderClean}`);
+            continue;
+          }
 
           // Usar debounce para agrupar mensajes rápidos del mismo número
           // (evita respuestas duplicadas cuando el usuario envía varios textos en ráfaga)
@@ -2235,86 +2213,6 @@ function setTestModeStatus(active) {
 
 // Función para procesar mensajes entrantes (NUEVA ARQUITECTURA BASADA EN INTENTS)
 async function processIncomingMessage(senderPhone, incomingMessage, options = {}) {
-  // ── COMANDOS DE STAFF (admin) ─────────────────────────────────────────────
-  // Si el mensaje viene del teléfono admin, interceptarlo como comando de control.
-  // El staff puede escribir desde su teléfono al número del bot:
-  //   pausa 5215512345678        → pausa esa conversación 30 min
-  //   pausa 5215512345678 60     → pausa esa conversación N min
-  //   reanudar 5215512345678     → reanuda esa conversación inmediatamente
-  //   pausa?                     → muestra ayuda de comandos
-  {
-    const adminPhoneClean = ADMIN_PHONE.replace(/\D/g, '');
-    const senderClean = senderPhone ? senderPhone.replace(/\D/g, '') : '';
-    const isAdmin = adminPhoneClean && (
-      senderClean === adminPhoneClean ||
-      senderClean.endsWith(adminPhoneClean.slice(-10))
-    );
-
-    if (isAdmin) {
-      const msg = incomingMessage.trim().toLowerCase();
-
-      // Comando: pausa <dígitos>  (últimos 4+ dígitos del teléfono de la clienta)
-      // Ejemplos: "pausa 0710"  "pausa 5521920710"  "pausa 5215521920710"
-      const pausaMatch = msg.match(/^pausa\s+(\d{4,})(?:\s+(\d+))?$/);
-      if (pausaMatch) {
-        const suffix = pausaMatch[1];
-        const minutes = parseInt(pausaMatch[2] || '10', 10);
-
-        // Buscar el teléfono completo entre todas las sesiones activas
-        const allSessions = sessions.getAllSessions();
-        const matchingPhone = Object.keys(allSessions).find(p => p.endsWith(suffix));
-
-        if (!matchingPhone) {
-          await sendWhatsAppMessage(senderClean, `⚠️ No encontré ninguna conversación activa que termine en *${suffix}*.\nVerifica los últimos dígitos e intenta de nuevo.`);
-          return;
-        }
-
-        const pauseUntil = new Date(Date.now() + minutes * 60 * 1000);
-        sessions.updateSession(matchingPhone, { bot_paused_until: pauseUntil.toISOString() });
-        cancelPendingMessages(matchingPhone);
-        const hora = pauseUntil.toLocaleTimeString('es-MX', { timeZone: 'America/Mexico_City', hour: '2-digit', minute: '2-digit' });
-        console.log(`🙋 [ADMIN CMD] Bot pausado para ${matchingPhone} por ${minutes} min`);
-        await sendWhatsAppMessage(senderClean, `✅ Bot pausado para ...${suffix} (${matchingPhone}) durante ${minutes} min.\nReanuda automáticamente a las ${hora}.`);
-        return;
-      }
-
-      // Comando: reanudar <dígitos>
-      const reanudarMatch = msg.match(/^reanudar\s+(\d{4,})$/);
-      if (reanudarMatch) {
-        const suffix = reanudarMatch[1];
-        const allSessions = sessions.getAllSessions();
-        const matchingPhone = Object.keys(allSessions).find(p => p.endsWith(suffix));
-        if (!matchingPhone) {
-          await sendWhatsAppMessage(senderClean, `⚠️ No encontré ninguna conversación activa que termine en *${suffix}*.`);
-          return;
-        }
-        sessions.updateSession(matchingPhone, { bot_paused_until: null });
-        console.log(`▶️  [ADMIN CMD] Bot reanudado para ${matchingPhone}`);
-        await sendWhatsAppMessage(senderClean, `✅ Bot reanudado para ...${suffix} (${matchingPhone}).`);
-        return;
-      }
-
-      // Comando de ayuda
-      if (msg === 'pausa?' || msg === 'ayuda' || msg === 'help' || msg === 'comandos') {
-        await sendWhatsAppMessage(senderClean,
-          `🤖 *Comandos de control del bot:*\n\n` +
-          `*pausa <últimos 4 dígitos>*\n` +
-          `Pausa el bot 10 min. Ej: pausa 0710\n\n` +
-          `*pausa <últimos 4 dígitos> <minutos>*\n` +
-          `Con duración personalizada. Ej: pausa 0710 30\n\n` +
-          `*reanudar <últimos 4 dígitos>*\n` +
-          `Reanuda el bot de inmediato. Ej: reanudar 0710`
-        );
-        return;
-      }
-
-      // Si el admin envía cualquier otro mensaje, no lo procesar como mensaje de cliente
-      // (evita que el bot le responda al admin como si fuera una clienta)
-      console.log(`📨 [ADMIN] Mensaje del admin ignorado (no es un comando reconocido): "${incomingMessage}"`);
-      return;
-    }
-  }
-  // ── FIN COMANDOS DE STAFF ─────────────────────────────────────────────────
 
   // CRITICAL: Verificar estado del bot ANTES de cualquier logging o procesamiento
   // Esto debe ser lo ABSOLUTAMENTE PRIMERO
@@ -2543,9 +2441,6 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
           console.warn('⚠️  No se pudo loguear confirmación de asistencia:', e.message);
         }
 
-        // Pausar bot 15 min para que el equipo vea la confirmación sin interferencia
-        const pauseUntil = new Date(Date.now() + 15 * 60 * 1000);
-        sessions.updateSession(cleanPhone, { bot_paused_until: pauseUntil.toISOString() });
         return;
       }
     }
@@ -2596,9 +2491,6 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
           console.warn('⚠️  No se pudo loguear solicitud de ajuste/entrega:', e.message);
         }
 
-        // Pausar bot 30 min para que el equipo gestione sin interferencia
-        const pauseUntil = new Date(Date.now() + 30 * 60 * 1000);
-        sessions.updateSession(cleanPhone, { bot_paused_until: pauseUntil.toISOString() });
         return;
       }
     }
@@ -3807,14 +3699,6 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
         await sendWhatsAppMessage(cleanPhone, userReply);
         sessions.addToHistory(cleanPhone, 'assistant', userReply);
         
-        // Pause bot for 10 minutes to allow advisor to respond without bot interference
-        // This pause only applies to this specific conversation (session), not others
-        const pauseUntil = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
-        sessions.updateSession(cleanPhone, {
-          bot_paused_until: pauseUntil.toISOString()
-        });
-        console.log(`⏸️  Bot pausado para esta conversación hasta ${pauseUntil.toISOString()} (10 minutos) para permitir que el asesor atienda al cliente`);
-        
         return;
       } else if (incomingMessage === 'info_catalogo') {
         // User selected catalog from info menu
@@ -4803,6 +4687,7 @@ app.get('/api/config', async (req, res) => {
       horarios: businessConfig.horarios,
       catalogo: businessConfig.catalogo,
       precios: businessConfig.precios,
+      staffPhones: businessConfig.staff_phones || [],
       adminPhone: phoneConfig.adminPhone || ADMIN_PHONE,
       botPhone: phoneConfig.botPhone || process.env.PHONE_NUMBER_ID || process.env.DISPLAY_PHONE_NUMBER || ''
     });
@@ -4815,7 +4700,7 @@ app.get('/api/config', async (req, res) => {
 // PUT /api/config - Actualizar configuración del bot
 app.put('/api/config', async (req, res) => {
   try {
-    const { business, horarios, catalogo, precios, adminPhone, botPhone } = req.body;
+    const { business, horarios, catalogo, precios, staffPhones, adminPhone, botPhone } = req.body;
     
     // Leer configuración actual
     const currentConfig = JSON.parse(await fs.promises.readFile(path.join(__dirname, 'business_config.json'), 'utf8'));
@@ -4833,7 +4718,12 @@ app.put('/api/config', async (req, res) => {
     if (precios) {
       currentConfig.precios = { ...currentConfig.precios, ...precios };
     }
-    
+    if (Array.isArray(staffPhones)) {
+      currentConfig.staff_phones = staffPhones.map(p => p.replace(/\D/g, '')).filter(Boolean);
+      STAFF_PHONES = currentConfig.staff_phones;
+      console.log(`✅ STAFF_PHONES actualizado: ${STAFF_PHONES.length} números`);
+    }
+
     // Guardar configuración actualizada
     await fs.promises.writeFile(
       path.join(__dirname, 'business_config.json'),
