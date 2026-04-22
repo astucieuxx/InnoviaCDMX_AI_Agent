@@ -1,6 +1,7 @@
 // Estado de la aplicación
 let currentConversation = null;
 let refreshInterval = null;
+let conversationsCache = [];
 let charts = {};
 let selectedPeriod = '30d'; // Período por defecto
 
@@ -897,6 +898,8 @@ async function loadConversations() {
             return;
         }
 
+        conversationsCache = data.conversations;
+
         // Preservar posición de scroll para que no salte al hacer refresh
         const scrollTop = container.scrollTop;
 
@@ -942,6 +945,7 @@ async function loadConversations() {
                             <div style="display:flex;align-items:center;gap:6px;">
                                 <div class="conversation-phone">${formatPhone(conv.phone)}</div>
                                 ${unread ? '<span class="unread-dot" title="Mensajes sin leer"></span>' : ''}
+                                ${paused ? '<span style="font-size:10px;background:#2d6a4f;color:#fff;padding:1px 6px;border-radius:10px;font-weight:600;">⏸ pausado</span>' : ''}
                             </div>
                             ${conv.nombre ? `<div style="font-weight:600;color:#667eea;font-size:12px;">${escapeHtml(conv.nombre)}</div>` : ''}
                         </div>
@@ -1050,12 +1054,19 @@ async function loadConversationMessages(phone) {
             return;
         }
 
-        messagesContainer.innerHTML = data.messages.map(msg => `
-            <div class="conversation-message ${msg.direction}">
+        messagesContainer.innerHTML = data.messages.map(msg => {
+            if (msg.direction === 'system') {
+                return `<div style="display:flex;align-items:center;gap:8px;margin:10px 0;">
+                    <div style="flex:1;height:1px;background:#e0e0e0;"></div>
+                    <div style="font-size:11px;color:#888;background:#f0f0f0;padding:3px 10px;border-radius:12px;white-space:nowrap;">${escapeHtml(msg.message)} · ${formatDate(msg.timestamp)}</div>
+                    <div style="flex:1;height:1px;background:#e0e0e0;"></div>
+                </div>`;
+            }
+            return `<div class="conversation-message ${msg.direction}">
                 <div>${escapeHtml(msg.message)}</div>
                 <div class="message-time">${formatDate(msg.timestamp)}</div>
-            </div>
-        `).join('');
+            </div>`;
+        }).join('');
 
         // Scroll al final
         messagesContainer.scrollTop = messagesContainer.scrollHeight;

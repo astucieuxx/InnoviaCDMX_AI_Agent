@@ -1582,6 +1582,7 @@ app.post('/admin/pause-bot', (req, res) => {
 
   const pauseUntil = new Date(Date.now() + minutes * 60 * 1000);
   sessions.updateSession(phone, { bot_paused_until: pauseUntil.toISOString() });
+  sessions.addToHistory(phone, 'system_event', `⏸ Bot pausado por el equipo (${minutes} min)`);
   cancelPendingMessages(phone);
 
   console.log(`⏸️  Bot pausado para ${phone} hasta ${pauseUntil.toISOString()} (${minutes} min)`);
@@ -1597,6 +1598,7 @@ app.post('/admin/resume-bot', (req, res) => {
   }
 
   sessions.updateSession(phone, { bot_paused_until: null });
+  sessions.addToHistory(phone, 'system_event', '▶ Bot reactivado por el equipo');
 
   console.log(`▶️  Bot reanudado manualmente para ${phone}`);
   res.json({ ok: true, phone });
@@ -4644,7 +4646,7 @@ app.get('/api/conversations/:phone', (req, res) => {
 
     const messages = (session.historial || []).map(msg => ({
       message: msg.content,
-      direction: msg.role === 'user' ? 'incoming' : 'outgoing',
+      direction: msg.role === 'user' ? 'incoming' : msg.role === 'system_event' ? 'system' : 'outgoing',
       timestamp: msg.timestamp
     }));
 
