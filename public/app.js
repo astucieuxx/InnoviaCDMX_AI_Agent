@@ -945,7 +945,6 @@ async function loadConversations() {
                             <div style="display:flex;align-items:center;gap:6px;">
                                 <div class="conversation-phone">${formatPhone(conv.phone)}</div>
                                 ${unread ? '<span class="unread-dot" title="Mensajes sin leer"></span>' : ''}
-                                ${paused ? '<span style="font-size:10px;background:#2d6a4f;color:#fff;padding:1px 6px;border-radius:10px;font-weight:600;">⏸ pausado</span>' : ''}
                             </div>
                             ${conv.nombre ? `<div style="font-weight:600;color:#667eea;font-size:12px;">${escapeHtml(conv.nombre)}</div>` : ''}
                         </div>
