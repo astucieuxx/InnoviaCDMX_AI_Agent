@@ -2035,6 +2035,18 @@ app.post('/webhook', async (req, res) => {
             console.log(`⏸️  NO se procesará el mensaje`);
             console.log(`⏸️  Mensaje bloqueado completamente`);
             console.log(`⏸️  ============================================\n`);
+
+            // GUARDAR el mensaje en la sesión aunque el bot esté inactivo,
+            // para que el escáner de "conversaciones perdidas" lo pueda detectar
+            // y el admin pueda recuperarlas desde el dashboard.
+            try {
+              sessions.addToHistory(cleanPhone, 'user', incomingMessage);
+              sessions.updateSession(cleanPhone, { ultima_actividad: new Date().toISOString() });
+              console.log(`📥 [INACTIVO] Mensaje guardado en sesión ${cleanPhone} para recuperación futura`);
+            } catch (saveErr) {
+              console.error(`⚠️  [INACTIVO] No se pudo guardar mensaje en sesión:`, saveErr.message);
+            }
+
             continue; // Saltar este mensaje y continuar con el siguiente (si hay)
           }
           
