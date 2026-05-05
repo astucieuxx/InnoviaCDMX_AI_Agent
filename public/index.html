@@ -263,8 +263,8 @@
                     </div>
                     <div class="form-group">
                         <label>Clientes Existentes (el bot ignora estos números)</label>
-                        <textarea id="existing-clients" rows="6" placeholder="5215512345678&#10;5215598765432" style="width:100%;font-family:monospace;font-size:13px;resize:vertical;"></textarea>
-                        <small>Un número por línea. Agrega aquí a clientes que ya pasaron por el proceso inicial de WhatsApp y a los que el bot ya no debe responder.</small>
+                        <textarea id="existing-clients" rows="6" placeholder="5512345678&#10;5598765432&#10;5587654321" style="width:100%;font-family:monospace;font-size:13px;resize:vertical;"></textarea>
+                        <small>Un número por línea · Solo los últimos 10 dígitos (sin código de país). El bot ignorará cualquier número que termine con estos dígitos.</small>
                     </div>
                     <button type="submit" class="btn-primary">💾 Guardar Configuración</button>
                     <div id="config-status" class="status-message"></div>
