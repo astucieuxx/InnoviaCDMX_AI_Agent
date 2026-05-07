@@ -3376,12 +3376,27 @@ app.get('/api/analytics', async (req, res) => {
 app.get('/api/conversations', (req, res) => {
   try {
     const allSessions = sessions.getAllSessions();
-    
+
+    // Build a set of phones that have a pending task (for backward-compat
+    // with sessions escalated before the escalated_to_human flag existed)
+    const pendingTaskPhones = new Set(
+      (getPendingTasks() || []).map(t => (t.phone || '').replace(/\D/g, ''))
+    );
+
     const conversations = allSessions.map(({ phone, session }) => {
       const lastMessage = session.historial && session.historial.length > 0
         ? session.historial[session.historial.length - 1]
         : null;
-      
+
+      const cleanPhone = phone.replace(/\D/g, '');
+      const hasFlag    = !!session.escalated_to_human;
+      const hasPending = pendingTaskPhones.has(cleanPhone);
+
+      // If a pending task exists but the flag isn't set yet, backfill it
+      if (hasPending && !hasFlag && !session.resolved_by_agent) {
+        sessions.updateSession(cleanPhone, { escalated_to_human: true, resolved_by_agent: false });
+      }
+
       return {
         phone,
         nombre: session.nombre_cliente || session.nombre_novia || null,
@@ -3397,7 +3412,7 @@ app.get('/api/conversations', (req, res) => {
         hasAppointment: session.etapa === 'cita_agendada' || !!session.calendar_event_id,
         botPaused: !!(session.bot_paused_until && new Date(session.bot_paused_until) > new Date()),
         pausedUntil: session.bot_paused_until || null,
-        escalatedToHuman: !!session.escalated_to_human,
+        escalatedToHuman: hasFlag || (hasPending && !session.resolved_by_agent),
         resolvedByAgent: !!session.resolved_by_agent
       };
     });
