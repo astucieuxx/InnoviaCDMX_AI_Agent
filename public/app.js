@@ -1273,7 +1273,10 @@ async function embudoOpenConv(phone) {
                 <div class="message-time">${formatDate(msg.timestamp)}</div>
             </div>`;
         }).join('');
-        msgs.scrollTop = msgs.scrollHeight;
+        // Scroll after paint so scrollHeight is fully calculated
+        requestAnimationFrame(() => {
+            msgs.scrollTop = msgs.scrollHeight;
+        });
     }
 
     // Open the panel and start auto-refresh
