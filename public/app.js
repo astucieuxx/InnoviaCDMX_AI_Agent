@@ -1371,7 +1371,6 @@ function updateEmbudoResolveBtn(escalated) {
 
 async function embudoResolve() {
     if (!embudoActivePanelPhone) return;
-    if (!confirm('¿Marcar esta conversación como resuelta?')) return;
     try {
         await fetch('/admin/resolve-conversation', {
             method: 'POST',
