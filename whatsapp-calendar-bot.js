@@ -3881,18 +3881,29 @@ app.get('/api/export-snapshot', (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // JOB: Mensaje de recuperación (reengagement)
-// Corre cada 30 minutos. Envía un mensaje generado por LLM a conversaciones
-// de etapa 'primer_contacto' o 'interesada' que llevan entre 15 y 23 horas
-// sin respuesta del usuario, dentro del horario 8:00–23:59 CDMX.
+// Corre en slots fijos cada 30 min en hora CDMX: 8:00, 8:30, 9:00 … 22:30, 23:00.
+// Envía un mensaje generado por LLM a conversaciones de etapa 'primer_contacto'
+// o 'interesada' que llevan entre 15 y 23 horas sin respuesta del usuario.
 // ─────────────────────────────────────────────────────────────────────────────
 
-function isCDMXAllowedHour() {
+function getCDMXTime() {
   const now = new Date();
-  const cdmxHour = parseInt(
-    now.toLocaleString('en-US', { timeZone: 'America/Mexico_City', hour: 'numeric', hour12: false }),
-    10
-  );
-  return cdmxHour >= 8 && cdmxHour <= 23; // 8:00 am – 11:59 pm
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Mexico_City',
+    hour: 'numeric', minute: 'numeric', hour12: false
+  }).formatToParts(now);
+  const hour   = parseInt(parts.find(p => p.type === 'hour').value,   10);
+  const minute = parseInt(parts.find(p => p.type === 'minute').value, 10);
+  return { hour, minute };
+}
+
+function isCDMXAllowedSlot() {
+  const { hour, minute } = getCDMXTime();
+  // Slots válidos: 8:00–23:00 (última corrida a las 23:00)
+  if (hour < 8 || hour > 23) return false;
+  if (hour === 23 && minute > 0) return false; // después de las 23:00 no
+  // Solo disparar en el minuto :00 o :30 (ventana de ±1 min para no perderse)
+  return minute <= 1 || (minute >= 29 && minute <= 31);
 }
 
 async function generateRecoveryMessage(session) {
@@ -3933,10 +3944,7 @@ Reglas: no menciones que no respondió, no presiones, empieza con "${greeting} �
 }
 
 async function runRecoveryJob() {
-  if (!isCDMXAllowedHour()) {
-    console.log('⏰ [Recovery Job] Fuera de horario permitido (8am–11pm CDMX), saltando.');
-    return;
-  }
+  if (!isCDMXAllowedSlot()) return; // silencioso fuera de slot
 
   const now = Date.now();
   const MIN_ELAPSED = 15 * 60 * 60 * 1000; // 15 horas
@@ -3988,13 +3996,9 @@ async function runRecoveryJob() {
 }
 
 function startRecoveryJob() {
-  const INTERVAL_MS = 30 * 60 * 1000; // 30 minutos
-  console.log('🔄 [Recovery Job] Iniciado — revisión cada 30 minutos.');
-  // Primera corrida a los 2 minutos del arranque (para no bloquear el boot)
-  setTimeout(() => {
-    runRecoveryJob();
-    setInterval(runRecoveryJob, INTERVAL_MS);
-  }, 2 * 60 * 1000);
+  // Tick cada minuto; runRecoveryJob solo actúa en los slots :00 y :30 (8:00–23:00 CDMX)
+  console.log('🔄 [Recovery Job] Iniciado — slots fijos 8:00, 8:30 … 22:30, 23:00 CDMX.');
+  setInterval(runRecoveryJob, 60 * 1000);
 }
 
 // Iniciar servidor
