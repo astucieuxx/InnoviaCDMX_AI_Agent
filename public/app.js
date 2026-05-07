@@ -1396,7 +1396,7 @@ function embudoReplyKeydown(e) {
 function updateEmbudoResolveBtn(escalated) {
     const btn = document.getElementById('embudo-panel-resolve-btn');
     if (!btn) return;
-    btn.style.display = escalated ? 'inline-flex' : 'none';
+    btn.style.display = 'inline-flex'; // visible en todas las columnas
 }
 
 async function embudoResolve() {
