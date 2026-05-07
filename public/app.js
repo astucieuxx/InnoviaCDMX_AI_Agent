@@ -1226,12 +1226,6 @@ function renderEmbudoColumn(containerId, convs, type) {
         if (type === 'escalada') badges.push(`<span class="embudo-badge badge-escalada">🙋 Asesor</span>`);
         if (type === 'resuelta') badges.push(`<span class="embudo-badge badge-cita">✅ Cita</span>`);
 
-        const pauseBtn = type === 'bot'
-            ? c.botPaused
-                ? `<button class="embudo-btn embudo-btn-resume" onclick="event.stopPropagation(); embudoResume('${rawPhone}')">▶ Reactivar</button>`
-                : `<button class="embudo-btn embudo-btn-pause"  onclick="event.stopPropagation(); embudoPause('${rawPhone}')">⏸ Pausar</button>`
-            : '';
-
         return `
         <div class="embudo-card" data-phone="${rawPhone}" onclick="embudoOpenConv('${rawPhone}')">
             <div class="embudo-card-name">${name}</div>
@@ -1240,7 +1234,6 @@ function renderEmbudoColumn(containerId, convs, type) {
                 <span class="embudo-card-time">⏱ ${timeAgo}</span>
                 <span style="display:flex;gap:4px;flex-wrap:wrap;">${badges.join('')}</span>
             </div>
-            ${pauseBtn ? `<div class="embudo-card-action">${pauseBtn}<button class="embudo-btn embudo-btn-view" onclick="event.stopPropagation(); embudoOpenConv('${rawPhone}')">💬 Ver chat</button></div>` : ''}
         </div>`;
     }).join('');
 }
