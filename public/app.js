@@ -1176,7 +1176,12 @@ async function loadEmbudo() {
         const escalada = [];
         const resuelta = [];
 
+        const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000; // 7 días atrás
+
         (conversations || []).forEach(c => {
+            const lastActivity = c.lastActivity ? new Date(c.lastActivity).getTime() : 0;
+            if (lastActivity < cutoff) return; // más de 7 días → ignorar
+
             if (c.resolvedByAgent || c.hasAppointment) {
                 resuelta.push(c);
             } else if (c.escalatedToHuman) {
