@@ -1275,6 +1275,46 @@ function updateEmbudoPauseBtn(paused) {
         btn.className = 'embudo-btn embudo-btn-pause';
         btn.style.cssText = 'padding:6px 12px;font-size:12px;';
     }
+    // Show reply box only when paused
+    const replyBox = document.getElementById('embudo-reply-box');
+    if (replyBox) replyBox.style.display = paused ? 'flex' : 'none';
+}
+
+async function embudoSendMessage() {
+    if (!embudoActivePanelPhone) return;
+    const input = document.getElementById('embudo-reply-input');
+    const message = input.value.trim();
+    if (!message) return;
+
+    const sendBtn = document.querySelector('.embudo-reply-send');
+    sendBtn.disabled = true;
+
+    try {
+        const res = await fetch('/admin/send-human-message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone: embudoActivePanelPhone, message })
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Error desconocido');
+
+        input.value = '';
+        // Reload the conversation to show the sent message
+        await embudoOpenConv(embudoActivePanelPhone);
+    } catch (err) {
+        alert('Error al enviar: ' + err.message);
+    } finally {
+        sendBtn.disabled = false;
+        input.focus();
+    }
+}
+
+function embudoReplyKeydown(e) {
+    // Send on Enter, newline on Shift+Enter
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        embudoSendMessage();
+    }
 }
 
 async function embudoPanelTogglePause() {

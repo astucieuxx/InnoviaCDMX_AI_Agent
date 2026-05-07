@@ -1629,6 +1629,42 @@ app.get('/admin/pause-status/:phone', (req, res) => {
   });
 });
 
+// POST /admin/send-human-message — envía un mensaje de texto desde el dashboard
+// Bypasses the bot-mode guard (it's a human agent speaking, not the bot).
+app.post('/admin/send-human-message', async (req, res) => {
+  try {
+    const { phone, message } = req.body;
+    if (!phone || !message || !message.trim()) {
+      return res.status(400).json({ error: 'Se requieren phone y message' });
+    }
+
+    const cleanPhone = phone.replace(/\D/g, '');
+
+    // Build Chakra payload directly (skip sendWhatsAppMessage's bot-mode guard)
+    const whatsappPhoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || process.env.PHONE_NUMBER_ID || '';
+    const endpoint = `https://api.chakrahq.com/v1/ext/plugin/whatsapp/${CHAKRA_PLUGIN_ID}/api/${CHAKRA_WHATSAPP_API_VERSION}/${whatsappPhoneNumberId}/messages`;
+
+    const cleanApiKey = CHAKRA_API_KEY.trim().replace(/\s+/g, '');
+    await axios.post(endpoint, {
+      messaging_product: 'whatsapp',
+      to: cleanPhone,
+      type: 'text',
+      text: { body: message.trim() }
+    }, {
+      headers: { 'Authorization': `Bearer ${cleanApiKey}`, 'Content-Type': 'application/json' }
+    });
+
+    // Record in session history so it shows in the dashboard chat view
+    sessions.addToHistory(cleanPhone, 'assistant', `[Agente] ${message.trim()}`);
+
+    console.log(`💬 [HUMAN MSG] Agente envió mensaje a ${cleanPhone}: ${message.trim().slice(0, 60)}`);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error en /admin/send-human-message:', error.response?.data || error.message);
+    res.status(500).json({ error: error.response?.data?.error?.message || error.message });
+  }
+});
+
 // ────────────────────────────────────────────────────────────────────────────
 
 // Verificación del webhook (GET) - Chakra puede requerir esto

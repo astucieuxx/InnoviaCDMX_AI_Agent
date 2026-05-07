@@ -192,6 +192,11 @@
                     <div class="embudo-panel-messages" id="embudo-panel-messages">
                         <p class="loading-text">Selecciona una conversación</p>
                     </div>
+                    <!-- Reply box — only shown when bot is paused -->
+                    <div class="embudo-reply-box" id="embudo-reply-box" style="display:none;">
+                        <textarea id="embudo-reply-input" class="embudo-reply-input" placeholder="Escribe un mensaje..." rows="2" onkeydown="embudoReplyKeydown(event)"></textarea>
+                        <button class="embudo-reply-send" onclick="embudoSendMessage()" title="Enviar (Enter)">➤</button>
+                    </div>
                 </div>
             </div>
         </div>
