@@ -2464,6 +2464,17 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
       }
     }
     
+    // Si la conversación estaba marcada como resuelta y el cliente vuelve a escribir,
+    // re-escalarla automáticamente para que el equipo lo note en el Embudo.
+    if (session.resolved_by_agent) {
+      console.log(`🔄 Conversación resuelta reactivada por nuevo mensaje de ${cleanPhone}`);
+      sessions.updateSession(cleanPhone, {
+        resolved_by_agent: false,
+        escalated_to_human: true
+      });
+      session = sessions.getSession(cleanPhone);
+    }
+
     // Agregar mensaje del usuario al historial (usar el título del botón si es un clic)
     const messageForHistory = options.buttonTitle || incomingMessage;
     sessions.addToHistory(cleanPhone, 'user', messageForHistory);
