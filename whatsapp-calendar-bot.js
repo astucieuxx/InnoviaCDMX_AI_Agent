@@ -3879,6 +3879,124 @@ app.get('/api/export-snapshot', (req, res) => {
   res.json(snapshot);
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// JOB: Mensaje de recuperación (reengagement)
+// Corre cada 30 minutos. Envía un mensaje generado por LLM a conversaciones
+// de etapa 'primer_contacto' o 'interesada' que llevan entre 15 y 23 horas
+// sin respuesta del usuario, dentro del horario 8:00–23:59 CDMX.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function isCDMXAllowedHour() {
+  const now = new Date();
+  const cdmxHour = parseInt(
+    now.toLocaleString('en-US', { timeZone: 'America/Mexico_City', hour: 'numeric', hour12: false }),
+    10
+  );
+  return cdmxHour >= 8 && cdmxHour <= 23; // 8:00 am – 11:59 pm
+}
+
+async function generateRecoveryMessage(session) {
+  const OpenAI = require('openai');
+  const bizConfig = getBizConfig();
+
+  const openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+  const name = session.nombre_cliente || session.nombre_novia || '';
+  const firstName = name ? name.split(' ')[0] : null;
+  const greeting = firstName ? `Hola ${firstName}` : 'Hola';
+
+  // Últimos 3 mensajes del usuario para dar contexto al LLM
+  const recentUserMsgs = (session.historial || [])
+    .filter(m => m.role === 'user')
+    .slice(-3)
+    .map(m => `- ${m.content}`)
+    .join('\n');
+
+  const systemPrompt = `Eres la asistente virtual de ${bizConfig.businessName || 'una boutique de vestidos de novia'}.
+Tu objetivo es recuperar una conversación con una clienta que no ha respondido en las últimas horas.
+Redacta UN solo mensaje corto (máx 2 oraciones) cálido y femenino para retomar el contacto y motivarla a agendar una cita en el showroom.
+Reglas: no menciones que no respondió, no presiones, empieza con "${greeting} 🤍", solo devuelve el texto del mensaje sin comillas.`;
+
+  const userPrompt = `Contexto — últimas cosas que dijo la clienta:\n${recentUserMsgs || '(primera vez que escribe, aún no ha respondido nada)'}`;
+
+  const response = await openaiClient.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user',   content: userPrompt }
+    ],
+    max_tokens: 150,
+    temperature: 0.8
+  });
+
+  return response.choices?.[0]?.message?.content?.trim() || null;
+}
+
+async function runRecoveryJob() {
+  if (!isCDMXAllowedHour()) {
+    console.log('⏰ [Recovery Job] Fuera de horario permitido (8am–11pm CDMX), saltando.');
+    return;
+  }
+
+  const now = Date.now();
+  const MIN_ELAPSED = 15 * 60 * 60 * 1000; // 15 horas
+  const MAX_ELAPSED = 23 * 60 * 60 * 1000; // 23 horas
+
+  const allSessions = sessions.getAllSessions();
+  const eligible = allSessions.filter(({ session }) => {
+    // Solo etapas relevantes
+    if (!['primer_contacto', 'interesada'].includes(session.etapa)) return false;
+    // Sin cita, sin escalación, sin resolución, sin recovery previo
+    if (session.calendar_event_id) return false;
+    if (session.escalated_to_human) return false;
+    if (session.resolved_by_agent) return false;
+    if (session.recovery_sent_at) return false;
+
+    // Último mensaje del USUARIO (no del bot)
+    const userMessages = (session.historial || []).filter(m => m.role === 'user');
+    if (!userMessages.length) return false;
+    const lastUserMsg = userMessages[userMessages.length - 1];
+    const lastUserTime = new Date(lastUserMsg.timestamp || 0).getTime();
+    const elapsed = now - lastUserTime;
+
+    return elapsed >= MIN_ELAPSED && elapsed <= MAX_ELAPSED;
+  });
+
+  if (!eligible.length) {
+    console.log(`🔄 [Recovery Job] Sin conversaciones elegibles para recovery.`);
+    return;
+  }
+
+  console.log(`📤 [Recovery Job] ${eligible.length} conversación(es) elegible(s).`);
+
+  for (const { phone, session } of eligible) {
+    try {
+      const message = await generateRecoveryMessage(session, phone);
+      if (!message) {
+        console.warn(`⚠️  [Recovery Job] LLM no generó mensaje para ${phone}`);
+        continue;
+      }
+
+      await sendWhatsAppMessage(phone, message);
+      sessions.updateSession(phone.replace(/\D/g, ''), { recovery_sent_at: new Date().toISOString() });
+      sessions.addToHistory(phone.replace(/\D/g, ''), 'assistant', `[Recovery] ${message}`);
+      console.log(`✅ [Recovery Job] Mensaje enviado a ${phone}: "${message}"`);
+    } catch (err) {
+      console.error(`❌ [Recovery Job] Error enviando a ${phone}:`, err.message);
+    }
+  }
+}
+
+function startRecoveryJob() {
+  const INTERVAL_MS = 30 * 60 * 1000; // 30 minutos
+  console.log('🔄 [Recovery Job] Iniciado — revisión cada 30 minutos.');
+  // Primera corrida a los 2 minutos del arranque (para no bloquear el boot)
+  setTimeout(() => {
+    runRecoveryJob();
+    setInterval(runRecoveryJob, INTERVAL_MS);
+  }, 2 * 60 * 1000);
+}
+
 // Iniciar servidor
 const PORT = process.env.PORT || 3000;
 
@@ -3913,6 +4031,7 @@ initGoogleAuth()
     console.log(`   URL: https://tu-url-ngrok.com/webhook`);
     console.log(`   Verify Token: ${VERIFY_TOKEN}`);
     console.log(`   Método: POST\n`);
+    startRecoveryJob();
   });
 }).catch(error => {
   console.error('❌ Error al inicializar:', error);
