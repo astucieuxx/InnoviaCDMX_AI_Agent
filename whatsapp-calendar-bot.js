@@ -2464,10 +2464,11 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
       }
     }
     
-    // Si la conversación estaba marcada como resuelta y el cliente vuelve a escribir,
-    // re-escalarla automáticamente para que el equipo lo note en el Embudo.
-    if (session.resolved_by_agent) {
-      console.log(`🔄 Conversación resuelta reactivada por nuevo mensaje de ${cleanPhone}`);
+    // Si la conversación estaba marcada como resuelta, o ya tenía cita agendada,
+    // y el cliente vuelve a escribir → re-escalar para que el equipo lo note en el Embudo.
+    const hadAppointment = session.etapa === 'cita_agendada' || !!session.calendar_event_id;
+    if (session.resolved_by_agent || hadAppointment) {
+      console.log(`🔄 Conversación ${session.resolved_by_agent ? 'resuelta' : 'con cita'} reactivada por nuevo mensaje de ${cleanPhone}`);
       sessions.updateSession(cleanPhone, {
         resolved_by_agent: false,
         escalated_to_human: true

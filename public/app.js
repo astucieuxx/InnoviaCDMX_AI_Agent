@@ -1185,10 +1185,11 @@ async function loadEmbudo() {
             const lastActivity = c.lastActivity ? new Date(c.lastActivity).getTime() : 0;
             if (lastActivity < cutoff) return; // más de 7 días → ignorar
 
-            if (c.resolvedByAgent || c.hasAppointment) {
-                resuelta.push(c);
-            } else if (c.escalatedToHuman) {
+            // Escalada tiene prioridad sobre resuelta/agendada
+            if (c.escalatedToHuman) {
                 escalada.push(c);
+            } else if (c.resolvedByAgent || c.hasAppointment) {
+                resuelta.push(c);
             } else {
                 bot.push(c);
             }
