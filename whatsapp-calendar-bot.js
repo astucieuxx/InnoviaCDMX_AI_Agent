@@ -1629,6 +1629,21 @@ app.get('/admin/pause-status/:phone', (req, res) => {
   });
 });
 
+// POST /admin/resolve-conversation — marca una conversación escalada como resuelta por agente
+app.post('/admin/resolve-conversation', (req, res) => {
+  try {
+    const { phone } = req.body;
+    if (!phone) return res.status(400).json({ error: 'Se requiere phone' });
+    const cleanPhone = phone.replace(/\D/g, '');
+    sessions.updateSession(cleanPhone, { resolved_by_agent: true, escalated_to_human: false });
+    console.log(`✅ [EMBUDO] Conversación resuelta por agente: ${cleanPhone}`);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error en /admin/resolve-conversation:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // POST /admin/send-human-message — envía un mensaje de texto desde el dashboard
 // Bypasses the bot-mode guard (it's a human agent speaking, not the bot).
 app.post('/admin/send-human-message', async (req, res) => {
@@ -3381,7 +3396,9 @@ app.get('/api/conversations', (req, res) => {
         messageCount: session.historial?.length || 0,
         hasAppointment: session.etapa === 'cita_agendada' || !!session.calendar_event_id,
         botPaused: !!(session.bot_paused_until && new Date(session.bot_paused_until) > new Date()),
-        pausedUntil: session.bot_paused_until || null
+        pausedUntil: session.bot_paused_until || null,
+        escalatedToHuman: !!session.escalated_to_human,
+        resolvedByAgent: !!session.resolved_by_agent
       };
     });
 

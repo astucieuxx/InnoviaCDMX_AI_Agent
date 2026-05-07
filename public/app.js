@@ -1165,29 +1165,17 @@ function stopEmbudoPanelRefresh() {
 
 async function loadEmbudo() {
     try {
-        const [convRes, tasksRes] = await Promise.all([
-            fetch('/api/conversations'),
-            fetch('/api/pending-tasks')
-        ]);
+        const convRes = await fetch('/api/conversations');
         const { conversations } = await convRes.json();
-        const { tasks } = await tasksRes.json();
-
-        // Build a set of phones that have a pending escalation task
-        const escalatedPhones = new Set(
-            (tasks || [])
-                .filter(t => t.estado === 'Pendiente')
-                .map(t => (t.telefono || '').replace(/\D/g, ''))
-        );
 
         const bot      = [];
         const escalada = [];
         const resuelta = [];
 
         (conversations || []).forEach(c => {
-            const phone = (c.phone || '').replace(/\D/g, '');
-            if (c.hasAppointment) {
+            if (c.resolvedByAgent || c.hasAppointment) {
                 resuelta.push(c);
-            } else if (escalatedPhones.has(phone)) {
+            } else if (c.escalatedToHuman) {
                 escalada.push(c);
             } else {
                 bot.push(c);
@@ -1240,6 +1228,7 @@ function renderEmbudoColumn(containerId, convs, type) {
 
 let embudoActivePanelPhone = null;
 let embudoActivePanelPaused = false;
+let embudoActivePanelEscalated = false;
 
 async function embudoOpenConv(phone) {
     embudoActivePanelPhone = phone;
@@ -1255,12 +1244,15 @@ async function embudoOpenConv(phone) {
 
     const name   = conv?.nombre || formatPhone(phone);
     const paused = !!(conv?.botPaused);
+    const escalated = !!(conv?.escalatedToHuman);
     embudoActivePanelPaused = paused;
+    embudoActivePanelEscalated = escalated;
 
     // Update panel header
     document.getElementById('embudo-panel-name').textContent  = name;
     document.getElementById('embudo-panel-phone').textContent = formatPhone(phone);
     updateEmbudoPauseBtn(paused);
+    updateEmbudoResolveBtn(escalated);
 
     // Render messages (reuse same rendering as Conversaciones tab)
     const msgs = document.getElementById('embudo-panel-messages');
@@ -1352,6 +1344,27 @@ function embudoReplyKeydown(e) {
         e.preventDefault();
         embudoSendMessage();
     }
+}
+
+function updateEmbudoResolveBtn(escalated) {
+    const btn = document.getElementById('embudo-panel-resolve-btn');
+    if (!btn) return;
+    btn.style.display = escalated ? 'inline-flex' : 'none';
+}
+
+async function embudoResolve() {
+    if (!embudoActivePanelPhone) return;
+    if (!confirm('¿Marcar esta conversación como resuelta?')) return;
+    try {
+        await fetch('/admin/resolve-conversation', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone: embudoActivePanelPhone })
+        });
+        embudoActivePanelEscalated = false;
+        updateEmbudoResolveBtn(false);
+        loadEmbudo(); // refresh columns
+    } catch(e) { console.error(e); }
 }
 
 async function embudoPanelTogglePause() {

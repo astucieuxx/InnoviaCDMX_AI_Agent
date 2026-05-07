@@ -526,6 +526,13 @@ async function executeTool(toolName, toolArgs, calendarDeps, session, phone) {
         historial: session.historial || []
       });
 
+      // Mark session so Embudo tracks this independently of pendingTasks
+      const sessionsModule = require('../sessions');
+      sessionsModule.updateSession(phone, {
+        escalated_to_human: true,
+        resolved_by_agent: false
+      });
+
       return {
         exito: true,
         mensaje: 'Solicitud registrada. Un agente del staff se pondrá en contacto con la clienta.'

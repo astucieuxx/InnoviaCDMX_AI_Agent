@@ -168,7 +168,7 @@
                     <div class="embudo-column">
                         <div class="embudo-column-header resuelta-header">
                             <span class="embudo-column-icon">✅</span>
-                            <span class="embudo-column-title">Cita Agendada</span>
+                            <span class="embudo-column-title">Resuelta / Cita Agendada</span>
                             <span class="embudo-column-count" id="embudo-count-resuelta">0</span>
                         </div>
                         <div class="embudo-cards" id="embudo-col-resuelta">
@@ -184,7 +184,8 @@
                             <div class="embudo-panel-name" id="embudo-panel-name">—</div>
                             <div class="embudo-panel-phone" id="embudo-panel-phone">—</div>
                         </div>
-                        <div style="display:flex;gap:8px;align-items:center;">
+                        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                            <button id="embudo-panel-resolve-btn" onclick="embudoResolve()" style="display:none;padding:6px 12px;font-size:12px;font-weight:600;background:rgba(34,197,94,0.15);color:#4ade80;border:none;border-radius:6px;cursor:pointer;">✅ Marcar resuelta</button>
                             <button id="embudo-panel-pause-btn" class="embudo-btn embudo-btn-pause" onclick="embudoPanelTogglePause()" style="padding:6px 12px;font-size:12px;">⏸ Pausar</button>
                             <button onclick="embudoClosePanel()" style="background:none;border:none;color:var(--text-secondary);font-size:20px;cursor:pointer;padding:4px 8px;line-height:1;">✕</button>
                         </div>
