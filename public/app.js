@@ -63,8 +63,11 @@ function initTabs() {
             
             // Detener auto-refresh de logs y embudo si se cambia de pestaña
             stopLogsAutoRefresh();
-            if (targetTab !== 'embudo') stopEmbudoPanelRefresh();
-            
+            if (targetTab !== 'embudo') {
+                stopEmbudoPanelRefresh();
+                stopEmbudoBoardRefresh();
+            }
+
             // Cargar datos según el tab
             if (targetTab === 'analytics') {
                 loadAnalytics();
@@ -72,6 +75,7 @@ function initTabs() {
                 loadConversations();
             } else if (targetTab === 'embudo') {
                 loadEmbudo();
+                startEmbudoBoardRefresh();
             } else if (targetTab === 'appointments') {
                 loadAppointments();
             } else if (targetTab === 'pending-tasks') {
@@ -1230,6 +1234,23 @@ function renderEmbudoColumn(containerId, convs, type) {
 let embudoActivePanelPhone = null;
 let embudoActivePanelPaused = false;
 let embudoActivePanelEscalated = false;
+
+let embudoBoardRefreshTimer = null;
+
+function startEmbudoBoardRefresh() {
+    stopEmbudoBoardRefresh();
+    embudoBoardRefreshTimer = setInterval(() => {
+        // Only refresh columns if no panel is open (panel has its own refresh)
+        if (!embudoActivePanelPhone) loadEmbudo();
+    }, 15000);
+}
+
+function stopEmbudoBoardRefresh() {
+    if (embudoBoardRefreshTimer) {
+        clearInterval(embudoBoardRefreshTimer);
+        embudoBoardRefreshTimer = null;
+    }
+}
 
 async function embudoOpenConv(phone) {
     embudoActivePanelPhone = phone;
