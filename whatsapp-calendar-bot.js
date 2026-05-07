@@ -1640,8 +1640,10 @@ app.post('/admin/send-human-message', async (req, res) => {
 
     const cleanPhone = phone.replace(/\D/g, '');
 
-    // Build Chakra payload directly (skip sendWhatsAppMessage's bot-mode guard)
-    const whatsappPhoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || process.env.PHONE_NUMBER_ID || '';
+    // Use the module-level whatsappPhoneNumberId (populated from webhook metadata)
+    if (!whatsappPhoneNumberId) {
+      return res.status(500).json({ error: 'Phone number ID no disponible aún. Espera a que llegue un mensaje al bot primero.' });
+    }
     const endpoint = `https://api.chakrahq.com/v1/ext/plugin/whatsapp/${CHAKRA_PLUGIN_ID}/api/${CHAKRA_WHATSAPP_API_VERSION}/${whatsappPhoneNumberId}/messages`;
 
     const cleanApiKey = CHAKRA_API_KEY.trim().replace(/\s+/g, '');
