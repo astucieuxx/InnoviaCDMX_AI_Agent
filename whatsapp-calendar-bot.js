@@ -1695,6 +1695,20 @@ app.get('/admin/pause-status/:phone', (req, res) => {
   });
 });
 
+// DELETE /admin/session/:phone — elimina completamente la sesión de un usuario
+app.delete('/admin/session/:phone', (req, res) => {
+  try {
+    const cleanPhone = (req.params.phone || '').replace(/\D/g, '');
+    if (!cleanPhone) return res.status(400).json({ error: 'Phone inválido' });
+    sessions.clearSession(cleanPhone);
+    console.log(`🗑️  [ADMIN] Sesión eliminada: ${cleanPhone}`);
+    res.json({ success: true, phone: cleanPhone });
+  } catch (error) {
+    console.error('Error eliminando sesión:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // POST /admin/resolve-conversation — marca una conversación escalada como resuelta por agente
 app.post('/admin/resolve-conversation', (req, res) => {
   try {
