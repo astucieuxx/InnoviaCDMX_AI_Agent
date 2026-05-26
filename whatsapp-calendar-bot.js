@@ -2831,21 +2831,37 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
     // STEP 3: Run conversational agent (handles all intents + calendar tools)
     const { runAgent } = require('./bot/agent');
 
-    const calendarDeps = {
-      calendarClient: calendar,
-      authClient: authClient,
-      calendarId: citasNuevasCalendarId || process.env.CALENDAR_ID || 'primary',
-      innoviaCDMXCalendarId: innoviaCDMXCalendarId
-    };
+    // Guard against concurrent processing for the same phone number.
+    // If two messages arrive within seconds of each other (e.g. "A las 11" + "☺️"),
+    // the debounce (3s) may fire twice before the first runAgent call completes.
+    // Without this lock both calls read the session before the appointment is saved
+    // and each independently creates a calendar event → duplicate appointments.
+    if (appointmentCreationLocks.has(cleanPhone)) {
+      console.log(`🔒 [LOCK] Mensaje de ${cleanPhone} descartado — procesamiento previo en curso.`);
+      return;
+    }
+    appointmentCreationLocks.add(cleanPhone);
 
-    const agentResult = await runAgent(
-      cleanPhone,
-      session,
-      incomingMessage,
-      calendarDeps,
-      options.isButtonClick || false,
-      options.buttonTitle || null
-    );
+    let agentResult;
+    try {
+      const calendarDeps = {
+        calendarClient: calendar,
+        authClient: authClient,
+        calendarId: citasNuevasCalendarId || process.env.CALENDAR_ID || 'primary',
+        innoviaCDMXCalendarId: innoviaCDMXCalendarId
+      };
+
+      agentResult = await runAgent(
+        cleanPhone,
+        session,
+        incomingMessage,
+        calendarDeps,
+        options.isButtonClick || false,
+        options.buttonTitle || null
+      );
+    } finally {
+      appointmentCreationLocks.delete(cleanPhone);
+    }
 
     // Send the agent's natural-language reply
     if (agentResult.reply) {
