@@ -928,17 +928,30 @@ async function loadConversations() {
             return;
         }
 
-        conversationsCache = data.conversations;
+        // Ordenar defensivamente en el cliente también (más reciente primero),
+        // por si alguna sesión tiene lastActivity undefined (hace inestable el sort del servidor).
+        const sorted = [...data.conversations].sort((a, b) => {
+            const ta = a.lastActivity ? new Date(a.lastActivity).getTime() : 0;
+            const tb = b.lastActivity ? new Date(b.lastActivity).getTime() : 0;
+            return tb - ta;
+        });
 
-        // Preservar posición de scroll para que no salte al hacer refresh
-        const scrollTop = container.scrollTop;
+        // Detectar si la conversación más reciente cambió para decidir si
+        // hacer scroll al tope (nueva actividad) o preservar posición.
+        const prevTopPhone = conversationsCache[0]?.phone;
+        conversationsCache = sorted;
+        const topChanged = sorted.length > 0 && sorted[0].phone !== prevTopPhone;
+
+        // Si el tope cambió → scroll al tope para mostrar la nueva actividad.
+        // Si no cambió → preservar posición para no interrumpir al usuario.
+        const scrollTop = topChanged ? 0 : container.scrollTop;
 
         // Agrupar conversaciones por día
         const todayStr   = new Date().toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City' });
         const yesterday  = new Date(Date.now() - 864e5).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City' });
 
         const groups = {};
-        data.conversations.forEach(conv => {
+        sorted.forEach(conv => {
             const d = conv.lastActivity
                 ? new Date(conv.lastActivity).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City' })
                 : 'Sin fecha';
