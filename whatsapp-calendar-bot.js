@@ -2896,7 +2896,8 @@ async function processIncomingMessage(senderPhone, incomingMessage, options = {}
           cleanPhoneForCleanup,
           'Disculpa, tuve un problema procesando tu mensaje. ¿Puedes intentarlo de nuevo? 💫'
         );
-        sessions.addToHistory(cleanPhoneForCleanup, 'assistant', 'Error interno — mensaje de fallback enviado.');
+        const errorSummary = (error?.message || String(error) || 'error desconocido').slice(0, 300);
+        sessions.addToHistory(cleanPhoneForCleanup, 'assistant', `[ERROR INTERNO] ${errorSummary}`);
       } catch (sendError) {
         console.error('❌ No se pudo enviar mensaje de fallback al usuario:', sendError.message);
       }

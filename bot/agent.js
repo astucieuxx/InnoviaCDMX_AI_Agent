@@ -701,7 +701,23 @@ async function runAgent(phone, session, message, calendarDeps, isButtonClick = f
 
       for (const toolCall of choice.message.tool_calls) {
         const toolName = toolCall.function.name;
-        const toolArgs = JSON.parse(toolCall.function.arguments);
+
+        // JSON.parse puede lanzar SyntaxError si el LLM genera JSON malformado.
+        // Esto ocurre raramente pero es una excepción no capturada que escapa a
+        // processIncomingMessage y dispara el fallback. Capturarlo aquí y devolver
+        // un error controlado evita ese problema.
+        let toolArgs;
+        try {
+          toolArgs = JSON.parse(toolCall.function.arguments);
+        } catch (parseErr) {
+          console.error(`❌ JSON.parse falló para argumentos de ${toolName}: ${toolCall.function.arguments}`);
+          messages.push({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: JSON.stringify({ error: `Argumentos JSON malformados para ${toolName}: ${parseErr.message}` })
+          });
+          continue;
+        }
 
         console.log(`🔧 Tool call: ${toolName}`, toolArgs);
         const result = await executeTool(toolName, toolArgs, calendarDeps, session, phone);
