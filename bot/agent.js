@@ -659,17 +659,39 @@ async function runAgent(phone, session, message, calendarDeps, isButtonClick = f
   const sessionUpdates = {};
   const MAX_ITERATIONS = 5;
 
+  // Retry helper for transient OpenAI errors (rate limits, network issues, 5xx).
+  // Retries up to MAX_RETRIES times with exponential backoff before giving up.
+  const MAX_RETRIES = 3;
+  const callOpenAI = async (msgs) => {
+    let lastError;
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        return await client.chat.completions.create({
+          model: 'gpt-4o',
+          messages: msgs,
+          tools: TOOLS,
+          tool_choice: 'auto',
+          temperature: 0.7,
+          max_tokens: 600
+        });
+      } catch (err) {
+        lastError = err;
+        const status = err?.status || err?.response?.status;
+        // Only retry on transient errors: rate limit (429), server errors (5xx), network
+        const isRetryable = status === 429 || (status >= 500 && status < 600) || !status;
+        if (!isRetryable || attempt === MAX_RETRIES) throw err;
+        const delay = Math.pow(2, attempt) * 1000; // 2s, 4s
+        console.warn(`⚠️  OpenAI error (status=${status}), reintentando en ${delay}ms (intento ${attempt}/${MAX_RETRIES})...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+    throw lastError;
+  };
+
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     console.log(`🤖 Agent loop iteration ${i + 1}`);
 
-    const response = await client.chat.completions.create({
-      model: 'gpt-4o',
-      messages,
-      tools: TOOLS,
-      tool_choice: 'auto',
-      temperature: 0.7,
-      max_tokens: 600
-    });
+    const response = await callOpenAI(messages);
 
     const choice = response.choices[0];
 
