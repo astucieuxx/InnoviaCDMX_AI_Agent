@@ -647,7 +647,7 @@ async function runAgent(phone, session, message, calendarDeps, isButtonClick = f
 
   // Build conversation messages (last 20 exchanges for context)
   const history = (session.historial || [])
-    .slice(-20)
+    .slice(-10)
     .map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }));
 
   // Replace the last user message with the resolved version (button click → readable text)
